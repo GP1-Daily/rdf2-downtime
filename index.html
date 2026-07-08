@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RDF2 Downtime Logger</title>
+<style>
+  :root{
+    --green:#16a34a; --green-bg:#dcfce7;
+    --red:#dc2626; --red-bg:#fee2e2;
+    --amber:#d97706; --amber-bg:#fef3c7;
+    --dark:#1e293b; --dark2:#334155;
+    --gray:#64748b; --gray-bg:#f1f5f9;
+    --border:#e2e8f0;
+    --blue:#2563eb;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:Tahoma,"Segoe UI",Arial,sans-serif; background:#eef1f6; color:var(--dark);}
+  header.topbar{
+    background:linear-gradient(135deg,#0f172a,#1e3a5f); color:#fff; padding:20px 28px;
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;
+  }
+  header.topbar h1{margin:0; font-size:22px; font-weight:700;}
+  header.topbar .sub{font-size:13px; color:#93c5fd; margin-top:2px;}
+  nav.tabs{display:flex; gap:6px; background:#0f172a; padding:0 22px;}
+  nav.tabs button{
+    background:transparent; border:none; color:#93c5fd; padding:12px 18px; font-size:14px; font-weight:600;
+    cursor:pointer; border-bottom:3px solid transparent;
+  }
+  nav.tabs button.active{color:#fff; border-bottom-color:var(--blue);}
+  nav.tabs button:hover{color:#fff;}
+  main{max-width:1200px; margin:0 auto; padding:24px;}
+  select, button, input, textarea{font-family:inherit; font-size:14px; border-radius:6px; border:1px solid var(--border); padding:8px 12px;}
+  button{cursor:pointer; background:#fff; color:var(--dark); border:1px solid #cbd5e1; transition:.15s;}
+  button:hover{background:#f8fafc;}
+  button.primary{background:var(--blue); color:#fff; border-color:var(--blue);}
+  button.primary:hover{background:#1d4ed8;}
+  button.danger{color:var(--red); border-color:var(--red);}
+  button.danger:hover{background:var(--red-bg);}
+  button.start{background:var(--green); color:#fff; border-color:var(--green); font-weight:700; padding:14px 22px; font-size:15px;}
+  button.stop{background:var(--red); color:#fff; border-color:var(--red); font-weight:700; padding:14px 22px; font-size:15px;}
+  section.panel{background:#fff; border-radius:12px; padding:20px 22px; margin-bottom:22px; box-shadow:0 1px 3px rgba(0,0,0,.08);}
+  section.panel h2{font-size:16px; margin:0 0 16px; color:var(--dark2); display:flex; align-items:center; gap:10px; justify-content:space-between;}
+  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+  .entry-form{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px; align-items:end;}
+  .entry-form label{font-size:12px; color:var(--gray); display:block; margin-bottom:4px;}
+  .entry-form input, .entry-form select{width:100%;}
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th,td{padding:8px 10px; border-bottom:1px solid var(--border); text-align:center;}
+  th{background:var(--gray-bg); color:var(--dark2); font-weight:700;}
+  td.left, th.left{text-align:left;}
+  tr:hover td{background:#f8fafc;}
+  .empty-note{color:var(--gray); font-size:13px; padding:16px; text-align:center;}
+  .badge{display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:12px;}
+  .badge.morning{background:#fef3c7; color:#92400e;}
+  .badge.afternoon{background:#dbeafe; color:#1e40af;}
+  .badge.night{background:#e0e7ff; color:#3730a3;}
+  .badge.carry{background:var(--amber-bg); color:var(--amber); margin-left:6px;}
+  .cards-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-bottom:22px;}
+  .kpi-card{background:#fff; border-radius:12px; padding:16px 18px; box-shadow:0 1px 3px rgba(0,0,0,.08); border-left:6px solid var(--gray);}
+  .kpi-card.blue{border-left-color:var(--blue);}
+  .kpi-card.red{border-left-color:var(--red);}
+  .kpi-card.green{border-left-color:var(--green);}
+  .kpi-card .name{font-size:12px; color:var(--gray); font-weight:600; margin-bottom:6px;}
+  .kpi-card .value{font-size:24px; font-weight:800; color:var(--dark);}
+  .kpi-card .value small{font-size:13px; font-weight:600; color:var(--gray);}
+  .period-table td, .period-table th{text-align:center;}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+  .toast{position:fixed; bottom:20px; right:20px; background:var(--dark); color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; opacity:0; transition:.3s; pointer-events:none; z-index:50;}
+  .toast.show{opacity:1;}
+  .toast.err{background:var(--red);}
+  .quick-actions{display:flex; gap:14px; margin-bottom:16px;}
+  .csv-drop{border:2px dashed var(--border); border-radius:10px; padding:24px; text-align:center; color:var(--gray);}
+  .mapping-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin:14px 0;}
+  .mapping-grid label{font-size:12px; color:var(--gray); display:block; margin-bottom:4px;}
+  .scroll-table{max-height:320px; overflow:auto; border:1px solid var(--border); border-radius:8px;}
+  .hint{font-size:12px; color:var(--gray); margin-top:4px;}
+  footer{text-align:center; color:var(--gray); font-size:12px; padding:20px;}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div>
+    <h1>RDF2 Downtime Logger</h1>
+    <div class="sub">บันทึกเวลาหยุดเครื่อง / Start-Stop Line / นำเข้าข้อมูล Grab Crane</div>
+  </div>
+  <div class="row">
+    <span id="clock" class="sub" style="color:#fff;font-size:16px;font-weight:700;"></span>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button data-tab="today" class="active">บันทึกข้อมูลวันนี้</button>
+  <button data-tab="report">รายงานประจำวัน</button>
+  <button data-tab="grab">นำเข้า Grab Crane</button>
+</nav>
+
+<main>
+
+  <!-- ===================== TAB: TODAY ===================== -->
+  <section id="tab-today" class="tab-panel active">
+
+    <section class="panel">
+      <h2>
+        เลือกวันที่บันทึก
+        <span class="row"><input type="date" id="entryDate"></span>
+      </h2>
+
+      <h2 style="margin-top:4px;">Start Line / Stop Line</h2>
+      <div class="quick-actions">
+        <button class="start" id="btnQuickStart">▶ บันทึก Start Line (เวลาปัจจุบัน)</button>
+        <button class="stop" id="btnQuickStop">■ บันทึก Stop Line (เวลาปัจจุบัน)</button>
+      </div>
+      <div class="entry-form">
+        <div>
+          <label>ประเภท</label>
+          <select id="lineType"><option value="Start">Start Line</option><option value="Stop">Stop Line</option></select>
+        </div>
+        <div>
+          <label>เวลา</label>
+          <input type="time" id="lineTime">
+        </div>
+        <div>
+          <label>หมายเหตุ</label>
+          <input type="text" id="lineNote" placeholder="(ถ้ามี)">
+        </div>
+        <div>
+          <button class="primary" id="btnAddLine">+ บันทึก</button>
+        </div>
+      </div>
+      <div class="scroll-table">
+        <table id="lineTable">
+          <thead><tr><th>เวลา</th><th>ประเภท</th><th class="left">หมายเหตุ</th><th>จัดการ</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>รายการหยุดเครื่อง (Downtime)</h2>
+      <div class="entry-form">
+        <div>
+          <label>เวลาเริ่มหยุด</label>
+          <input type="time" id="dtStart">
+        </div>
+        <div>
+          <label>เวลาเดินเครื่องต่อ</label>
+          <input type="time" id="dtEnd">
+        </div>
+        <div style="grid-column:span 2;">
+          <label>สาเหตุ / จุดที่หยุด</label>
+          <input type="text" id="dtReason" placeholder="เช่น Plug Spinner">
+        </div>
+        <div style="grid-column:span 2;">
+          <label>หมายเหตุ</label>
+          <input type="text" id="dtNote" placeholder="(ถ้ามี)">
+        </div>
+        <div>
+          <button class="primary" id="btnAddDowntime">+ เพิ่มรายการ</button>
+        </div>
+      </div>
+      <div class="hint">ถ้าเวลาเดินเครื่องต่อ น้อยกว่า เวลาเริ่มหยุด ระบบจะเข้าใจว่าคาบเกี่ยวข้ามเที่ยงคืนไปวันถัดไปให้อัตโนมัติ</div>
+      <div class="scroll-table" style="margin-top:12px;">
+        <table id="downtimeTable">
+          <thead><tr><th>เริ่มหยุด</th><th>เดินเครื่องต่อ</th><th>ระยะเวลา</th><th class="left">สาเหตุ</th><th class="left">หมายเหตุ</th><th>จัดการ</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="row" style="margin-top:12px; font-size:13px; color:var(--gray);">
+        รวมเวลาหยุดวันนี้: <b id="todayTotalDowntime" style="color:var(--dark);">-</b>&nbsp; (<span id="todayCount">0</span> รายการ)
+      </div>
+    </section>
+
+  </section>
+
+  <!-- ===================== TAB: REPORT ===================== -->
+  <section id="tab-report" class="tab-panel">
+
+    <section class="panel">
+      <h2>
+        รายงานประจำวัน
+        <span class="row">
+          <input type="date" id="reportDate">
+          <button id="btnLoadReport" class="primary">แสดงผล</button>
+        </span>
+      </h2>
+      <div class="hint">ค่าเริ่มต้นจะแสดง "เมื่อวาน" เพราะข้อมูลกรอกวันนี้จะถูกนำไปทำรายงานในวันถัดไป</div>
+    </section>
+
+    <div class="cards-grid">
+      <div class="kpi-card blue">
+        <div class="name">เวลาเดินไลน์ (Start-Stop Line)</div>
+        <div class="value" id="rLineTime">-</div>
+      </div>
+      <div class="kpi-card red">
+        <div class="name">รวมเวลาหยุดเครื่องทั้งหมด</div>
+        <div class="value" id="rDowntime">-</div>
+      </div>
+      <div class="kpi-card green">
+        <div class="name">เวลาเดินเครื่องจริง (สุทธิ)</div>
+        <div class="value" id="rNetRun">-</div>
+      </div>
+      <div class="kpi-card">
+        <div class="name">Availability</div>
+        <div class="value" id="rAvail">-</div>
+      </div>
+    </div>
+
+    <section class="panel">
+      <h2>สรุปแยกตามช่วงเวลา (เช้า 00:00-12:00 / บ่าย 12:00-17:00 / ดึก 17:00-24:00)</h2>
+      <table class="period-table">
+        <thead><tr><th class="left">ช่วง</th><th>เวลาเดินไลน์</th><th>เวลาหยุดเครื่อง</th><th>จำนวน Grab</th><th>น้ำหนักเฉลี่ย/แกรบ (kg)</th></tr></thead>
+        <tbody id="periodTable"></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>รายการหยุดเครื่อง</h2>
+      <div class="scroll-table">
+        <table>
+          <thead><tr><th>ช่วง</th><th>เวลา</th><th>ระยะเวลา</th><th class="left">สาเหตุ</th><th class="left">หมายเหตุ</th></tr></thead>
+          <tbody id="reportDowntimeTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Grab Crane</h2>
+      <div class="cards-grid">
+        <div class="kpi-card">
+          <div class="name">จำนวน Grab ทั้งหมด</div>
+          <div class="value" id="rGrabCount">-</div>
+        </div>
+        <div class="kpi-card">
+          <div class="name">น้ำหนักเฉลี่ยต่อแกรบ</div>
+          <div class="value" id="rGrabAvg">-</div>
+        </div>
+        <div class="kpi-card">
+          <div class="name">น้ำหนักรวม</div>
+          <div class="value" id="rGrabTotal">-</div>
+        </div>
+      </div>
+    </section>
+
+  </section>
+
+  <!-- ===================== TAB: GRAB CRANE IMPORT ===================== -->
+  <section id="tab-grab" class="tab-panel">
+    <section class="panel">
+      <h2>นำเข้าไฟล์ CSV จากระบบ Grab Crane</h2>
+      <div class="row" style="margin-bottom:14px;">
+        <label style="font-size:13px;">วันที่ของข้อมูล:&nbsp;</label>
+        <input type="date" id="grabDate">
+      </div>
+      <div class="csv-drop">
+        <input type="file" id="csvFile" accept=".csv,text/csv">
+        <div class="hint">เลือกไฟล์ CSV ที่ export จากเว็บแอป Grab Crane</div>
+      </div>
+      <div id="mappingArea" style="display:none;">
+        <div class="mapping-grid">
+          <div>
+            <label>คอลัมน์เวลา (Timestamp)</label>
+            <select id="mapTimestamp"></select>
+          </div>
+          <div>
+            <label>คอลัมน์วันที่ (ถ้าแยกจากเวลา - ไม่บังคับ)</label>
+            <select id="mapDate"><option value="">(ไม่มี / รวมอยู่ในคอลัมน์เวลาแล้ว)</option></select>
+          </div>
+          <div>
+            <label>คอลัมน์น้ำหนัก (Weight)</label>
+            <select id="mapWeight"></select>
+          </div>
+        </div>
+        <div class="hint">ตัวอย่างข้อมูล 5 แถวแรก (ตรวจสอบว่า mapping ถูกต้อง)</div>
+        <div class="scroll-table" style="margin:10px 0;">
+          <table id="previewTable"><thead></thead><tbody></tbody></table>
+        </div>
+        <div class="row">
+          <label style="font-size:13px;"><input type="checkbox" id="grabReplace" checked style="width:auto;"> แทนที่ข้อมูลเดิมของวันนี้ (ถ้ามี)</label>
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <button class="primary" id="btnConfirmImport">ยืนยันนำเข้าข้อมูล</button>
+          <span id="importResult" class="hint"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>
+        ตรวจสอบข้อมูลที่นำเข้าแล้ว
+        <span class="row">
+          <input type="date" id="grabCheckDate">
+          <button id="btnCheckGrab">ตรวจสอบ</button>
+          <button class="danger" id="btnDeleteGrab">ลบข้อมูลวันนี้</button>
+        </span>
+      </h2>
+      <div id="grabCheckResult"></div>
+    </section>
+  </section>
+
+</main>
+
+<footer>RDF2 Downtime Logger</footer>
+<div class="toast" id="toast"></div>
+
+<script>
+const PERIOD_LABEL = { 'เช้า':'morning', 'บ่าย':'afternoon', 'ดึก':'night' };
+
+function todayStr(offsetDays=0){
+  const d = new Date(); d.setDate(d.getDate()+offsetDays);
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function nowTime(){
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function fmtMin(min){
+  if (min === null || min === undefined || isNaN(min)) return '-';
+  const h = Math.floor(min/60), m = Math.round(min%60);
+  return `${h} ชม. ${m} น.`;
+}
+function toast(msg, isErr){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isErr ? ' err' : '');
+  setTimeout(()=>{ t.className='toast'; }, 2500);
+}
+async function api(path, opts){
+  const res = await fetch(path, opts);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'เกิดข้อผิดพลาด');
+  return data;
+}
+
+// ---------------- Tabs ----------------
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+  });
+});
+
+function tickClock(){
+  const d = new Date();
+  document.getElementById('clock').textContent = d.toLocaleString('th-TH', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+setInterval(tickClock, 1000); tickClock();
+
+// ---------------- TODAY TAB ----------------
+const entryDateEl = document.getElementById('entryDate');
+entryDateEl.value = todayStr();
+
+async function loadLineTable(){
+  const data = await api(`/api/line?date=${entryDateEl.value}`);
+  const tbody = document.querySelector('#lineTable tbody');
+  tbody.innerHTML = '';
+  if (data.rows.length === 0){
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-note">ยังไม่มีรายการ</td></tr>';
+    return;
+  }
+  for (const r of data.rows){
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r.Time}</td><td>${r.EventType === 'Start' ? 'Start Line' : 'Stop Line'}</td>
+      <td class="left">${r.Note||''}</td>
+      <td><button class="danger" data-id="${r.ID}">ลบ</button></td>`;
+    tr.querySelector('button').addEventListener('click', async ()=>{
+      await api(`/api/line/${r.ID}`, { method:'DELETE' });
+      loadLineTable();
+    });
+    tbody.appendChild(tr);
+  }
+}
+
+async function loadDowntimeTable(){
+  const data = await api(`/api/downtime?date=${entryDateEl.value}`);
+  const tbody = document.querySelector('#downtimeTable tbody');
+  tbody.innerHTML = '';
+  let totalMin = 0;
+  if (data.rows.length === 0){
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-note">ยังไม่มีรายการ</td></tr>';
+  }
+  for (const r of data.rows){
+    const [sh,sm] = r.StartTime.split(':').map(Number);
+    const [eh,em] = r.EndTime.split(':').map(Number);
+    let dur = (eh*60+em) - (sh*60+sm);
+    if (dur < 0) dur += 1440;
+    totalMin += dur;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r.StartTime}</td><td>${r.EndTime}</td><td>${fmtMin(dur)}</td>
+      <td class="left">${r.Reason||''}</td><td class="left">${r.Note||''}</td>
+      <td><button class="danger" data-id="${r.ID}">ลบ</button></td>`;
+    tr.querySelector('button').addEventListener('click', async ()=>{
+      await api(`/api/downtime/${r.ID}`, { method:'DELETE' });
+      loadDowntimeTable();
+    });
+    tbody.appendChild(tr);
+  }
+  document.getElementById('todayTotalDowntime').textContent = fmtMin(totalMin);
+  document.getElementById('todayCount').textContent = data.rows.length;
+}
+
+document.getElementById('entryDate').addEventListener('change', ()=>{ loadLineTable(); loadDowntimeTable(); });
+
+document.getElementById('btnQuickStart').addEventListener('click', async ()=>{
+  try{
+    await api('/api/line', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ entryDate: entryDateEl.value, eventType:'Start', time: nowTime() }) });
+    toast('บันทึก Start Line แล้ว'); loadLineTable();
+  }catch(e){ toast(e.message, true); }
+});
+document.getElementById('btnQuickStop').addEventListener('click', async ()=>{
+  try{
+    await api('/api/line', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ entryDate: entryDateEl.value, eventType:'Stop', time: nowTime() }) });
+    toast('บันทึก Stop Line แล้ว'); loadLineTable();
+  }catch(e){ toast(e.message, true); }
+});
+document.getElementById('btnAddLine').addEventListener('click', async ()=>{
+  const time = document.getElementById('lineTime').value;
+  if (!time){ toast('กรุณาระบุเวลา', true); return; }
+  try{
+    await api('/api/line', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        entryDate: entryDateEl.value,
+        eventType: document.getElementById('lineType').value,
+        time,
+        note: document.getElementById('lineNote').value,
+      }) });
+    document.getElementById('lineNote').value='';
+    toast('บันทึกแล้ว'); loadLineTable();
+  }catch(e){ toast(e.message, true); }
+});
+
+document.getElementById('btnAddDowntime').addEventListener('click', async ()=>{
+  const startTime = document.getElementById('dtStart').value;
+  const endTime = document.getElementById('dtEnd').value;
+  if (!startTime || !endTime){ toast('กรุณาระบุเวลาเริ่มหยุดและเวลาเดินเครื่องต่อ', true); return; }
+  try{
+    await api('/api/downtime', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        entryDate: entryDateEl.value, startTime, endTime,
+        reason: document.getElementById('dtReason').value,
+        note: document.getElementById('dtNote').value,
+      }) });
+    document.getElementById('dtStart').value='';
+    document.getElementById('dtEnd').value='';
+    document.getElementById('dtReason').value='';
+    document.getElementById('dtNote').value='';
+    toast('เพิ่มรายการหยุดเครื่องแล้ว'); loadDowntimeTable();
+  }catch(e){ toast(e.message, true); }
+});
+
+loadLineTable(); loadDowntimeTable();
+
+// ---------------- REPORT TAB ----------------
+const reportDateEl = document.getElementById('reportDate');
+reportDateEl.value = todayStr(-1);
+
+function periodBadge(p){
+  const cls = p === 'เช้า' ? 'morning' : (p === 'บ่าย' ? 'afternoon' : 'night');
+  return `<span class="badge ${cls}">${p}</span>`;
+}
+
+async function loadReport(){
+  const date = reportDateEl.value;
+  const data = await api(`/api/report?date=${date}`);
+
+  document.getElementById('rLineTime').innerHTML = fmtMin(data.line.totalMinutes);
+  document.getElementById('rDowntime').innerHTML = fmtMin(data.downtime.totalMinutes);
+  document.getElementById('rNetRun').innerHTML = fmtMin(data.line.netRunMinutes);
+  document.getElementById('rAvail').innerHTML = data.line.availabilityPct === null ? '-' : data.line.availabilityPct.toFixed(1) + ' %';
+
+  const periods = ['เช้า','บ่าย','ดึก'];
+  const ptbody = document.getElementById('periodTable');
+  ptbody.innerHTML = '';
+  for (const p of periods){
+    const g = data.grab.byPeriod[p];
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="left">${periodBadge(p)}</td>
+      <td>${fmtMin(data.line.byPeriod[p])}</td>
+      <td>${fmtMin(data.downtime.byPeriod[p])}</td>
+      <td>${g.count}</td>
+      <td>${g.avgWeight === null ? '-' : g.avgWeight.toFixed(2)}</td>`;
+    ptbody.appendChild(tr);
+  }
+
+  const dtbody = document.getElementById('reportDowntimeTable');
+  dtbody.innerHTML = '';
+  if (data.downtime.segments.length === 0){
+    dtbody.innerHTML = '<tr><td colspan="5" class="empty-note">ไม่มีรายการหยุดเครื่อง</td></tr>';
+  }
+  for (const s of data.downtime.segments){
+    const tr = document.createElement('tr');
+    const carry = s.carriedOver ? '<span class="badge carry">ต่อจากเมื่อวาน</span>' : '';
+    tr.innerHTML = `<td>${periodBadge(s.period)}</td>
+      <td>${s.startTime}-${s.endTime}${carry}</td>
+      <td>${fmtMin(s.minutes)}</td>
+      <td class="left">${s.reason||''}</td>
+      <td class="left">${s.note||''}</td>`;
+    dtbody.appendChild(tr);
+  }
+
+  document.getElementById('rGrabCount').textContent = data.grab.totalGrabs;
+  document.getElementById('rGrabAvg').textContent = data.grab.avgWeight === null ? '-' : data.grab.avgWeight.toFixed(2) + ' kg';
+  document.getElementById('rGrabTotal').textContent = data.grab.totalWeight.toFixed(2) + ' kg';
+}
+document.getElementById('btnLoadReport').addEventListener('click', loadReport);
+loadReport();
+
+// ---------------- GRAB CRANE IMPORT TAB ----------------
+document.getElementById('grabDate').value = todayStr();
+document.getElementById('grabCheckDate').value = todayStr();
+
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i=0;i<text.length;i++){
+    const c = text[i];
+    if (inQuotes){
+      if (c === '"'){
+        if (text[i+1] === '"'){ field += '"'; i++; } else { inQuotes = false; }
+      } else field += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ','){ row.push(field); field=''; }
+      else if (c === '\r'){ /* skip */ }
+      else if (c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+      else field += c;
+    }
+  }
+  if (field.length>0 || row.length>0){ row.push(field); rows.push(row); }
+  return rows.filter(r => !(r.length===1 && r[0].trim()===''));
+}
+
+let csvHeaders = [];
+let csvRows = [];
+
+function guessTimestampCol(headers, rows){
+  const nameMatch = headers.findIndex(h => /time|เวลา|date|วันที่|datetime/i.test(h));
+  if (nameMatch >= 0) return nameMatch;
+  for (let c=0;c<headers.length;c++){
+    const sample = rows[0] ? rows[0][c] : '';
+    if (/\d{1,2}:\d{2}/.test(sample)) return c;
+  }
+  return 0;
+}
+function guessWeightCol(headers, rows){
+  const nameMatch = headers.findIndex(h => /weight|kg|น้ำหนัก|มวล|load/i.test(h));
+  if (nameMatch >= 0) return nameMatch;
+  for (let c=0;c<headers.length;c++){
+    const sample = rows[0] ? rows[0][c] : '';
+    if (sample !== '' && !isNaN(Number(sample))) return c;
+  }
+  return headers.length > 1 ? 1 : 0;
+}
+
+document.getElementById('csvFile').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  const parsed = parseCSV(text);
+  if (parsed.length < 2){ toast('ไฟล์ CSV ไม่มีข้อมูล', true); return; }
+  csvHeaders = parsed[0];
+  csvRows = parsed.slice(1);
+
+  const mapTs = document.getElementById('mapTimestamp');
+  const mapDate = document.getElementById('mapDate');
+  const mapWt = document.getElementById('mapWeight');
+  mapTs.innerHTML = ''; mapWt.innerHTML = '';
+  mapDate.innerHTML = '<option value="">(ไม่มี / รวมอยู่ในคอลัมน์เวลาแล้ว)</option>';
+  csvHeaders.forEach((h, i)=>{
+    const opt = `<option value="${i}">${h || '(คอลัมน์ ' + (i+1) + ')'}</option>`;
+    mapTs.insertAdjacentHTML('beforeend', opt);
+    mapDate.insertAdjacentHTML('beforeend', opt);
+    mapWt.insertAdjacentHTML('beforeend', opt);
+  });
+  mapTs.value = guessTimestampCol(csvHeaders, csvRows);
+  mapWt.value = guessWeightCol(csvHeaders, csvRows);
+
+  renderPreview();
+  document.getElementById('mappingArea').style.display = 'block';
+});
+
+function renderPreview(){
+  const thead = document.querySelector('#previewTable thead');
+  const tbody = document.querySelector('#previewTable tbody');
+  thead.innerHTML = '<tr>' + csvHeaders.map(h=>`<th>${h}</th>`).join('') + '</tr>';
+  tbody.innerHTML = csvRows.slice(0,5).map(r => '<tr>' + r.map(c=>`<td>${c}</td>`).join('') + '</tr>').join('');
+}
+['mapTimestamp','mapDate','mapWeight'].forEach(id=>{
+  document.getElementById(id).addEventListener('change', renderPreview);
+});
+
+document.getElementById('btnConfirmImport').addEventListener('click', async ()=>{
+  const tsCol = Number(document.getElementById('mapTimestamp').value);
+  const dateCol = document.getElementById('mapDate').value;
+  const wtCol = Number(document.getElementById('mapWeight').value);
+  const reportDate = document.getElementById('grabDate').value;
+  const replace = document.getElementById('grabReplace').checked;
+
+  const rows = csvRows.map(r => {
+    let dateTime = r[tsCol] || '';
+    if (dateCol !== ''){ dateTime = `${r[Number(dateCol)]} ${dateTime}`; }
+    return { dateTime, weight: r[wtCol] };
+  }).filter(r => r.dateTime && r.weight !== '');
+
+  try{
+    const result = await api('/api/grab/import', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ reportDate, rows, sourceFile: document.getElementById('csvFile').files[0]?.name || '', replace }) });
+    document.getElementById('importResult').textContent = `นำเข้าสำเร็จ ${result.imported} แถว (วันที่ ${reportDate})`;
+    toast(`นำเข้าข้อมูล Grab Crane สำเร็จ ${result.imported} รายการ`);
+  }catch(e){ toast(e.message, true); }
+});
+
+document.getElementById('btnCheckGrab').addEventListener('click', async ()=>{
+  const date = document.getElementById('grabCheckDate').value;
+  const data = await api(`/api/grab?date=${date}`);
+  const el = document.getElementById('grabCheckResult');
+  if (data.rows.length === 0){ el.innerHTML = '<div class="empty-note">ไม่มีข้อมูลของวันที่นี้</div>'; return; }
+  const total = data.rows.length;
+  const avg = data.rows.reduce((s,r)=>s+Number(r.Weight||0),0) / total;
+  el.innerHTML = `<div class="hint">จำนวน ${total} แกรบ / น้ำหนักเฉลี่ย ${avg.toFixed(2)} kg</div>
+    <div class="scroll-table" style="margin-top:8px;"><table>
+    <thead><tr><th>เวลา</th><th>น้ำหนัก (kg)</th></tr></thead>
+    <tbody>${data.rows.map(r=>`<tr><td>${r.DateTime}</td><td>${r.Weight}</td></tr>`).join('')}</tbody>
+    </table></div>`;
+});
+document.getElementById('btnDeleteGrab').addEventListener('click', async ()=>{
+  const date = document.getElementById('grabCheckDate').value;
+  if (!confirm(`ลบข้อมูล Grab Crane ของวันที่ ${date} ทั้งหมด?`)) return;
+  const result = await api(`/api/grab?date=${date}`, { method:'DELETE' });
+  toast(`ลบแล้ว ${result.deleted} รายการ`);
+  document.getElementById('btnCheckGrab').click();
+});
+</script>
+</body>
+</html>

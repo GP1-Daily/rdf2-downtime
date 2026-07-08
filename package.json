@@ -1,0 +1,17 @@
+{
+  "name": "rdf2_downtime",
+  "version": "1.0.0",
+  "description": "RDF2 Machine Downtime & Line Time Logger + Grab Crane CSV Report",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "pg": "^8.22.0"
+  }
+}
