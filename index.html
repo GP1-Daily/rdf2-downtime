@@ -335,6 +335,16 @@ async function api(path, opts){
   return data;
 }
 
+// Disables the button for the duration of the click handler so a chattering
+// mouse switch or an accidental double-click can't submit the same entry twice.
+function onClickGuarded(el, handler){
+  el.addEventListener('click', async () => {
+    if (el.disabled) return;
+    el.disabled = true;
+    try { await handler(); } finally { el.disabled = false; }
+  });
+}
+
 // ---------------- Tabs ----------------
 document.querySelectorAll('nav.tabs button').forEach(btn=>{
   btn.addEventListener('click', ()=>{
@@ -406,21 +416,21 @@ async function loadDowntimeTable(){
 
 document.getElementById('entryDate').addEventListener('change', ()=>{ loadLineTable(); loadDowntimeTable(); });
 
-document.getElementById('btnQuickStart').addEventListener('click', async ()=>{
+onClickGuarded(document.getElementById('btnQuickStart'), async ()=>{
   try{
     await api('/api/line', { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ entryDate: entryDateEl.value, eventType:'Start', time: nowTime() }) });
     toast('บันทึก Start Line แล้ว'); loadLineTable();
   }catch(e){ toast(e.message, true); }
 });
-document.getElementById('btnQuickStop').addEventListener('click', async ()=>{
+onClickGuarded(document.getElementById('btnQuickStop'), async ()=>{
   try{
     await api('/api/line', { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ entryDate: entryDateEl.value, eventType:'Stop', time: nowTime() }) });
     toast('บันทึก Stop Line แล้ว'); loadLineTable();
   }catch(e){ toast(e.message, true); }
 });
-document.getElementById('btnAddLine').addEventListener('click', async ()=>{
+onClickGuarded(document.getElementById('btnAddLine'), async ()=>{
   const time = document.getElementById('lineTime').value;
   if (!time){ toast('กรุณาระบุเวลา', true); return; }
   try{
@@ -436,7 +446,7 @@ document.getElementById('btnAddLine').addEventListener('click', async ()=>{
   }catch(e){ toast(e.message, true); }
 });
 
-document.getElementById('btnAddDowntime').addEventListener('click', async ()=>{
+onClickGuarded(document.getElementById('btnAddDowntime'), async ()=>{
   const startTime = document.getElementById('dtStart').value;
   const endTime = document.getElementById('dtEnd').value;
   if (!startTime || !endTime){ toast('กรุณาระบุเวลาเริ่มหยุดและเวลาเดินเครื่องต่อ', true); return; }
@@ -596,7 +606,7 @@ function renderPreview(){
   document.getElementById(id).addEventListener('change', renderPreview);
 });
 
-document.getElementById('btnConfirmImport').addEventListener('click', async ()=>{
+onClickGuarded(document.getElementById('btnConfirmImport'), async ()=>{
   const tsCol = Number(document.getElementById('mapTimestamp').value);
   const dateCol = document.getElementById('mapDate').value;
   const wtCol = Number(document.getElementById('mapWeight').value);
