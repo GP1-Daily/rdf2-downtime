@@ -96,14 +96,34 @@ async function appendRows(sheetName, dataArr) {
     const ws = wb.getWorksheet(sheetName);
     const cols = SHEETS[sheetName];
     let maxId = 0;
+    // Re-importing the same file (same ReportDate + DateTime) updates the
+    // existing row instead of creating a duplicate, regardless of whether
+    // "replace existing data" was used on import.
+    const isGrabCrane = sheetName === 'GrabCrane';
+    const existingRowByKey = new Map();
     ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
       if (rowNumber === 1) return;
       const id = Number(row.getCell(1).value) || 0;
       if (id > maxId) maxId = id;
+      if (isGrabCrane) {
+        const key = `${row.getCell(2).value}|${row.getCell(3).value}`; // ReportDate|DateTime
+        existingRowByKey.set(key, rowNumber);
+      }
     });
     const created = new Date().toISOString();
     const records = [];
     for (const data of dataArr) {
+      if (isGrabCrane) {
+        const key = `${data.ReportDate}|${data.DateTime}`;
+        const existingRowNumber = existingRowByKey.get(key);
+        if (existingRowNumber) {
+          const row = ws.getRow(existingRowNumber);
+          row.getCell(4).value = data.Weight; // Weight
+          row.getCell(5).value = data.SourceFile; // SourceFile
+          records.push({ ID: row.getCell(1).value, CreatedAt: row.getCell(6).value, ...data });
+          continue;
+        }
+      }
       maxId += 1;
       const record = { CreatedAt: created, ...data, ID: maxId };
       ws.addRow(cols.map((c) => (record[c] !== undefined ? record[c] : '')));

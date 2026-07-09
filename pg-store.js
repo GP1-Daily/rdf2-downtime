@@ -64,6 +64,8 @@ function ensureSchema() {
         source_file TEXT DEFAULT '',
         created_at TIMESTAMPTZ DEFAULT now()
       );
+      CREATE UNIQUE INDEX IF NOT EXISTS grab_crane_report_datetime_idx
+        ON grab_crane (report_date, date_time);
     `);
   }
   return schemaReady;
@@ -93,7 +95,14 @@ async function appendRow(sheetName, data) {
   const dbCols = jsKeys.map((k) => columns[k]);
   const values = jsKeys.map((k) => data[k]);
   const placeholders = values.map((_, i) => `$${i + 1}`);
-  const sql = `INSERT INTO ${table} (${dbCols.join(',')}) VALUES (${placeholders.join(',')}) RETURNING *`;
+  let sql = `INSERT INTO ${table} (${dbCols.join(',')}) VALUES (${placeholders.join(',')})`;
+  if (sheetName === 'GrabCrane') {
+    // Re-importing the same file (same report_date + date_time) updates the
+    // existing row instead of creating a duplicate, regardless of whether
+    // "replace existing data" was used on import.
+    sql += ` ON CONFLICT (report_date, date_time) DO UPDATE SET weight = EXCLUDED.weight, source_file = EXCLUDED.source_file`;
+  }
+  sql += ` RETURNING *`;
   const res = await pool.query(sql, values);
   return rowToObj(columns, res.rows[0]);
 }

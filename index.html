@@ -211,7 +211,7 @@
     <section class="panel">
       <h2>สรุปแยกตามช่วงเวลา (เช้า 00:00-12:00 / บ่าย 12:00-17:00 / ดึก 17:00-24:00)</h2>
       <table class="period-table">
-        <thead><tr><th class="left">ช่วง</th><th>เวลาเดินไลน์</th><th>เวลาหยุดเครื่อง</th><th>จำนวน Grab</th><th>น้ำหนักเฉลี่ย/แกรบ (kg)</th></tr></thead>
+        <thead><tr><th class="left">ช่วง</th><th>เวลาเดินไลน์</th><th>เวลาหยุดเครื่อง</th><th>จำนวน Grab</th><th>น้ำหนักเฉลี่ย/แกรบ (ตัน)</th></tr></thead>
         <tbody id="periodTable"></tbody>
       </table>
     </section>
@@ -506,8 +506,8 @@ async function loadReport(){
   }
 
   document.getElementById('rGrabCount').textContent = data.grab.totalGrabs;
-  document.getElementById('rGrabAvg').textContent = data.grab.avgWeight === null ? '-' : data.grab.avgWeight.toFixed(2) + ' kg';
-  document.getElementById('rGrabTotal').textContent = data.grab.totalWeight.toFixed(2) + ' kg';
+  document.getElementById('rGrabAvg').textContent = data.grab.avgWeight === null ? '-' : data.grab.avgWeight.toFixed(2) + ' ตัน';
+  document.getElementById('rGrabTotal').textContent = data.grab.totalWeight.toFixed(2) + ' ตัน';
 }
 document.getElementById('btnLoadReport').addEventListener('click', loadReport);
 loadReport();
@@ -624,9 +624,9 @@ document.getElementById('btnCheckGrab').addEventListener('click', async ()=>{
   if (data.rows.length === 0){ el.innerHTML = '<div class="empty-note">ไม่มีข้อมูลของวันที่นี้</div>'; return; }
   const total = data.rows.length;
   const avg = data.rows.reduce((s,r)=>s+Number(r.Weight||0),0) / total;
-  el.innerHTML = `<div class="hint">จำนวน ${total} แกรบ / น้ำหนักเฉลี่ย ${avg.toFixed(2)} kg</div>
+  el.innerHTML = `<div class="hint">จำนวน ${total} แกรบ / น้ำหนักเฉลี่ย ${avg.toFixed(2)} ตัน</div>
     <div class="scroll-table" style="margin-top:8px;"><table>
-    <thead><tr><th>เวลา</th><th>น้ำหนัก (kg)</th></tr></thead>
+    <thead><tr><th>เวลา</th><th>น้ำหนัก (ตัน)</th></tr></thead>
     <tbody>${data.rows.map(r=>`<tr><td>${r.DateTime}</td><td>${r.Weight}</td></tr>`).join('')}</tbody>
     </table></div>`;
 });
