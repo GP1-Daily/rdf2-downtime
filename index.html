@@ -65,6 +65,24 @@
   .kpi-card .value{font-size:24px; font-weight:800; color:var(--dark);}
   .kpi-card .value small{font-size:13px; font-weight:600; color:var(--gray);}
   .period-table td, .period-table th{text-align:center;}
+  .print-summary{background:#fff; border:1px solid var(--border); border-radius:10px; padding:24px; max-width:640px; margin:0 auto;}
+  .print-summary .ps-header{display:flex; justify-content:space-between; align-items:baseline; border-bottom:2px solid var(--dark); padding-bottom:10px; margin-bottom:16px;}
+  .print-summary .ps-title{font-size:18px; font-weight:800; color:var(--dark);}
+  .print-summary .ps-date{font-size:15px; font-weight:700; color:var(--dark2);}
+  .print-summary .ps-section-title{font-size:13px; font-weight:700; color:var(--blue); margin:18px 0 8px; text-transform:uppercase; letter-spacing:.03em;}
+  .print-summary .ps-section-title:first-of-type{margin-top:0;}
+  .ps-timeline{display:flex; flex-direction:column; gap:4px;}
+  .ps-timeline .ps-row{display:flex; gap:10px; font-size:13px; padding:4px 8px; border-radius:6px;}
+  .ps-timeline .ps-row.line-event{background:#eff6ff; color:#1d4ed8; font-weight:700;}
+  .ps-timeline .ps-row.downtime-event{background:#fef2f2; color:#7f1d1d;}
+  .ps-timeline .ps-row .ps-time{min-width:110px; font-weight:700;}
+  .ps-timeline .empty-note{padding:8px;}
+  .ps-table{width:100%; border-collapse:collapse; font-size:13px; margin-bottom:4px;}
+  .ps-table td, .ps-table th{padding:6px 8px; border-bottom:1px solid var(--border); text-align:center;}
+  .ps-table th{color:var(--gray); font-weight:700;}
+  .ps-table td.left, .ps-table th.left{text-align:left;}
+  .ps-table td.ps-label{text-align:left; color:var(--gray); font-weight:600;}
+  .ps-table td.ps-value{text-align:right; font-weight:800; color:var(--dark);}
   .tab-panel{display:none;}
   .tab-panel.active{display:block;}
   .toast{position:fixed; bottom:20px; right:20px; background:var(--dark); color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; opacity:0; transition:.3s; pointer-events:none; z-index:50;}
@@ -244,6 +262,30 @@
       </div>
     </section>
 
+    <section class="panel">
+      <h2>
+        สรุปประจำวัน (สำหรับดาวน์โหลดเป็นรูปภาพ)
+        <button class="primary" id="btnDownloadImage">📷 ดาวน์โหลดเป็นรูปภาพ</button>
+      </h2>
+      <div id="printSummary" class="print-summary">
+        <div class="ps-header">
+          <div class="ps-title">RDF2 Downtime Logger</div>
+          <div class="ps-date" id="psDate">-</div>
+        </div>
+        <div class="ps-section-title">Start Line / Stop Line</div>
+        <div id="psTimeline" class="ps-timeline"></div>
+        <div class="ps-section-title">สรุปเวลาหยุดเครื่องตามสาเหตุ</div>
+        <table class="ps-table">
+          <thead><tr><th class="left">สาเหตุ</th><th>จำนวนครั้ง</th><th>รวมเวลา</th></tr></thead>
+          <tbody id="psReasonTable"></tbody>
+        </table>
+        <div class="ps-section-title">สรุปรวม</div>
+        <table class="ps-table">
+          <tbody id="psTotalsTable"></tbody>
+        </table>
+      </div>
+    </section>
+
   </section>
 
   <!-- ===================== TAB: GRAB CRANE IMPORT ===================== -->
@@ -305,6 +347,7 @@
 <footer>RDF2 Downtime Logger</footer>
 <div class="toast" id="toast"></div>
 
+<script src="html2canvas.min.js"></script>
 <script>
 const PERIOD_LABEL = { 'เช้า':'morning', 'บ่าย':'afternoon', 'ดึก':'night' };
 
@@ -518,9 +561,84 @@ async function loadReport(){
   document.getElementById('rGrabCount').textContent = data.grab.totalGrabs;
   document.getElementById('rGrabAvg').textContent = data.grab.avgWeight === null ? '-' : data.grab.avgWeight.toFixed(2) + ' ตัน';
   document.getElementById('rGrabTotal').textContent = data.grab.totalWeight.toFixed(2) + ' ตัน';
+
+  renderPrintSummary(date, data);
 }
+
+function renderPrintSummary(date, data){
+  document.getElementById('psDate').textContent = date;
+
+  // Reconstruct Start/Stop Line event points (on this date) from the line segments'
+  // sessionStart/sessionStop timestamps, deduplicated.
+  const lineEvents = [];
+  const seenStarts = new Set(), seenStops = new Set();
+  for (const s of data.line.segments){
+    const [startDate, startTime] = s.sessionStart.split(' ');
+    const [stopDate, stopTime] = s.sessionStop.split(' ');
+    if (startDate === date && !seenStarts.has(s.sessionStart)){
+      seenStarts.add(s.sessionStart);
+      lineEvents.push({ time: startTime, label: 'Start Line', cls: 'line-event' });
+    }
+    if (stopDate === date && !seenStops.has(s.sessionStop)){
+      seenStops.add(s.sessionStop);
+      lineEvents.push({ time: stopTime, label: 'Stop Line', cls: 'line-event' });
+    }
+  }
+  // Orphan Start/Stop events (no matching pair yet) don't produce segments,
+  // so they'd otherwise be silently missing from the timeline.
+  for (const inc of data.line.incomplete){
+    if (inc.type === 'no-stop') lineEvents.push({ time: inc.time, label: 'Start Line (ยังไม่มี Stop Line)', cls: 'line-event' });
+    else lineEvents.push({ time: inc.time, label: 'Stop Line (ไม่มี Start Line ก่อนหน้า)', cls: 'line-event' });
+  }
+  const downtimeEvents = data.downtime.segments.map(s => ({
+    time: s.startTime,
+    label: `${s.startTime}-${s.endTime} ${s.reason || '(ไม่ระบุสาเหตุ)'} (${fmtMin(s.minutes)})`,
+    cls: 'downtime-event',
+  }));
+  const timeline = [...lineEvents, ...downtimeEvents].sort((a,b) => a.time < b.time ? -1 : 1);
+
+  const tlEl = document.getElementById('psTimeline');
+  tlEl.innerHTML = timeline.length === 0
+    ? '<div class="empty-note">ไม่มีข้อมูล</div>'
+    : timeline.map(e => `<div class="ps-row ${e.cls}"><span class="ps-time">${e.time}</span><span>${e.label}</span></div>`).join('');
+
+  // Group downtime by reason
+  const byReason = new Map();
+  for (const s of data.downtime.segments){
+    const key = (s.reason || '(ไม่ระบุสาเหตุ)').trim();
+    const cur = byReason.get(key) || { count: 0, minutes: 0 };
+    cur.count += 1; cur.minutes += s.minutes;
+    byReason.set(key, cur);
+  }
+  const reasonBody = document.getElementById('psReasonTable');
+  reasonBody.innerHTML = byReason.size === 0
+    ? '<tr><td colspan="3" class="empty-note">ไม่มีรายการหยุดเครื่อง</td></tr>'
+    : [...byReason.entries()].map(([reason, v]) =>
+        `<tr><td class="left">${reason}</td><td>${v.count}</td><td>${fmtMin(v.minutes)}</td></tr>`).join('');
+
+  const totalsBody = document.getElementById('psTotalsTable');
+  totalsBody.innerHTML = [
+    ['เวลาเดินไลน์รวม', fmtMin(data.line.totalMinutes)],
+    ['รวมเวลาหยุดเครื่องทั้งหมด', fmtMin(data.downtime.totalMinutes)],
+    ['เวลาเดินเครื่องจริง (สุทธิ)', fmtMin(data.line.netRunMinutes)],
+    ['Availability', data.line.availabilityPct === null ? '-' : data.line.availabilityPct.toFixed(1) + ' %'],
+    ['จำนวน Grab ทั้งหมด', String(data.grab.totalGrabs)],
+    ['น้ำหนักเฉลี่ยต่อแกรบ', data.grab.avgWeight === null ? '-' : data.grab.avgWeight.toFixed(2) + ' ตัน'],
+    ['น้ำหนักรวม', data.grab.totalWeight.toFixed(2) + ' ตัน'],
+  ].map(([label, value]) => `<tr><td class="ps-label">${label}</td><td class="ps-value">${value}</td></tr>`).join('');
+}
+
 document.getElementById('btnLoadReport').addEventListener('click', loadReport);
 loadReport();
+
+onClickGuarded(document.getElementById('btnDownloadImage'), async ()=>{
+  const el = document.getElementById('printSummary');
+  const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff' });
+  const link = document.createElement('a');
+  link.download = `RDF2-สรุปประจำวัน-${reportDateEl.value}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+});
 
 // ---------------- GRAB CRANE IMPORT TAB ----------------
 document.getElementById('grabDate').value = todayStr();
