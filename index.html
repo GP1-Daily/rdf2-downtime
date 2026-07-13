@@ -65,6 +65,7 @@
   .kpi-card .value{font-size:24px; font-weight:800; color:var(--dark);}
   .kpi-card .value small{font-size:13px; font-weight:600; color:var(--gray);}
   .period-table td, .period-table th{text-align:center;}
+  .warn-banner{background:var(--amber-bg); color:#92400e; border:1px solid #fde68a; border-radius:8px; padding:10px 14px; font-size:13px; margin-bottom:14px;}
   .print-summary{background:#fff; border:1px solid var(--border); border-radius:10px; padding:24px; max-width:640px; margin:0 auto;}
   .print-summary .ps-header{display:flex; justify-content:space-between; align-items:baseline; border-bottom:2px solid var(--dark); padding-bottom:10px; margin-bottom:16px;}
   .print-summary .ps-title{font-size:18px; font-weight:800; color:var(--dark);}
@@ -127,6 +128,7 @@
       </h2>
 
       <h2 style="margin-top:4px;">Start Line / Stop Line</h2>
+      <div id="openSessionWarning" class="warn-banner" style="display:none;"></div>
       <div class="quick-actions">
         <button class="start" id="btnQuickStart">▶ บันทึก Start Line (เวลาปัจจุบัน)</button>
         <button class="stop" id="btnQuickStop">■ บันทึก Stop Line (เวลาปัจจุบัน)</button>
@@ -414,18 +416,42 @@ async function loadLineTable(){
   tbody.innerHTML = '';
   if (data.rows.length === 0){
     tbody.innerHTML = '<tr><td colspan="4" class="empty-note">ยังไม่มีรายการ</td></tr>';
-    return;
+  } else {
+    for (const r of data.rows){
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${r.Time}</td><td>${r.EventType === 'Start' ? 'Start Line' : 'Stop Line'}</td>
+        <td class="left">${r.Note||''}</td>
+        <td><button class="danger" data-id="${r.ID}">ลบ</button></td>`;
+      tr.querySelector('button').addEventListener('click', async ()=>{
+        await api(`/api/line/${r.ID}`, { method:'DELETE' });
+        loadLineTable();
+      });
+      tbody.appendChild(tr);
+    }
   }
-  for (const r of data.rows){
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${r.Time}</td><td>${r.EventType === 'Start' ? 'Start Line' : 'Stop Line'}</td>
-      <td class="left">${r.Note||''}</td>
-      <td><button class="danger" data-id="${r.ID}">ลบ</button></td>`;
-    tr.querySelector('button').addEventListener('click', async ()=>{
-      await api(`/api/line/${r.ID}`, { method:'DELETE' });
-      loadLineTable();
-    });
-    tbody.appendChild(tr);
+  await checkOpenLineSession();
+}
+
+// Warns if there's a Start Line from an earlier day with no matching Stop Line
+// yet - otherwise it silently stops appearing in any report after the day it
+// started, and an operator could easily forget to close it out.
+async function checkOpenLineSession(){
+  const data = await api('/api/line');
+  const rows = [...data.rows].sort((a,b) => {
+    if (a.EntryDate !== b.EntryDate) return a.EntryDate < b.EntryDate ? -1 : 1;
+    return a.Time < b.Time ? -1 : (a.Time > b.Time ? 1 : 0);
+  });
+  let open = null;
+  for (const ev of rows){
+    if (ev.EventType === 'Start') open = ev;
+    else if (ev.EventType === 'Stop') open = null;
+  }
+  const banner = document.getElementById('openSessionWarning');
+  if (open && open.EntryDate < entryDateEl.value){
+    banner.style.display = 'block';
+    banner.textContent = `⚠ มี Start Line ค้างไม่มี Stop Line ตั้งแต่วันที่ ${open.EntryDate} เวลา ${open.Time} น. กรุณาตรวจสอบและกรอก Stop Line ย้อนหลังให้ครบ`;
+  } else {
+    banner.style.display = 'none';
   }
 }
 
