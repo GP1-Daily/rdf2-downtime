@@ -235,7 +235,7 @@ async function handleReport(req, res, query) {
   const incompleteSessions = [];
   for (const sess of sessions) {
     if (sess.incomplete) {
-      if (sess.stop && !sess.start) {
+      if (sess.stop && !sess.start && sess.stop.EntryDate === date) {
         incompleteSessions.push({ type: 'no-start', entryDate: sess.stop.EntryDate, time: sess.stop.Time, note: sess.stop.Note });
       }
       // A Start with no Stop yet is still "running" up through now - give it
