@@ -115,6 +115,7 @@
   <button data-tab="today" class="active">บันทึกข้อมูลวันนี้</button>
   <button data-tab="report">รายงานประจำวัน</button>
   <button data-tab="grab">นำเข้า Grab Crane</button>
+  <button data-tab="stock">สต็อก &amp; ผลผลิต</button>
 </nav>
 
 <main>
@@ -271,6 +272,20 @@
     </section>
 
     <section class="panel">
+      <h2>ผลผลิต (คำนวณจากขยะขาเข้า × Yield %)</h2>
+      <div id="productionNoYield" class="empty-note" style="display:none;">ยังไม่ได้ตั้งค่า Yield % — ไปตั้งค่าที่แท็บ "สต็อก &amp; ผลผลิต" ก่อน</div>
+      <div id="productionContent">
+        <div class="row" style="margin-bottom:12px; font-size:13px; color:var(--gray);">
+          ขยะขาเข้า (จาก Grab Crane): <b id="prodIncoming" style="color:var(--dark);">-</b>
+        </div>
+        <table class="ps-table" style="max-width:520px;">
+          <thead><tr><th class="left">ผลผลิต</th><th>% Yield</th><th>น้ำหนัก (ตัน)</th></tr></thead>
+          <tbody id="prodTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
       <h2>
         สรุปประจำวัน (สำหรับดาวน์โหลดเป็นรูปภาพ)
         <button class="primary" id="btnDownloadImage">📷 ดาวน์โหลดเป็นรูปภาพ</button>
@@ -348,6 +363,131 @@
       </h2>
       <div id="grabCheckResult"></div>
     </section>
+  </section>
+
+  <!-- ===================== TAB: STOCK & PRODUCTION ===================== -->
+  <section id="tab-stock" class="tab-panel">
+
+    <section class="panel">
+      <h2>สต็อกปัจจุบัน</h2>
+      <div class="cards-grid">
+        <div class="kpi-card blue">
+          <div class="name">RDF2</div>
+          <div class="value" id="stockRDF2">-</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="name">Fine Fraction</div>
+          <div class="value" id="stockFine">-</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="name">Metal</div>
+          <div class="value" id="stockMetal">-</div>
+        </div>
+      </div>
+      <div class="hint" id="stockBaselineHint"></div>
+    </section>
+
+    <section class="panel">
+      <h2>ตั้งค่า Yield % (ใช้ต่อเนื่องจนกว่าจะตั้งใหม่)</h2>
+      <div class="entry-form">
+        <div>
+          <label>มีผลตั้งแต่วันที่</label>
+          <input type="date" id="yieldDate">
+        </div>
+        <div>
+          <label>RDF2 %</label>
+          <input type="number" id="yieldRDF2" min="0" max="100" step="0.1">
+        </div>
+        <div>
+          <label>Fine Fraction %</label>
+          <input type="number" id="yieldFine" min="0" max="100" step="0.1">
+        </div>
+        <div>
+          <label>Heavy Fraction %</label>
+          <input type="number" id="yieldHeavy" min="0" max="100" step="0.1">
+        </div>
+        <div>
+          <label>Metal %</label>
+          <input type="number" id="yieldMetal" min="0" max="100" step="0.1">
+        </div>
+        <div>
+          <button class="primary" id="btnAddYield">+ บันทึก</button>
+        </div>
+      </div>
+      <div class="hint">ส่วนที่เหลือจาก 100% จะคำนวณเป็น "น้ำ" ให้อัตโนมัติ ไม่ต้องกรอกเอง</div>
+      <div class="scroll-table" style="margin-top:12px;">
+        <table>
+          <thead><tr><th>มีผลตั้งแต่</th><th>RDF2</th><th>Fine Fraction</th><th>Heavy Fraction</th><th>Metal</th><th>น้ำ</th><th>จัดการ</th></tr></thead>
+          <tbody id="yieldTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>สต็อกเริ่มต้น (ตั้งครั้งเดียวตอนเริ่มใช้ระบบ)</h2>
+      <div class="entry-form">
+        <div>
+          <label>ณ วันที่</label>
+          <input type="date" id="baselineDate">
+        </div>
+        <div>
+          <label>RDF2 (ตัน)</label>
+          <input type="number" id="baselineRDF2" min="0" step="0.01">
+        </div>
+        <div>
+          <label>Fine Fraction (ตัน)</label>
+          <input type="number" id="baselineFine" min="0" step="0.01">
+        </div>
+        <div>
+          <label>Metal (ตัน)</label>
+          <input type="number" id="baselineMetal" min="0" step="0.01">
+        </div>
+        <div>
+          <button class="primary" id="btnSaveBaseline">บันทึกสต็อกเริ่มต้น</button>
+        </div>
+      </div>
+      <div class="hint">ระบบจะเอาผลผลิต (จาก Grab Crane × Yield) ตั้งแต่วันนี้เป็นต้นไปมาบวกเพิ่ม และลบตามรายการขายที่บันทึก</div>
+    </section>
+
+    <section class="panel">
+      <h2>บันทึกการขาย / ส่งออกสินค้า</h2>
+      <div class="entry-form">
+        <div>
+          <label>วันที่ขาย</label>
+          <input type="date" id="saleDate">
+        </div>
+        <div>
+          <label>วัสดุ</label>
+          <select id="saleMaterial">
+            <option value="RDF2">RDF2</option>
+            <option value="FineFraction">Fine Fraction</option>
+            <option value="Metal">Metal</option>
+          </select>
+        </div>
+        <div>
+          <label>ลูกค้า</label>
+          <input type="text" id="saleCustomer" placeholder="ชื่อลูกค้า">
+        </div>
+        <div>
+          <label>จำนวน (ตัน)</label>
+          <input type="number" id="saleTons" min="0" step="0.01">
+        </div>
+        <div>
+          <label>หมายเหตุ</label>
+          <input type="text" id="saleNote" placeholder="(ถ้ามี)">
+        </div>
+        <div>
+          <button class="primary" id="btnAddSale">+ บันทึกการขาย</button>
+        </div>
+      </div>
+      <div class="scroll-table">
+        <table>
+          <thead><tr><th>วันที่</th><th>วัสดุ</th><th class="left">ลูกค้า</th><th>ตัน</th><th class="left">หมายเหตุ</th><th>จัดการ</th></tr></thead>
+          <tbody id="salesTable"></tbody>
+        </table>
+      </div>
+    </section>
+
   </section>
 
 </main>
@@ -613,7 +753,33 @@ async function loadReport(){
   document.getElementById('rGrabAvg').textContent = data.grab.avgWeight === null ? '-' : data.grab.avgWeight.toFixed(2) + ' ตัน';
   document.getElementById('rGrabTotal').textContent = data.grab.totalWeight.toFixed(2) + ' ตัน';
 
+  await loadProduction(date);
   renderPrintSummary(date, data);
+}
+
+const PRODUCT_LABELS = { rdf2: 'RDF2', fineFraction: 'Fine Fraction', heavyFraction: 'Heavy Fraction', metal: 'Metal', water: 'น้ำ (ส่วนที่เหลือ)' };
+
+async function loadProduction(date){
+  const data = await api(`/api/production?date=${date}`);
+  document.getElementById('prodIncoming').textContent = data.incomingWaste.toFixed(2) + ' ตัน';
+  const noYieldEl = document.getElementById('productionNoYield');
+  const contentEl = document.getElementById('productionContent');
+  if (!data.hasYieldSetting){
+    noYieldEl.style.display = 'block';
+    contentEl.style.display = 'none';
+    return;
+  }
+  noYieldEl.style.display = 'none';
+  contentEl.style.display = 'block';
+  const tbody = document.getElementById('prodTable');
+  if (!data.production){
+    tbody.innerHTML = '<tr><td colspan="3" class="empty-note">ไม่มีขยะขาเข้าวันนี้</td></tr>';
+    return;
+  }
+  const p = data.production;
+  tbody.innerHTML = Object.keys(PRODUCT_LABELS).map((key) => `
+    <tr><td class="left">${PRODUCT_LABELS[key]}</td><td>${p.yieldPct[key].toFixed(1)}%</td><td>${p.tons[key].toFixed(2)}</td></tr>
+  `).join('');
 }
 
 function renderPrintSummary(date, data){
@@ -825,6 +991,126 @@ document.getElementById('btnDeleteGrab').addEventListener('click', async ()=>{
   toast(`ลบแล้ว ${result.deleted} รายการ`);
   document.getElementById('btnCheckGrab').click();
 });
+
+// ---------------- STOCK & PRODUCTION TAB ----------------
+document.getElementById('yieldDate').value = todayStr();
+document.getElementById('baselineDate').value = todayStr();
+document.getElementById('saleDate').value = todayStr();
+
+async function loadYieldTable(){
+  const data = await api('/api/yield');
+  const tbody = document.getElementById('yieldTable');
+  if (data.rows.length === 0){
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-note">ยังไม่ได้ตั้งค่า Yield</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.rows.map(r => {
+    const water = Math.max(0, 100 - Number(r.RDF2Pct) - Number(r.FineFractionPct) - Number(r.HeavyFractionPct) - Number(r.MetalPct));
+    return `<tr><td>${r.EffectiveDate}</td><td>${Number(r.RDF2Pct).toFixed(1)}%</td><td>${Number(r.FineFractionPct).toFixed(1)}%</td>
+      <td>${Number(r.HeavyFractionPct).toFixed(1)}%</td><td>${Number(r.MetalPct).toFixed(1)}%</td><td>${water.toFixed(1)}%</td>
+      <td><button class="danger" data-id="${r.ID}">ลบ</button></td></tr>`;
+  }).join('');
+  tbody.querySelectorAll('button[data-id]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await api(`/api/yield/${btn.dataset.id}`, { method:'DELETE' });
+      loadYieldTable(); loadStock();
+    });
+  });
+}
+
+onClickGuarded(document.getElementById('btnAddYield'), async ()=>{
+  const effectiveDate = document.getElementById('yieldDate').value;
+  const rdf2Pct = document.getElementById('yieldRDF2').value;
+  const fineFractionPct = document.getElementById('yieldFine').value;
+  const heavyFractionPct = document.getElementById('yieldHeavy').value;
+  const metalPct = document.getElementById('yieldMetal').value;
+  if (!effectiveDate || rdf2Pct === '' || fineFractionPct === '' || heavyFractionPct === '' || metalPct === ''){
+    toast('กรุณากรอกวันที่และเปอร์เซ็นต์ทั้ง 4 ค่า', true); return;
+  }
+  try{
+    await api('/api/yield', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ effectiveDate, rdf2Pct, fineFractionPct, heavyFractionPct, metalPct }) });
+    toast('บันทึกค่า Yield แล้ว');
+    loadYieldTable(); loadStock();
+  }catch(e){ toast(e.message, true); }
+});
+
+async function loadBaseline(){
+  const data = await api('/api/stock/baseline');
+  if (data.row){
+    document.getElementById('baselineDate').value = data.row.BaselineDate;
+    document.getElementById('baselineRDF2').value = data.row.RDF2Tons;
+    document.getElementById('baselineFine').value = data.row.FineFractionTons;
+    document.getElementById('baselineMetal').value = data.row.MetalTons;
+  }
+}
+
+onClickGuarded(document.getElementById('btnSaveBaseline'), async ()=>{
+  const baselineDate = document.getElementById('baselineDate').value;
+  if (!baselineDate){ toast('กรุณาระบุวันที่', true); return; }
+  try{
+    await api('/api/stock/baseline', { method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        baselineDate,
+        rdf2Tons: document.getElementById('baselineRDF2').value || 0,
+        fineFractionTons: document.getElementById('baselineFine').value || 0,
+        metalTons: document.getElementById('baselineMetal').value || 0,
+      }) });
+    toast('บันทึกสต็อกเริ่มต้นแล้ว');
+    loadStock();
+  }catch(e){ toast(e.message, true); }
+});
+
+async function loadSalesTable(){
+  const data = await api('/api/sales');
+  const tbody = document.getElementById('salesTable');
+  if (data.rows.length === 0){
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-note">ยังไม่มีรายการขาย</td></tr>';
+    return;
+  }
+  const materialLabel = { RDF2: 'RDF2', FineFraction: 'Fine Fraction', Metal: 'Metal' };
+  tbody.innerHTML = data.rows.map(r => `<tr><td>${r.SaleDate}</td><td>${materialLabel[r.Material] || r.Material}</td>
+    <td class="left">${r.Customer||''}</td><td>${Number(r.Tons).toFixed(2)}</td><td class="left">${r.Note||''}</td>
+    <td><button class="danger" data-id="${r.ID}">ลบ</button></td></tr>`).join('');
+  tbody.querySelectorAll('button[data-id]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await api(`/api/sales/${btn.dataset.id}`, { method:'DELETE' });
+      loadSalesTable(); loadStock();
+    });
+  });
+}
+
+onClickGuarded(document.getElementById('btnAddSale'), async ()=>{
+  const saleDate = document.getElementById('saleDate').value;
+  const material = document.getElementById('saleMaterial').value;
+  const tons = document.getElementById('saleTons').value;
+  if (!saleDate || !tons){ toast('กรุณาระบุวันที่และจำนวนตัน', true); return; }
+  try{
+    await api('/api/sales', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        saleDate, material, tons,
+        customer: document.getElementById('saleCustomer').value,
+        note: document.getElementById('saleNote').value,
+      }) });
+    document.getElementById('saleCustomer').value = '';
+    document.getElementById('saleTons').value = '';
+    document.getElementById('saleNote').value = '';
+    toast('บันทึกการขายแล้ว');
+    loadSalesTable(); loadStock();
+  }catch(e){ toast(e.message, true); }
+});
+
+async function loadStock(){
+  const data = await api('/api/stock');
+  document.getElementById('stockRDF2').textContent = data.stock.rdf2.toFixed(2) + ' ตัน';
+  document.getElementById('stockFine').textContent = data.stock.fineFraction.toFixed(2) + ' ตัน';
+  document.getElementById('stockMetal').textContent = data.stock.metal.toFixed(2) + ' ตัน';
+  document.getElementById('stockBaselineHint').textContent = data.baseline
+    ? `คำนวณจากสต็อกเริ่มต้นวันที่ ${data.baselineDate} บวกผลผลิต ลบยอดขาย`
+    : 'ยังไม่ได้ตั้งค่าสต็อกเริ่มต้น (ถือว่าเริ่มจาก 0)';
+}
+
+loadYieldTable(); loadBaseline(); loadSalesTable(); loadStock();
 </script>
 </body>
 </html>

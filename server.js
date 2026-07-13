@@ -322,6 +322,186 @@ async function handleReport(req, res, query) {
   });
 }
 
+// ---------- Production & Stock ----------
+
+// Yield % settings are effective-dated: the setting used for a given day is
+// whichever one was most recently in effect on or before that day, so
+// updating the yield doesn't retroactively change past days' numbers.
+function getApplicableYield(yieldRows, date) {
+  const applicable = yieldRows
+    .filter((y) => y.EffectiveDate <= date)
+    .sort((a, b) => (a.EffectiveDate < b.EffectiveDate ? -1 : 1));
+  return applicable.length ? applicable[applicable.length - 1] : null;
+}
+
+function computeProduction(incomingWaste, yieldSetting) {
+  if (!yieldSetting || incomingWaste <= 0) return null;
+  const rdf2Pct = Number(yieldSetting.RDF2Pct) || 0;
+  const fineFractionPct = Number(yieldSetting.FineFractionPct) || 0;
+  const heavyFractionPct = Number(yieldSetting.HeavyFractionPct) || 0;
+  const metalPct = Number(yieldSetting.MetalPct) || 0;
+  const waterPct = Math.max(0, 100 - rdf2Pct - fineFractionPct - heavyFractionPct - metalPct);
+  return {
+    incomingWaste,
+    yieldPct: { rdf2: rdf2Pct, fineFraction: fineFractionPct, heavyFraction: heavyFractionPct, metal: metalPct, water: waterPct },
+    tons: {
+      rdf2: incomingWaste * rdf2Pct / 100,
+      fineFraction: incomingWaste * fineFractionPct / 100,
+      heavyFraction: incomingWaste * heavyFractionPct / 100,
+      metal: incomingWaste * metalPct / 100,
+      water: incomingWaste * waterPct / 100,
+    },
+  };
+}
+
+async function handleProduction(req, res, query) {
+  const date = query.date || lib.todayStr();
+  const [grabRows, yieldRows] = await Promise.all([
+    store.readSheet('GrabCrane'),
+    store.readSheet('YieldSettings'),
+  ]);
+  const incomingWaste = grabRows.filter((r) => r.ReportDate === date).reduce((s, r) => s + (Number(r.Weight) || 0), 0);
+  const yieldSetting = getApplicableYield(yieldRows, date);
+  const production = computeProduction(incomingWaste, yieldSetting);
+  return sendJson(res, 200, { ok: true, date, incomingWaste, hasYieldSetting: !!yieldSetting, production });
+}
+
+async function handleYield(req, res, parts) {
+  if (req.method === 'GET' && parts.length === 0) {
+    const rows = await store.readSheet('YieldSettings');
+    rows.sort((a, b) => (a.EffectiveDate < b.EffectiveDate ? 1 : -1));
+    return sendJson(res, 200, { ok: true, rows });
+  }
+  if (req.method === 'POST' && parts.length === 0) {
+    const body = await readBody(req);
+    const { effectiveDate, rdf2Pct, fineFractionPct, heavyFractionPct, metalPct } = body;
+    if (!effectiveDate || [rdf2Pct, fineFractionPct, heavyFractionPct, metalPct].some((v) => v === undefined || v === null || v === '')) {
+      return sendJson(res, 400, { ok: false, error: 'ต้องระบุ effectiveDate และเปอร์เซ็นต์ทั้ง 4 ค่า' });
+    }
+    const sum = Number(rdf2Pct) + Number(fineFractionPct) + Number(heavyFractionPct) + Number(metalPct);
+    if (sum > 100) return sendJson(res, 400, { ok: false, error: 'ผลรวมเปอร์เซ็นต์ต้องไม่เกิน 100' });
+    const record = await store.appendRow('YieldSettings', {
+      EffectiveDate: effectiveDate,
+      RDF2Pct: Number(rdf2Pct),
+      FineFractionPct: Number(fineFractionPct),
+      HeavyFractionPct: Number(heavyFractionPct),
+      MetalPct: Number(metalPct),
+    });
+    return sendJson(res, 200, { ok: true, row: record });
+  }
+  if (req.method === 'DELETE' && parts.length === 1) {
+    const okDel = await store.deleteRow('YieldSettings', parts[0]);
+    return sendJson(res, 200, { ok: okDel });
+  }
+  return sendJson(res, 404, { ok: false, error: 'not found' });
+}
+
+async function handleStockBaseline(req, res) {
+  if (req.method === 'GET') {
+    const rows = await store.readSheet('StockBaseline');
+    return sendJson(res, 200, { ok: true, row: rows[0] || null });
+  }
+  if (req.method === 'PUT') {
+    const body = await readBody(req);
+    const { baselineDate, rdf2Tons, fineFractionTons, metalTons } = body;
+    if (!baselineDate) return sendJson(res, 400, { ok: false, error: 'ต้องระบุ baselineDate' });
+    const rows = await store.readSheet('StockBaseline');
+    const patch = {
+      BaselineDate: baselineDate,
+      RDF2Tons: Number(rdf2Tons) || 0,
+      FineFractionTons: Number(fineFractionTons) || 0,
+      MetalTons: Number(metalTons) || 0,
+    };
+    const record = rows.length === 0
+      ? await store.appendRow('StockBaseline', patch)
+      : await store.updateRow('StockBaseline', rows[0].ID, patch);
+    return sendJson(res, 200, { ok: true, row: record });
+  }
+  return sendJson(res, 404, { ok: false, error: 'not found' });
+}
+
+const SALES_MATERIALS = ['RDF2', 'FineFraction', 'Metal'];
+
+async function handleSales(req, res, parts) {
+  if (req.method === 'GET' && parts.length === 0) {
+    const rows = await store.readSheet('Sales');
+    rows.sort((a, b) => (a.SaleDate < b.SaleDate ? 1 : -1));
+    return sendJson(res, 200, { ok: true, rows });
+  }
+  if (req.method === 'POST' && parts.length === 0) {
+    const body = await readBody(req);
+    const { saleDate, material, customer, tons, note } = body;
+    if (!saleDate || !material || !tons) {
+      return sendJson(res, 400, { ok: false, error: 'ต้องระบุ saleDate, material, tons' });
+    }
+    if (!SALES_MATERIALS.includes(material)) {
+      return sendJson(res, 400, { ok: false, error: 'material ต้องเป็น RDF2, FineFraction หรือ Metal' });
+    }
+    const record = await store.appendRow('Sales', {
+      SaleDate: saleDate, Material: material, Customer: customer || '', Tons: Number(tons), Note: note || '',
+    });
+    return sendJson(res, 200, { ok: true, row: record });
+  }
+  if (req.method === 'DELETE' && parts.length === 1) {
+    const okDel = await store.deleteRow('Sales', parts[0]);
+    return sendJson(res, 200, { ok: okDel });
+  }
+  return sendJson(res, 404, { ok: false, error: 'not found' });
+}
+
+async function handleStock(req, res) {
+  const [grabRows, yieldRows, baselineRows, salesRows] = await Promise.all([
+    store.readSheet('GrabCrane'),
+    store.readSheet('YieldSettings'),
+    store.readSheet('StockBaseline'),
+    store.readSheet('Sales'),
+  ]);
+  const baseline = baselineRows[0] || null;
+  const baselineDate = baseline ? baseline.BaselineDate : lib.todayStr();
+  const totals = {
+    rdf2: baseline ? Number(baseline.RDF2Tons) || 0 : 0,
+    fineFraction: baseline ? Number(baseline.FineFractionTons) || 0 : 0,
+    metal: baseline ? Number(baseline.MetalTons) || 0 : 0,
+  };
+
+  const weightByDate = {};
+  for (const r of grabRows) {
+    weightByDate[r.ReportDate] = (weightByDate[r.ReportDate] || 0) + (Number(r.Weight) || 0);
+  }
+
+  const dailyProduction = [];
+  for (const [date, weight] of Object.entries(weightByDate)) {
+    if (date < baselineDate) continue;
+    const yieldSetting = getApplicableYield(yieldRows, date);
+    const prod = computeProduction(weight, yieldSetting);
+    if (!prod) continue;
+    totals.rdf2 += prod.tons.rdf2;
+    totals.fineFraction += prod.tons.fineFraction;
+    totals.metal += prod.tons.metal;
+    dailyProduction.push({ date, incomingWaste: weight, tons: prod.tons });
+  }
+  dailyProduction.sort((a, b) => (a.date < b.date ? -1 : 1));
+
+  const salesTotals = { rdf2: 0, fineFraction: 0, metal: 0 };
+  const relevantSales = salesRows.filter((r) => r.SaleDate >= baselineDate);
+  for (const r of relevantSales) {
+    const key = r.Material === 'RDF2' ? 'rdf2' : r.Material === 'FineFraction' ? 'fineFraction' : 'metal';
+    salesTotals[key] += Number(r.Tons) || 0;
+  }
+  totals.rdf2 -= salesTotals.rdf2;
+  totals.fineFraction -= salesTotals.fineFraction;
+  totals.metal -= salesTotals.metal;
+
+  return sendJson(res, 200, {
+    ok: true,
+    baseline,
+    baselineDate,
+    stock: totals,
+    productionSince: dailyProduction,
+    salesTotals,
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const parsed = url.parse(req.url, true);
@@ -340,6 +520,13 @@ const server = http.createServer(async (req, res) => {
         if (rest[0] === 'import' && req.method === 'POST') return await handleGrabImport(req, res);
         if (rest.length === 0 && req.method === 'GET') return await handleGrabGet(req, res, query);
         if (rest.length === 0 && req.method === 'DELETE') return await handleGrabDelete(req, res, query);
+      }
+      if (resource === 'production') return await handleProduction(req, res, query);
+      if (resource === 'yield') return await handleYield(req, res, rest);
+      if (resource === 'sales') return await handleSales(req, res, rest);
+      if (resource === 'stock') {
+        if (rest[0] === 'baseline') return await handleStockBaseline(req, res);
+        if (rest.length === 0 && req.method === 'GET') return await handleStock(req, res);
       }
       return sendJson(res, 404, { ok: false, error: 'unknown api route' });
     }

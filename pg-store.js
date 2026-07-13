@@ -33,6 +33,27 @@ const TABLES = {
       SourceFile: 'source_file', CreatedAt: 'created_at',
     },
   },
+  YieldSettings: {
+    table: 'yield_settings',
+    columns: {
+      ID: 'id', EffectiveDate: 'effective_date', RDF2Pct: 'rdf2_pct', FineFractionPct: 'fine_fraction_pct',
+      HeavyFractionPct: 'heavy_fraction_pct', MetalPct: 'metal_pct', CreatedAt: 'created_at',
+    },
+  },
+  StockBaseline: {
+    table: 'stock_baseline',
+    columns: {
+      ID: 'id', BaselineDate: 'baseline_date', RDF2Tons: 'rdf2_tons',
+      FineFractionTons: 'fine_fraction_tons', MetalTons: 'metal_tons', CreatedAt: 'created_at',
+    },
+  },
+  Sales: {
+    table: 'sales',
+    columns: {
+      ID: 'id', SaleDate: 'sale_date', Material: 'material', Customer: 'customer',
+      Tons: 'tons', Note: 'note', CreatedAt: 'created_at',
+    },
+  },
 };
 
 let schemaReady = null;
@@ -68,6 +89,32 @@ function ensureSchema() {
       );
       CREATE UNIQUE INDEX IF NOT EXISTS grab_crane_report_datetime_idx
         ON grab_crane (report_date, date_time);
+      CREATE TABLE IF NOT EXISTS yield_settings (
+        id SERIAL PRIMARY KEY,
+        effective_date TEXT NOT NULL,
+        rdf2_pct NUMERIC NOT NULL,
+        fine_fraction_pct NUMERIC NOT NULL,
+        heavy_fraction_pct NUMERIC NOT NULL,
+        metal_pct NUMERIC NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+      CREATE TABLE IF NOT EXISTS stock_baseline (
+        id SERIAL PRIMARY KEY,
+        baseline_date TEXT NOT NULL,
+        rdf2_tons NUMERIC NOT NULL DEFAULT 0,
+        fine_fraction_tons NUMERIC NOT NULL DEFAULT 0,
+        metal_tons NUMERIC NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+      CREATE TABLE IF NOT EXISTS sales (
+        id SERIAL PRIMARY KEY,
+        sale_date TEXT NOT NULL,
+        material TEXT NOT NULL,
+        customer TEXT DEFAULT '',
+        tons NUMERIC NOT NULL,
+        note TEXT DEFAULT '',
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
     `);
   }
   return schemaReady;
