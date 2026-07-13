@@ -625,14 +625,17 @@ function renderPrintSummary(date, data){
   const seenStarts = new Set(), seenStops = new Set();
   for (const s of data.line.segments){
     const [startDate, startTime] = s.sessionStart.split(' ');
-    const [stopDate, stopTime] = s.sessionStop.split(' ');
     if (startDate === date && !seenStarts.has(s.sessionStart)){
       seenStarts.add(s.sessionStart);
-      lineEvents.push({ time: startTime, label: 'Start Line', cls: 'line-event' });
+      const label = s.ongoing ? 'Start Line (ยังไม่ได้ปิดไลน์)' : 'Start Line';
+      lineEvents.push({ time: startTime, label, cls: 'line-event' });
     }
-    if (stopDate === date && !seenStops.has(s.sessionStop)){
-      seenStops.add(s.sessionStop);
-      lineEvents.push({ time: stopTime, label: stopTypeLabel(s.stopType), cls: 'line-event' });
+    if (s.sessionStop){
+      const [stopDate, stopTime] = s.sessionStop.split(' ');
+      if (stopDate === date && !seenStops.has(s.sessionStop)){
+        seenStops.add(s.sessionStop);
+        lineEvents.push({ time: stopTime, label: stopTypeLabel(s.stopType), cls: 'line-event' });
+      }
     }
   }
   // Orphan Start/Stop events (no matching pair yet) don't produce segments,
@@ -640,6 +643,12 @@ function renderPrintSummary(date, data){
   for (const inc of data.line.incomplete){
     if (inc.type === 'no-stop') lineEvents.push({ time: inc.time, label: 'Start Line (ยังไม่มี Stop Line)', cls: 'line-event' });
     else lineEvents.push({ time: inc.time, label: 'Stop Line (ไม่มี Start Line ก่อนหน้า)', cls: 'line-event' });
+  }
+  // A day the line ran through entirely (no Start/Stop actually happened that
+  // day - it's a "pass-through" day of a session left open since an earlier
+  // day) would otherwise show an empty timeline despite counting real minutes.
+  if (lineEvents.length === 0 && data.line.segments.some(s => s.ongoing)){
+    lineEvents.push({ time: '00:00', label: 'ไลน์เดินต่อเนื่องจากวันก่อนหน้า (ยังไม่ได้ปิดไลน์)', cls: 'line-event' });
   }
   const downtimeEvents = data.downtime.segments.map(s => ({
     time: s.startTime,

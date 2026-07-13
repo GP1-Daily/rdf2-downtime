@@ -226,17 +226,38 @@ async function handleReport(req, res, query) {
   for (const s of downtimeSegments) downtimeByPeriod[s.period] += s.minutes;
 
   // ---- Line sessions ----
-  const relevantLineRows = lineRows.filter((r) => [lib.addDays(date, -1), date, lib.addDays(date, 1)].includes(r.EntryDate));
-  const sessions = computeLineSessions(relevantLineRows);
+  // Pair across ALL rows (not just a window around `date`): a Start left open
+  // for several days (forgotten Stop Line) must still be found and credited
+  // on every day it spans, not just the day it started.
+  const sessions = computeLineSessions(lineRows);
+  const nowBkk = lib.nowInBangkok();
   const lineSegments = [];
   const incompleteSessions = [];
   for (const sess of sessions) {
     if (sess.incomplete) {
-      if (sess.start && sess.start.EntryDate === date) incompleteSessions.push({ type: 'no-stop', entryDate: sess.start.EntryDate, time: sess.start.Time, note: sess.start.Note });
-      if (sess.stop && sess.stop.EntryDate === date) incompleteSessions.push({ type: 'no-start', entryDate: sess.stop.EntryDate, time: sess.stop.Time, note: sess.stop.Note });
+      if (sess.stop && !sess.start) {
+        incompleteSessions.push({ type: 'no-start', entryDate: sess.stop.EntryDate, time: sess.stop.Time, note: sess.stop.Note });
+      }
+      // A Start with no Stop yet is still "running" up through now - give it
+      // provisional credit on every day it spans (including today, up to the
+      // current time) instead of it silently disappearing until the operator
+      // eventually logs the real Stop Line.
+      if (sess.start && !sess.stop) {
+        const segs = lib.splitRange(sess.start.EntryDate, sess.start.Time, nowBkk.date, nowBkk.time);
+        for (const s of segs) {
+          if (s.date !== date) continue;
+          lineSegments.push({
+            ...s,
+            sessionStart: `${sess.start.EntryDate} ${sess.start.Time}`,
+            sessionStop: null,
+            stopType: '',
+            ongoing: true,
+          });
+        }
+      }
       continue;
     }
-    const segs = lib.splitEntry(sess.start.EntryDate, sess.start.Time, sess.stop.Time);
+    const segs = lib.splitRange(sess.start.EntryDate, sess.start.Time, sess.stop.EntryDate, sess.stop.Time);
     for (const s of segs) {
       if (s.date !== date) continue;
       lineSegments.push({
