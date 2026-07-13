@@ -5,7 +5,7 @@ const XLSX_PATH = path.join(__dirname, 'RDF2_Downtime.xlsx');
 
 const SHEETS = {
   Downtime: ['ID', 'EntryDate', 'StartTime', 'EndTime', 'Reason', 'Note', 'CreatedAt'],
-  LineTime: ['ID', 'EntryDate', 'EventType', 'Time', 'Note', 'CreatedAt'],
+  LineTime: ['ID', 'EntryDate', 'EventType', 'Time', 'Note', 'CreatedAt', 'StopType'],
   GrabCrane: ['ID', 'ReportDate', 'DateTime', 'Weight', 'SourceFile', 'CreatedAt'],
 };
 

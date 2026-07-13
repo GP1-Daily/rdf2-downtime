@@ -23,7 +23,7 @@ const TABLES = {
     table: 'line_time',
     columns: {
       ID: 'id', EntryDate: 'entry_date', EventType: 'event_type', Time: 'time',
-      Note: 'note', CreatedAt: 'created_at',
+      StopType: 'stop_type', Note: 'note', CreatedAt: 'created_at',
     },
   },
   GrabCrane: {
@@ -53,9 +53,11 @@ function ensureSchema() {
         entry_date TEXT NOT NULL,
         event_type TEXT NOT NULL,
         time TEXT NOT NULL,
+        stop_type TEXT DEFAULT '',
         note TEXT DEFAULT '',
         created_at TIMESTAMPTZ DEFAULT now()
       );
+      ALTER TABLE line_time ADD COLUMN IF NOT EXISTS stop_type TEXT DEFAULT '';
       CREATE TABLE IF NOT EXISTS grab_crane (
         id SERIAL PRIMARY KEY,
         report_date TEXT NOT NULL,

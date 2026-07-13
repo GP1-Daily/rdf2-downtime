@@ -39,6 +39,7 @@
   button.danger:hover{background:var(--red-bg);}
   button.start{background:var(--green); color:#fff; border-color:var(--green); font-weight:700; padding:14px 22px; font-size:15px;}
   button.stop{background:var(--red); color:#fff; border-color:var(--red); font-weight:700; padding:14px 22px; font-size:15px;}
+  button#btnQuickBreak{background:var(--amber); border-color:var(--amber);}
   section.panel{background:#fff; border-radius:12px; padding:20px 22px; margin-bottom:22px; box-shadow:0 1px 3px rgba(0,0,0,.08);}
   section.panel h2{font-size:16px; margin:0 0 16px; color:var(--dark2); display:flex; align-items:center; gap:10px; justify-content:space-between;}
   .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
@@ -131,12 +132,17 @@
       <div id="openSessionWarning" class="warn-banner" style="display:none;"></div>
       <div class="quick-actions">
         <button class="start" id="btnQuickStart">▶ บันทึก Start Line (เวลาปัจจุบัน)</button>
-        <button class="stop" id="btnQuickStop">■ บันทึก Stop Line (เวลาปัจจุบัน)</button>
+        <button class="stop" id="btnQuickBreak">⏸ หยุดพัก (เวลาปัจจุบัน)</button>
+        <button class="stop" id="btnQuickStop">■ เลิกกะ/ปิดไลน์ (เวลาปัจจุบัน)</button>
       </div>
       <div class="entry-form">
         <div>
           <label>ประเภท</label>
           <select id="lineType"><option value="Start">Start Line</option><option value="Stop">Stop Line</option></select>
+        </div>
+        <div id="stopTypeField" style="display:none;">
+          <label>ชนิดการหยุด</label>
+          <select id="lineStopType"><option value="break">หยุดพัก</option><option value="end">เลิกกะ/ปิดไลน์</option></select>
         </div>
         <div>
           <label>เวลา</label>
@@ -410,6 +416,12 @@ setInterval(tickClock, 1000); tickClock();
 const entryDateEl = document.getElementById('entryDate');
 entryDateEl.value = todayStr();
 
+function stopTypeLabel(stopType){
+  if (stopType === 'break') return 'Stop Line (หยุดพัก)';
+  if (stopType === 'end') return 'Stop Line (เลิกกะ/ปิดไลน์)';
+  return 'Stop Line';
+}
+
 async function loadLineTable(){
   const data = await api(`/api/line?date=${entryDateEl.value}`);
   const tbody = document.querySelector('#lineTable tbody');
@@ -419,7 +431,8 @@ async function loadLineTable(){
   } else {
     for (const r of data.rows){
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${r.Time}</td><td>${r.EventType === 'Start' ? 'Start Line' : 'Stop Line'}</td>
+      const typeLabel = r.EventType === 'Start' ? 'Start Line' : stopTypeLabel(r.StopType);
+      tr.innerHTML = `<td>${r.Time}</td><td>${typeLabel}</td>
         <td class="left">${r.Note||''}</td>
         <td><button class="danger" data-id="${r.ID}">ลบ</button></td>`;
       tr.querySelector('button').addEventListener('click', async ()=>{
@@ -492,21 +505,33 @@ onClickGuarded(document.getElementById('btnQuickStart'), async ()=>{
     toast('บันทึก Start Line แล้ว'); loadLineTable();
   }catch(e){ toast(e.message, true); }
 });
+onClickGuarded(document.getElementById('btnQuickBreak'), async ()=>{
+  try{
+    await api('/api/line', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ entryDate: entryDateEl.value, eventType:'Stop', stopType:'break', time: nowTime() }) });
+    toast('บันทึกหยุดพักแล้ว'); loadLineTable();
+  }catch(e){ toast(e.message, true); }
+});
 onClickGuarded(document.getElementById('btnQuickStop'), async ()=>{
   try{
     await api('/api/line', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ entryDate: entryDateEl.value, eventType:'Stop', time: nowTime() }) });
-    toast('บันทึก Stop Line แล้ว'); loadLineTable();
+      body: JSON.stringify({ entryDate: entryDateEl.value, eventType:'Stop', stopType:'end', time: nowTime() }) });
+    toast('บันทึกเลิกกะ/ปิดไลน์แล้ว'); loadLineTable();
   }catch(e){ toast(e.message, true); }
+});
+document.getElementById('lineType').addEventListener('change', (e)=>{
+  document.getElementById('stopTypeField').style.display = e.target.value === 'Stop' ? '' : 'none';
 });
 onClickGuarded(document.getElementById('btnAddLine'), async ()=>{
   const time = document.getElementById('lineTime').value;
   if (!time){ toast('กรุณาระบุเวลา', true); return; }
+  const eventType = document.getElementById('lineType').value;
   try{
     await api('/api/line', { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
         entryDate: entryDateEl.value,
-        eventType: document.getElementById('lineType').value,
+        eventType,
+        stopType: eventType === 'Stop' ? document.getElementById('lineStopType').value : undefined,
         time,
         note: document.getElementById('lineNote').value,
       }) });
@@ -607,7 +632,7 @@ function renderPrintSummary(date, data){
     }
     if (stopDate === date && !seenStops.has(s.sessionStop)){
       seenStops.add(s.sessionStop);
-      lineEvents.push({ time: stopTime, label: 'Stop Line', cls: 'line-event' });
+      lineEvents.push({ time: stopTime, label: stopTypeLabel(s.stopType), cls: 'line-event' });
     }
   }
   // Orphan Start/Stop events (no matching pair yet) don't produce segments,

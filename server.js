@@ -97,6 +97,7 @@ async function handleLine(req, res, parts, query) {
       EntryDate: body.entryDate,
       EventType: body.eventType,
       Time: body.time,
+      StopType: body.eventType === 'Stop' ? (body.stopType || '') : '',
       Note: body.note || '',
     });
     return sendJson(res, 200, { ok: true, row: record });
@@ -107,6 +108,7 @@ async function handleLine(req, res, parts, query) {
     if (body.entryDate !== undefined) patch.EntryDate = body.entryDate;
     if (body.eventType !== undefined) patch.EventType = body.eventType;
     if (body.time !== undefined) patch.Time = body.time;
+    if (body.stopType !== undefined) patch.StopType = body.stopType;
     if (body.note !== undefined) patch.Note = body.note;
     const record = await store.updateRow('LineTime', parts[0], patch);
     if (!record) return sendJson(res, 404, { ok: false, error: 'ไม่พบรายการ' });
@@ -241,6 +243,7 @@ async function handleReport(req, res, query) {
         ...s,
         sessionStart: `${sess.start.EntryDate} ${sess.start.Time}`,
         sessionStop: `${sess.stop.EntryDate} ${sess.stop.Time}`,
+        stopType: sess.stop.StopType || '',
       });
     }
   }
