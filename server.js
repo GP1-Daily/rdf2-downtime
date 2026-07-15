@@ -131,7 +131,11 @@ function computeLineSessions(rows) {
   let open = null;
   for (const ev of sorted) {
     if (ev.EventType === 'Start') {
-      if (open) sessions.push({ start: open, stop: null, incomplete: true });
+      // A Start superseded by another Start (no Stop in between) is an
+      // abandoned/forgotten entry, not a still-running session - the new
+      // Start proves the old one must have already ended, we just don't know
+      // when. Flagged separately from the one true still-open session below.
+      if (open) sessions.push({ start: open, stop: null, incomplete: true, superseded: true });
       open = ev;
     } else if (ev.EventType === 'Stop') {
       if (open) {
@@ -142,7 +146,7 @@ function computeLineSessions(rows) {
       }
     }
   }
-  if (open) sessions.push({ start: open, stop: null, incomplete: true });
+  if (open) sessions.push({ start: open, stop: null, incomplete: true, superseded: false });
   return sessions;
 }
 
@@ -238,11 +242,19 @@ async function handleReport(req, res, query) {
       if (sess.stop && !sess.start && sess.stop.EntryDate === date) {
         incompleteSessions.push({ type: 'no-start', entryDate: sess.stop.EntryDate, time: sess.stop.Time, note: sess.stop.Note });
       }
-      // A Start with no Stop yet is still "running" up through now - give it
-      // provisional credit on every day it spans (including today, up to the
-      // current time) instead of it silently disappearing until the operator
-      // eventually logs the real Stop Line.
-      if (sess.start && !sess.stop) {
+      if (sess.start && !sess.stop && sess.superseded) {
+        // Abandoned: a later Start proves this one must have already ended,
+        // but we don't know when - flag it, don't credit it with phantom
+        // running time all the way up to now.
+        if (sess.start.EntryDate === date) {
+          incompleteSessions.push({ type: 'no-stop', entryDate: sess.start.EntryDate, time: sess.start.Time, note: sess.start.Note });
+        }
+      } else if (sess.start && !sess.stop) {
+        // The one genuinely still-open session (nothing has superseded it) is
+        // still "running" up through now - give it provisional credit on
+        // every day it spans (including today, up to the current time)
+        // instead of it silently disappearing until the operator eventually
+        // logs the real Stop Line.
         const segs = lib.splitRange(sess.start.EntryDate, sess.start.Time, nowBkk.date, nowBkk.time);
         for (const s of segs) {
           if (s.date !== date) continue;
