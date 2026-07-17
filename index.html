@@ -96,6 +96,8 @@
   .mapping-grid label{font-size:12px; color:var(--gray); display:block; margin-bottom:4px;}
   .scroll-table{max-height:320px; overflow:auto; border:1px solid var(--border); border-radius:8px;}
   .hint{font-size:12px; color:var(--gray); margin-top:4px;}
+  .kpi-card .target{font-size:11.5px; color:var(--gray); margin-top:4px;}
+  .badge.outside{background:var(--gray-bg); color:var(--gray); margin-left:6px;}
   footer{text-align:center; color:var(--gray); font-size:12px; padding:20px;}
 </style>
 </head>
@@ -224,6 +226,7 @@
       <div class="kpi-card red">
         <div class="name">รวมเวลาหยุดเครื่องทั้งหมด</div>
         <div class="value" id="rDowntime">-</div>
+        <div class="target" id="rDowntimeRawHint"></div>
       </div>
       <div class="kpi-card green">
         <div class="name">เวลาเดินเครื่องจริง (สุทธิ)</div>
@@ -716,6 +719,10 @@ async function loadReport(){
 
   document.getElementById('rLineTime').innerHTML = fmtMin(data.line.totalMinutes);
   document.getElementById('rDowntime').innerHTML = fmtMin(data.downtime.totalMinutes);
+  const rawExtra = data.downtime.totalMinutesRaw - data.downtime.totalMinutes;
+  document.getElementById('rDowntimeRawHint').textContent = rawExtra > 0
+    ? `(รวมดิบ ${fmtMin(data.downtime.totalMinutesRaw)} - อีก ${fmtMin(rawExtra)} เกิดนอกช่วงเดินไลน์ ไม่นับใน Availability)`
+    : '';
   document.getElementById('rNetRun').innerHTML = fmtMin(data.line.netRunMinutes);
   document.getElementById('rAvail').innerHTML = data.line.availabilityPct === null ? '-' : data.line.availabilityPct.toFixed(1) + ' %';
 
@@ -741,9 +748,12 @@ async function loadReport(){
   for (const s of data.downtime.segments){
     const tr = document.createElement('tr');
     const carry = s.carriedOver ? '<span class="badge carry">ต่อจากเมื่อวาน</span>' : '';
+    const outside = s.outsideLineMinutes > 0
+      ? `<span class="badge outside" title="ไลน์ยังไม่ Start หรือ Stop ไปแล้ว - ไม่นับใน Availability">นอกช่วงเดินไลน์ ${fmtMin(s.outsideLineMinutes)}</span>`
+      : '';
     tr.innerHTML = `<td>${periodBadge(s.period)}</td>
       <td>${s.startTime}-${s.endTime}${carry}</td>
-      <td>${fmtMin(s.minutes)}</td>
+      <td>${fmtMin(s.minutes)}${outside}</td>
       <td class="left">${s.reason||''}</td>
       <td class="left">${s.note||''}</td>`;
     dtbody.appendChild(tr);

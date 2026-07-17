@@ -205,30 +205,6 @@ async function handleReport(req, res, query) {
     store.readSheet('GrabCrane'),
   ]);
 
-  // ---- Downtime: split across midnight + period boundaries ----
-  const relevantDowntime = downtimeRows.filter((r) => r.EntryDate === date || r.EntryDate === prevDate);
-  const downtimeSegments = [];
-  for (const r of relevantDowntime) {
-    const segs = lib.splitEntry(r.EntryDate, r.StartTime, r.EndTime);
-    for (const s of segs) {
-      if (s.date !== date) continue;
-      downtimeSegments.push({
-        ...s,
-        id: r.ID,
-        reason: r.Reason,
-        note: r.Note,
-        carriedOver: r.EntryDate !== date,
-        originalEntryDate: r.EntryDate,
-        originalStartTime: r.StartTime,
-        originalEndTime: r.EndTime,
-      });
-    }
-  }
-  downtimeSegments.sort((a, b) => (a.startTime < b.startTime ? -1 : 1));
-  const totalDowntimeMin = downtimeSegments.reduce((s, x) => s + x.minutes, 0);
-  const downtimeByPeriod = { 'เช้า': 0, 'บ่าย': 0, 'ดึก': 0 };
-  for (const s of downtimeSegments) downtimeByPeriod[s.period] += s.minutes;
-
   // ---- Line sessions ----
   // Pair across ALL rows (not just a window around `date`): a Start left open
   // for several days (forgotten Stop Line) must still be found and credited
@@ -285,6 +261,50 @@ async function handleReport(req, res, query) {
   const lineByPeriod = { 'เช้า': 0, 'บ่าย': 0, 'ดึก': 0 };
   for (const s of lineSegments) lineByPeriod[s.period] += s.minutes;
 
+  // ---- Downtime: split across midnight + period boundaries, then clipped to
+  // only the portion that overlaps an active Start-Stop Line window. Downtime
+  // logged while the line wasn't even running (e.g. maintenance before the
+  // first Start Line of the day) would otherwise inflate downtime past the
+  // total line time, making "net run time" negative and Availability
+  // nonsensical.
+  const activeRanges = lineSegments.map((s) => [lib.timeToMinutes(s.startTime), lib.timeToMinutes(s.endTime)]);
+  function overlapMinutes(startMin, endMin) {
+    let total = 0;
+    for (const [aStart, aEnd] of activeRanges) {
+      const lo = Math.max(startMin, aStart), hi = Math.min(endMin, aEnd);
+      if (hi > lo) total += hi - lo;
+    }
+    return total;
+  }
+
+  const relevantDowntime = downtimeRows.filter((r) => r.EntryDate === date || r.EntryDate === prevDate);
+  const downtimeSegments = [];
+  for (const r of relevantDowntime) {
+    const segs = lib.splitEntry(r.EntryDate, r.StartTime, r.EndTime);
+    for (const s of segs) {
+      if (s.date !== date) continue;
+      const startMin = lib.timeToMinutes(s.startTime), endMin = lib.timeToMinutes(s.endTime);
+      const insideLineMinutes = overlapMinutes(startMin, endMin);
+      downtimeSegments.push({
+        ...s,
+        id: r.ID,
+        reason: r.Reason,
+        note: r.Note,
+        carriedOver: r.EntryDate !== date,
+        originalEntryDate: r.EntryDate,
+        originalStartTime: r.StartTime,
+        originalEndTime: r.EndTime,
+        insideLineMinutes,
+        outsideLineMinutes: s.minutes - insideLineMinutes,
+      });
+    }
+  }
+  downtimeSegments.sort((a, b) => (a.startTime < b.startTime ? -1 : 1));
+  const totalDowntimeMinRaw = downtimeSegments.reduce((s, x) => s + x.minutes, 0);
+  const totalDowntimeMin = downtimeSegments.reduce((s, x) => s + x.insideLineMinutes, 0);
+  const downtimeByPeriod = { 'เช้า': 0, 'บ่าย': 0, 'ดึก': 0 };
+  for (const s of downtimeSegments) downtimeByPeriod[s.period] += s.insideLineMinutes;
+
   const netRunMin = Math.max(0, totalLineMin - totalDowntimeMin);
   const availabilityPct = totalLineMin > 0 ? (netRunMin / totalLineMin) * 100 : null;
 
@@ -315,6 +335,7 @@ async function handleReport(req, res, query) {
     downtime: {
       segments: downtimeSegments,
       totalMinutes: totalDowntimeMin,
+      totalMinutesRaw: totalDowntimeMinRaw,
       byPeriod: downtimeByPeriod,
     },
     line: {
