@@ -88,6 +88,13 @@ const TABLES = {
       ID: 'id', EntryDate: 'entry_date', MSWTons: 'msw_tons', Note: 'note', CreatedAt: 'created_at',
     },
   },
+  WeeklyDeliveryPlans: {
+    table: 'weekly_delivery_plans',
+    columns: {
+      ID: 'id', WeekStart: 'week_start', Customer: 'customer', Product: 'product',
+      PlanTons: 'plan_tons', CreatedAt: 'created_at',
+    },
+  },
 };
 
 let schemaReady = null;
@@ -195,6 +202,16 @@ function ensureSchema() {
       );
       CREATE UNIQUE INDEX IF NOT EXISTS revenue_tipping_daily_date_idx
         ON revenue_tipping_daily (entry_date);
+      CREATE TABLE IF NOT EXISTS weekly_delivery_plans (
+        id SERIAL PRIMARY KEY,
+        week_start TEXT NOT NULL,
+        customer TEXT NOT NULL,
+        product TEXT NOT NULL,
+        plan_tons NUMERIC NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS weekly_delivery_plans_key_idx
+        ON weekly_delivery_plans (week_start, lower(customer), product);
     `);
   }
   return schemaReady;

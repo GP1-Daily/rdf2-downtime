@@ -558,6 +558,18 @@ function validMonth(month) {
   return /^\d{4}-(0[1-9]|1[0-2])$/.test(String(month || ''));
 }
 
+function validIsoDate(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return false;
+  const parsed = new Date(`${date}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
+}
+
+function mondayForDate(date) {
+  const parsed = new Date(`${date}T00:00:00Z`);
+  const daysSinceMonday = (parsed.getUTCDay() + 6) % 7;
+  return lib.addDays(date, -daysSinceMonday);
+}
+
 function monthBounds(month) {
   const [year, monthNumber] = month.split('-').map(Number);
   const days = new Date(year, monthNumber, 0).getDate();
@@ -853,6 +865,149 @@ async function handleRevenue(req, res, parts, query) {
   return sendJson(res, 404, { ok: false, error: 'unknown revenue route' });
 }
 
+// ---------- Weekly Delivery Plan (Monday 00:00 to next Monday 00:00) ----------
+
+function deliveryActualRows(stockSales, rdf3Sales, weekStart, weekEndExclusive) {
+  const rows = stockSales
+    .filter((row) => row.SaleDate >= weekStart && row.SaleDate < weekEndExclusive
+      && ['RDF2', 'FineFraction'].includes(row.Material))
+    .map((row) => ({
+      customer: cleanText(row.Customer),
+      product: row.Material,
+      tons: Number(row.Tons) || 0,
+    }));
+  for (const row of rdf3Sales) {
+    if (row.SaleDate < weekStart || row.SaleDate >= weekEndExclusive) continue;
+    rows.push({
+      customer: cleanText(row.Customer),
+      product: 'RDF3',
+      tons: Number(row.Tons) || 0,
+    });
+  }
+  return rows;
+}
+
+async function handleDeliveryPlanDashboard(req, res, query) {
+  const requested = cleanText(query.weekStart);
+  const weekStart = validIsoDate(requested) ? requested : mondayForDate(lib.nowInBangkok().date);
+  if (mondayForDate(weekStart) !== weekStart) {
+    return sendJson(res, 400, { ok: false, error: 'วันเริ่มสัปดาห์ต้องเป็นวันจันทร์' });
+  }
+  const weekEndExclusive = lib.addDays(weekStart, 7);
+  const weekEnd = lib.addDays(weekStart, 6);
+  const [allPlans, stockSales, rdf3Sales, prices] = await Promise.all([
+    store.readSheet('WeeklyDeliveryPlans'),
+    store.readSheet('Sales'),
+    store.readSheet('RevenueRDF3Sales'),
+    store.readSheet('RevenuePrices'),
+  ]);
+  const plans = allPlans.filter((row) => row.WeekStart === weekStart);
+  const actualRows = deliveryActualRows(stockSales, rdf3Sales, weekStart, weekEndExclusive);
+  const detailRows = plans.map((plan) => {
+    const planTons = Number(plan.PlanTons) || 0;
+    const actualTons = actualRows
+      .filter((row) => row.product === plan.Product && sameText(row.customer, plan.Customer))
+      .reduce((sum, row) => sum + row.tons, 0);
+    const diffTons = actualTons - planTons;
+    const shortfallTons = Math.max(0, planTons - actualTons);
+    const priceRow = applicableRevenuePrice(prices, plan.Customer, plan.Product, weekStart);
+    const pricePerTon = priceRow ? Number(priceRow.PricePerTon) || 0 : null;
+    const opportunityLoss = pricePerTon === null ? null : shortfallTons * pricePerTon;
+    return {
+      id: plan.ID,
+      weekStart,
+      customer: cleanText(plan.Customer),
+      product: plan.Product,
+      planTons,
+      actualTons,
+      diffTons,
+      shortfallTons,
+      completionPct: planTons > 0 ? actualTons / planTons * 100 : 0,
+      pricePerTon,
+      opportunityLoss,
+      status: diffTons >= 0 ? 'achieved' : 'behind',
+    };
+  });
+
+  const customerMap = new Map();
+  for (const row of detailRows) {
+    if (!customerMap.has(row.customer)) {
+      customerMap.set(row.customer, {
+        customer: row.customer,
+        products: [],
+        shortfallTons: 0,
+        opportunityLoss: 0,
+        missingPriceCount: 0,
+      });
+    }
+    const customer = customerMap.get(row.customer);
+    customer.products.push(row);
+    customer.shortfallTons += row.shortfallTons;
+    if (row.opportunityLoss === null) customer.missingPriceCount += 1;
+    else customer.opportunityLoss += row.opportunityLoss;
+  }
+  const customers = [...customerMap.values()]
+    .map((customer) => ({
+      ...customer,
+      products: customer.products.sort((a, b) => REVENUE_PRODUCTS.indexOf(a.product) - REVENUE_PRODUCTS.indexOf(b.product)),
+    }))
+    .sort((a, b) => b.opportunityLoss - a.opportunityLoss
+      || b.shortfallTons - a.shortfallTons
+      || a.customer.localeCompare(b.customer, 'th'));
+
+  return sendJson(res, 200, {
+    ok: true,
+    weekStart,
+    weekEnd,
+    weekEndExclusive,
+    customers,
+  });
+}
+
+async function handleDeliveryPlans(req, res, parts, query) {
+  if (parts[0] === 'dashboard' && req.method === 'GET') {
+    return handleDeliveryPlanDashboard(req, res, query);
+  }
+  if (req.method === 'GET' && parts.length === 0) {
+    const weekStart = cleanText(query.weekStart);
+    let rows = await store.readSheet('WeeklyDeliveryPlans');
+    if (weekStart) rows = rows.filter((row) => row.WeekStart === weekStart);
+    rows.sort((a, b) => String(b.WeekStart).localeCompare(String(a.WeekStart))
+      || cleanText(a.Customer).localeCompare(cleanText(b.Customer), 'th'));
+    return sendJson(res, 200, { ok: true, rows });
+  }
+  if (req.method === 'POST' && parts.length === 0) {
+    const body = await readBody(req);
+    const weekStart = cleanText(body.weekStart);
+    const customer = cleanText(body.customer);
+    const product = cleanText(body.product);
+    const planTons = Number(body.planTons);
+    if (!validIsoDate(weekStart) || mondayForDate(weekStart) !== weekStart) {
+      return sendJson(res, 400, { ok: false, error: 'กรุณาเลือกวันจันทร์เริ่มสัปดาห์' });
+    }
+    if (!customer || !REVENUE_PRODUCTS.includes(product) || !Number.isFinite(planTons) || planTons <= 0) {
+      return sendJson(res, 400, { ok: false, error: 'กรุณาระบุลูกค้า สินค้า และ Plan ให้ถูกต้อง' });
+    }
+    const customers = await store.readSheet('RevenueCustomers');
+    if (!customers.some((row) => sameText(row.Name, customer))) {
+      return sendJson(res, 400, { ok: false, error: 'ไม่พบลูกค้าในรายการ Setup' });
+    }
+    const rows = await store.readSheet('WeeklyDeliveryPlans');
+    const existing = rows.find((row) => row.WeekStart === weekStart
+      && row.Product === product && sameText(row.Customer, customer));
+    const data = { WeekStart: weekStart, Customer: customer, Product: product, PlanTons: planTons };
+    const row = existing
+      ? await store.updateRow('WeeklyDeliveryPlans', existing.ID, data)
+      : await store.appendRow('WeeklyDeliveryPlans', data);
+    return sendJson(res, 200, { ok: true, row, updated: !!existing });
+  }
+  if (req.method === 'DELETE' && parts.length === 1) {
+    const deleted = await store.deleteRow('WeeklyDeliveryPlans', parts[0]);
+    return sendJson(res, 200, { ok: deleted });
+  }
+  return sendJson(res, 404, { ok: false, error: 'unknown delivery plan route' });
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const parsed = url.parse(req.url, true);
@@ -875,6 +1030,7 @@ const server = http.createServer(async (req, res) => {
       if (resource === 'production') return await handleProduction(req, res, query);
       if (resource === 'yield') return await handleYield(req, res, rest);
       if (resource === 'sales') return await handleSales(req, res, rest);
+      if (resource === 'delivery-plans') return await handleDeliveryPlans(req, res, rest, query);
       if (resource === 'stock') {
         if (rest[0] === 'baseline') return await handleStockBaseline(req, res);
         if (rest.length === 0 && req.method === 'GET') return await handleStock(req, res);

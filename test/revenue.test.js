@@ -83,6 +83,10 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   await post('/api/revenue/tipping-daily', { entryDate: '2026-07-05', mswTons: 320 });
   await post('/api/revenue/tipping-daily', { entryDate: '2026-07-05', mswTons: 300 });
   await post('/api/revenue/tipping-daily', { entryDate: '2026-07-06', mswTons: 100 });
+  await post('/api/delivery-plans', { weekStart: '2026-07-06', customer: 'ลูกค้า A', product: 'RDF2', planTons: 6 });
+  await post('/api/delivery-plans', { weekStart: '2026-07-06', customer: 'ลูกค้า A', product: 'RDF3', planTons: 5 });
+  await post('/api/delivery-plans', { weekStart: '2026-07-06', customer: 'ลูกค้า A', product: 'FineFraction', planTons: 3 });
+  await post('/api/delivery-plans', { weekStart: '2026-07-07', customer: 'ลูกค้า A', product: 'RDF2', planTons: 1 }, 400);
 
   const response = await fetch(`${baseUrl}/api/revenue/dashboard?month=2026-07`);
   const dashboard = await response.json();
@@ -105,4 +109,20 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   const dailyResponse = await fetch(`${baseUrl}/api/revenue/tipping-daily?month=2026-07`);
   const dailyRows = await dailyResponse.json();
   assert.equal(dailyRows.rows.length, 2, 'same-day MSW input must update instead of duplicate');
+
+  const planResponse = await fetch(`${baseUrl}/api/delivery-plans/dashboard?weekStart=2026-07-06`);
+  const planDashboard = await planResponse.json();
+  assert.equal(planDashboard.ok, true);
+  assert.equal(planDashboard.weekEnd, '2026-07-12');
+  assert.equal(planDashboard.weekEndExclusive, '2026-07-13');
+  assert.equal(planDashboard.customers.length, 1);
+  const planProducts = Object.fromEntries(planDashboard.customers[0].products.map((row) => [row.product, row]));
+  assert.equal(planProducts.RDF2.actualTons, 0, 'Sunday before the week must not count toward Actual');
+  assert.equal(planProducts.RDF2.diffTons, -6);
+  assert.equal(planProducts.RDF2.opportunityLoss, 6000);
+  assert.equal(planProducts.RDF3.actualTons, 4);
+  assert.equal(planProducts.RDF3.opportunityLoss, 1500);
+  assert.equal(planProducts.FineFraction.actualTons, 2);
+  assert.equal(planProducts.FineFraction.opportunityLoss, 500);
+  assert.equal(planDashboard.customers[0].opportunityLoss, 8000);
 });

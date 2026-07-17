@@ -17,6 +17,7 @@ const SHEETS = {
   RevenueRDF3Sales: ['ID', 'SaleDate', 'Customer', 'Tons', 'Note', 'CreatedAt'],
   RevenueTippingSettings: ['ID', 'EffectiveDate', 'RatePerTon', 'ExcludedCentralTons', 'ExcludedMinTons', 'ExcludedMaxTons', 'CreatedAt'],
   RevenueTippingDaily: ['ID', 'EntryDate', 'MSWTons', 'Note', 'CreatedAt'],
+  WeeklyDeliveryPlans: ['ID', 'WeekStart', 'Customer', 'Product', 'PlanTons', 'CreatedAt'],
 };
 
 // Serialize ALL access (reads and writes) to the workbook file through one
