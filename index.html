@@ -1529,8 +1529,8 @@ function deliveryMondayFor(date){
 function deliveryDateLabel(date){
   return new Date(`${date}T12:00:00`).toLocaleDateString('th-TH', { day:'numeric', month:'short', year:'numeric' });
 }
-function deliveryWeekLabel(start, end){
-  return `${deliveryDateLabel(start)} - ${deliveryDateLabel(end)}`;
+function deliveryWeekLabel(start, endExclusive){
+  return `${deliveryDateLabel(start)} - ${deliveryDateLabel(endExclusive)} (ตัดรอบ)`;
 }
 function deliveryDiff(value){
   const number = Number(value) || 0;
@@ -1612,7 +1612,7 @@ async function loadDeliveryDashboard(){
   weekInput.value = weekStart;
   const data = await api(`/api/delivery-plans/dashboard?weekStart=${encodeURIComponent(weekStart)}`);
   deliveryLastDashboard = data;
-  const period = deliveryWeekLabel(data.weekStart, data.weekEnd);
+  const period = deliveryWeekLabel(data.weekStart, data.weekEndExclusive);
   document.getElementById('deliveryDashboardPeriod').textContent = period;
   const list = document.getElementById('deliveryCustomerDashboards');
   list.innerHTML = data.customers.length
