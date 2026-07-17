@@ -98,30 +98,88 @@
   .hint{font-size:12px; color:var(--gray); margin-top:4px;}
   .kpi-card .target{font-size:11.5px; color:var(--gray); margin-top:4px;}
   .badge.outside{background:var(--gray-bg); color:var(--gray); margin-left:6px;}
-  .revenue-range{font-size:12px; color:var(--gray); margin-top:6px;}
-  .revenue-split{display:grid; grid-template-columns:minmax(180px,260px) 1fr; gap:24px; align-items:center;}
-  .revenue-donut{width:180px; height:180px; border-radius:50%; margin:auto; position:relative; background:conic-gradient(var(--blue) 0 50%,var(--green) 50% 100%);}
-  .revenue-donut::after{content:""; position:absolute; inset:38px; background:#fff; border-radius:50%;}
-  .revenue-donut-label{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1; text-align:center; font-size:12px; color:var(--gray);}
-  .revenue-donut-label strong{font-size:20px; color:var(--dark);}
-  .share-row{display:grid; grid-template-columns:120px 1fr 70px; gap:10px; align-items:center; margin:14px 0; font-size:13px;}
-  .share-track{height:12px; background:var(--gray-bg); border-radius:6px; overflow:hidden;}
-  .share-fill{height:100%; background:var(--blue); border-radius:6px;}
-  .share-fill.tipping{background:var(--green);}
-  .revenue-chart{display:flex; align-items:flex-end; gap:5px; min-height:230px; height:230px; padding:12px 4px 26px; overflow-x:auto; border-bottom:1px solid var(--border);}
-  .chart-day{height:100%; min-width:24px; flex:1; display:flex; align-items:flex-end; justify-content:center; gap:2px; position:relative;}
-  .chart-bar{width:9px; min-height:0; border-radius:3px 3px 0 0; background:var(--blue);}
-  .chart-bar.tipping{background:var(--green);}
-  .chart-label{position:absolute; bottom:-21px; font-size:10px; color:var(--gray);}
-  .chart-legend{display:flex; gap:18px; justify-content:flex-end; margin-top:12px; font-size:12px; color:var(--gray);}
-  .legend-dot{display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; background:var(--blue);}
-  .legend-dot.tipping{background:var(--green);}
-  .two-columns{display:grid; grid-template-columns:1fr 1fr; gap:22px;}
+  .revenue-toolbar h2{margin-bottom:0;}
+  .revenue-toolbar .row{justify-content:flex-end;}
+  .revenue-export{background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; overflow:hidden; margin-bottom:22px; color:#172033;}
+  .revenue-report-head{background:#17243a; color:#fff; padding:22px 26px; display:flex; justify-content:space-between; align-items:flex-start; gap:20px;}
+  .revenue-report-kicker{font-size:11px; color:#9fb5d1; font-weight:700; text-transform:uppercase; margin-bottom:5px;}
+  .revenue-report-title{font-size:25px; font-weight:800; line-height:1.2;}
+  .revenue-report-company{font-size:12px; color:#cbd5e1; margin-top:7px;}
+  .revenue-report-meta{text-align:right; min-width:210px;}
+  .revenue-report-period{font-size:18px; font-weight:800;}
+  .revenue-generated{font-size:11px; color:#cbd5e1; margin-top:5px;}
+  .revenue-status{display:inline-block; margin-top:9px; padding:4px 8px; border-radius:4px; background:#dcfce7; color:#166534; font-size:11px; font-weight:700;}
+  .revenue-status.warn{background:#fef3c7; color:#92400e;}
+  .revenue-kpis{display:grid; grid-template-columns:1.35fr 1fr 1fr 1fr; gap:12px; padding:18px 20px; border-bottom:1px solid #dbe2ea;}
+  .revenue-kpi{background:#fff; border:1px solid #dbe2ea; border-top:4px solid #64748b; border-radius:6px; padding:14px 16px; min-height:118px;}
+  .revenue-kpi.total{border-top-color:#17243a;}
+  .revenue-kpi.sales{border-top-color:#2563eb;}
+  .revenue-kpi.tipping{border-top-color:#16a34a;}
+  .revenue-kpi.msw{border-top-color:#d97706;}
+  .revenue-kpi .name{font-size:11px; color:#64748b; font-weight:700; margin-bottom:9px;}
+  .revenue-kpi .value{font-size:23px; font-weight:800; line-height:1.2; color:#172033; overflow-wrap:anywhere;}
+  .revenue-kpi.total .value{font-size:28px;}
+  .revenue-kpi .value small{font-size:11px; color:#64748b; font-weight:600;}
+  .revenue-range{font-size:10.5px; color:#64748b; margin-top:6px; line-height:1.35;}
+  .revenue-insight{display:grid; grid-template-columns:1.5fr 1fr 1fr; background:#fff; border-bottom:1px solid #dbe2ea;}
+  .revenue-insight-item{padding:13px 20px; border-right:1px solid #e2e8f0;}
+  .revenue-insight-item:last-child{border-right:none;}
+  .revenue-insight-item span{display:block; font-size:10px; font-weight:700; color:#64748b; margin-bottom:4px;}
+  .revenue-insight-item strong{font-size:13px; color:#172033;}
+  .revenue-report-body{padding:18px 20px 20px;}
+  .revenue-main-grid{display:grid; grid-template-columns:minmax(0,1.7fr) minmax(260px,.8fr); gap:14px; margin-bottom:14px;}
+  .revenue-report-block{background:#fff; border:1px solid #dbe2ea; border-radius:6px; padding:16px 18px; min-width:0;}
+  .revenue-report-block h3{font-size:13px; margin:0 0 4px; color:#172033;}
+  .revenue-block-sub{font-size:10px; color:#64748b; margin-bottom:12px;}
+  .revenue-mix{display:grid; grid-template-columns:150px 1fr; gap:15px; align-items:center; min-height:250px;}
+  .revenue-donut{width:145px; height:145px; margin:auto; position:relative;}
+  .revenue-donut svg{position:absolute; inset:0; width:100%; height:100%; transform:rotate(-90deg);}
+  .revenue-donut circle{fill:none; stroke-width:7;}
+  .revenue-donut .donut-bg{stroke:#e8edf3;}
+  .revenue-donut .donut-sales{stroke:#2563eb;}
+  .revenue-donut .donut-tipping{stroke:#16a34a;}
+  .revenue-donut-label{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1; text-align:center; font-size:10px; color:#64748b;}
+  .revenue-donut-label strong{font-size:14px; color:#172033; max-width:80px;}
+  .share-row{margin:12px 0; font-size:11px;}
+  .share-row-head{display:flex; justify-content:space-between; gap:8px; margin-bottom:5px;}
+  .share-row-head strong{font-size:12px;}
+  .share-track{height:8px; background:#e8edf3; border-radius:4px; overflow:hidden;}
+  .share-fill{height:100%; background:#2563eb; border-radius:4px;}
+  .share-fill.tipping{background:#16a34a;}
+  .share-amount{font-size:10px; color:#64748b; margin-top:4px;}
+  .chart-axis-layout{display:grid; grid-template-columns:65px minmax(0,1fr); gap:0;}
+  .chart-scale{height:246px; position:relative; color:#64748b; font-size:9px; text-align:right; padding-right:9px;}
+  .chart-scale span{position:absolute; right:9px; transform:translateY(-50%);}
+  .chart-stage{height:246px; position:relative; border-left:1px solid #cbd5e1; border-bottom:1px solid #cbd5e1; overflow:hidden;}
+  .chart-grid-lines{position:absolute; inset:0; pointer-events:none;}
+  .chart-grid-lines i{position:absolute; left:0; right:0; border-top:1px solid #e2e8f0;}
+  .revenue-chart{position:absolute; inset:0; display:flex; align-items:flex-start; gap:3px; padding:0 7px;}
+  .chart-day{height:100%; min-width:18px; flex:1; display:flex; align-items:flex-end; justify-content:center; gap:2px; position:relative; padding-bottom:23px;}
+  .chart-bar{width:8px; min-height:0; border-radius:2px 2px 0 0; background:#2563eb;}
+  .chart-bar.tipping{background:#16a34a;}
+  .chart-label{position:absolute; bottom:4px; font-size:8px; color:#64748b;}
+  .chart-legend{display:flex; gap:16px; justify-content:flex-end; margin-top:10px; font-size:10px; color:#64748b;}
+  .legend-dot{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; background:#2563eb;}
+  .legend-dot.tipping{background:#16a34a;}
+  .revenue-breakdowns{display:grid; grid-template-columns:.85fr 1.15fr; gap:14px;}
+  .revenue-report-table{font-size:10.5px;}
+  .revenue-report-table th,.revenue-report-table td{padding:7px 8px;}
+  .revenue-report-table th{background:#edf2f7;}
+  .revenue-share-cell{min-width:105px;}
+  .mini-track{height:5px; background:#e8edf3; border-radius:3px; overflow:hidden; margin-top:4px;}
+  .mini-fill{height:100%; background:#2563eb;}
+  .revenue-report-note{font-size:9.5px; color:#64748b; padding-top:13px; border-top:1px solid #dbe2ea; margin-top:14px;}
+  .revenue-export.exporting{width:1180px; max-width:none;}
   .warning-list{margin:0; padding-left:20px; color:#92400e; font-size:13px;}
   @media(max-width:700px){
     main{padding:14px;}
-    .revenue-split,.two-columns{grid-template-columns:1fr;}
-    .share-row{grid-template-columns:92px 1fr 58px;}
+    .revenue-toolbar .row{justify-content:flex-start;}
+    .revenue-report-head{flex-direction:column;}
+    .revenue-report-meta{text-align:left; min-width:0;}
+    .revenue-kpis,.revenue-insight,.revenue-main-grid,.revenue-breakdowns{grid-template-columns:1fr;}
+    .revenue-insight-item{border-right:none; border-bottom:1px solid #e2e8f0;}
+    .revenue-mix{grid-template-columns:1fr;}
+    .revenue-report-body{padding:12px;}
   }
   footer{text-align:center; color:var(--gray); font-size:12px; padding:20px;}
 </style>
@@ -482,8 +540,8 @@
 
   <!-- ===================== TAB: REVENUE ===================== -->
   <section id="tab-revenue" class="tab-panel">
-    <section class="panel">
-      <h2><span>ภาพรวมรายได้บริษัท</span></h2>
+    <section class="panel revenue-toolbar">
+      <h2><span>รายงานรายได้บริษัท</span><button class="primary" id="btnExportRevenueImage">ดาวน์โหลดภาพ PNG</button></h2>
       <div class="row">
         <label for="revenueMonth">เดือนรายงาน</label>
         <input type="month" id="revenueMonth">
@@ -491,77 +549,116 @@
       </div>
     </section>
 
-    <div class="cards-grid">
-      <div class="kpi-card blue">
-        <div class="name">รายได้จากการขายสินค้า</div>
-        <div class="value" id="revSalesBase">0 บาท</div>
-        <div class="revenue-range" id="revSalesRange">ช่วงประมาณการ 0 - 0 บาท</div>
-      </div>
-      <div class="kpi-card green">
-        <div class="name">รายได้ Tipping Fee</div>
-        <div class="value" id="revTipping">0 บาท</div>
-        <div class="revenue-range" id="revTippingDetail">ขยะที่คิดค่ากำจัด 0 ตัน</div>
-        <div class="revenue-range" id="revTippingRange">ช่วงประมาณการ 0 - 0 บาท</div>
-      </div>
-      <div class="kpi-card">
-        <div class="name">รายได้รวมบริษัท</div>
-        <div class="value" id="revCompanyTotal">0 บาท</div>
-        <div class="revenue-range" id="revCompanyRange">ช่วงประมาณการ 0 - 0 บาท</div>
-      </div>
-      <div class="kpi-card">
-        <div class="name">MSW เข้าโรงงาน / หักบ้านมะเกลือ</div>
-        <div class="value" id="revEligibleMSW">0 <small>ตันคิดค่ากำจัด</small></div>
-        <div class="revenue-range" id="revExcludedMSW">รับเข้า 0 ตัน / หัก 0 ตัน</div>
-      </div>
-    </div>
-
-    <section class="panel">
-      <h2>สัดส่วนรายได้ประจำเดือน</h2>
-      <div class="revenue-split">
-        <div class="revenue-donut" id="revenueDonut">
-          <div class="revenue-donut-label"><span>รายได้หลัก</span><strong id="revenueMainSource">-</strong></div>
-        </div>
+    <div class="revenue-export" id="revenueExportArea">
+      <header class="revenue-report-head">
         <div>
-          <div class="share-row">
-            <span>ขายสินค้า</span>
-            <div class="share-track"><div class="share-fill" id="revenueSalesShareBar" style="width:0"></div></div>
-            <strong id="revenueSalesShareText">0%</strong>
-          </div>
-          <div class="share-row">
-            <span>Tipping Fee</span>
-            <div class="share-track"><div class="share-fill tipping" id="revenueTippingShareBar" style="width:0"></div></div>
-            <strong id="revenueTippingShareText">0%</strong>
-          </div>
+          <div class="revenue-report-kicker">Monthly Revenue Summary</div>
+          <div class="revenue-report-title">สรุปรายได้ประจำเดือน</div>
+          <div class="revenue-report-company">GREEN POWER 1 CO., LTD. · RDF PRODUCTION</div>
+        </div>
+        <div class="revenue-report-meta">
+          <div class="revenue-report-period" id="revenueReportPeriod">-</div>
+          <div class="revenue-generated" id="revenueGeneratedAt">-</div>
+          <div class="revenue-status" id="revenueDataStatus">ข้อมูลราคาครบถ้วน</div>
+        </div>
+      </header>
+
+      <div class="revenue-kpis">
+        <div class="revenue-kpi total">
+          <div class="name">รายได้รวมโดยประมาณ</div>
+          <div class="value" id="revCompanyTotal">0 บาท</div>
+          <div class="revenue-range" id="revCompanyRange">ช่วงประมาณการ 0 - 0 บาท</div>
+        </div>
+        <div class="revenue-kpi sales">
+          <div class="name">รายได้จากการขายสินค้า</div>
+          <div class="value" id="revSalesBase">0 บาท</div>
+          <div class="revenue-range" id="revSalesRange">ช่วงประมาณการ 0 - 0 บาท</div>
+        </div>
+        <div class="revenue-kpi tipping">
+          <div class="name">รายได้ Tipping Fee</div>
+          <div class="value" id="revTipping">0 บาท</div>
+          <div class="revenue-range" id="revTippingRange">ช่วงประมาณการ 0 - 0 บาท</div>
+        </div>
+        <div class="revenue-kpi msw">
+          <div class="name">MSW ที่คิดค่ากำจัด</div>
+          <div class="value" id="revEligibleMSW">0 <small>ตัน</small></div>
+          <div class="revenue-range" id="revTippingDetail">อัตรา 0 บาท/ตัน</div>
         </div>
       </div>
-    </section>
 
-    <section class="panel">
-      <h2>รายได้รายวัน</h2>
-      <div class="revenue-chart" id="revenueDailyChart"></div>
-      <div class="chart-legend">
-        <span><i class="legend-dot"></i>ขายสินค้า</span>
-        <span><i class="legend-dot tipping"></i>Tipping Fee</span>
+      <div class="revenue-insight">
+        <div class="revenue-insight-item"><span>ข้อสรุปสำคัญ</span><strong id="revenueLeadText">ยังไม่มีข้อมูลรายได้</strong></div>
+        <div class="revenue-insight-item"><span>ยอดขายที่นำมาคำนวณ</span><strong id="revTransactionCount">0 รายการ · 0 ตัน</strong></div>
+        <div class="revenue-insight-item"><span>MSW เข้าโรงงาน / ยกเว้น</span><strong id="revExcludedMSW">รับเข้า 0 ตัน / หัก 0 ตัน</strong></div>
       </div>
-    </section>
 
-    <div class="two-columns">
-      <section class="panel">
-        <h2>ยอดขายแยกตามสินค้า</h2>
-        <table>
-          <thead><tr><th class="left">สินค้า</th><th>ตัน</th><th>รายได้กลาง</th></tr></thead>
-          <tbody id="revenueProductTable"></tbody>
-        </table>
-      </section>
-      <section class="panel">
-        <h2>ยอดขายแยกตามลูกค้า</h2>
-        <div class="scroll-table">
-          <table>
-            <thead><tr><th class="left">ลูกค้า</th><th>ตัน</th><th>รายได้กลาง</th></tr></thead>
-            <tbody id="revenueCustomerSummaryTable"></tbody>
-          </table>
+      <div class="revenue-report-body">
+        <div class="revenue-main-grid">
+          <div class="revenue-report-block">
+            <h3>แนวโน้มรายได้รายวัน</h3>
+            <div class="revenue-block-sub">เปรียบเทียบรายได้จากการขายสินค้าและ Tipping Fee</div>
+            <div class="chart-axis-layout">
+              <div class="chart-scale" id="revenueChartScale"></div>
+              <div class="chart-stage">
+                <div class="chart-grid-lines"><i style="top:0"></i><i style="top:25%"></i><i style="top:50%"></i><i style="top:75%"></i></div>
+                <div class="revenue-chart" id="revenueDailyChart"></div>
+              </div>
+            </div>
+            <div class="chart-legend">
+              <span><i class="legend-dot"></i>ขายสินค้า</span>
+              <span><i class="legend-dot tipping"></i>Tipping Fee</span>
+            </div>
+          </div>
+
+          <div class="revenue-report-block">
+            <h3>โครงสร้างรายได้</h3>
+            <div class="revenue-block-sub">สัดส่วนจากค่ากลางของเดือน</div>
+            <div class="revenue-mix">
+              <div class="revenue-donut" id="revenueDonut">
+                <svg viewBox="0 0 42 42" aria-hidden="true">
+                  <circle class="donut-bg" cx="21" cy="21" r="15.9155"></circle>
+                  <circle class="donut-sales" id="revenueSalesArc" cx="21" cy="21" r="15.9155" pathLength="100"></circle>
+                  <circle class="donut-tipping" id="revenueTippingArc" cx="21" cy="21" r="15.9155" pathLength="100"></circle>
+                </svg>
+                <div class="revenue-donut-label"><span>รายได้หลัก</span><strong id="revenueMainSource">-</strong></div>
+              </div>
+              <div>
+                <div class="share-row">
+                  <div class="share-row-head"><span>ขายสินค้า</span><strong id="revenueSalesShareText">0%</strong></div>
+                  <div class="share-track"><div class="share-fill" id="revenueSalesShareBar" style="width:0"></div></div>
+                  <div class="share-amount" id="revenueSalesAmount">0 บาท</div>
+                </div>
+                <div class="share-row">
+                  <div class="share-row-head"><span>Tipping Fee</span><strong id="revenueTippingShareText">0%</strong></div>
+                  <div class="share-track"><div class="share-fill tipping" id="revenueTippingShareBar" style="width:0"></div></div>
+                  <div class="share-amount" id="revenueTippingAmount">0 บาท</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-      </section>
+
+        <div class="revenue-breakdowns">
+          <div class="revenue-report-block">
+            <h3>รายได้แยกตามสินค้า</h3>
+            <div class="revenue-block-sub">เรียงตามรายได้ค่ากลาง</div>
+            <table class="revenue-report-table">
+              <thead><tr><th class="left">สินค้า</th><th>ตัน</th><th>รายได้</th><th>สัดส่วน</th></tr></thead>
+              <tbody id="revenueProductTable"></tbody>
+            </table>
+          </div>
+          <div class="revenue-report-block">
+            <h3>รายได้แยกตามลูกค้า</h3>
+            <div class="revenue-block-sub">ลูกค้าสูงสุด 10 อันดับ</div>
+            <table class="revenue-report-table">
+              <thead><tr><th>อันดับ</th><th class="left">ลูกค้า</th><th>ตัน</th><th>รายได้</th><th>สัดส่วน</th></tr></thead>
+              <tbody id="revenueCustomerSummaryTable"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="revenue-report-note" id="revenueReportNote">รายได้เป็นตัวเลขประมาณการจากราคากลางและสมมติฐานที่ตั้งไว้ในระบบ</div>
+      </div>
     </div>
 
     <section class="panel" id="revenueUnresolvedPanel" style="display:none">
@@ -1315,6 +1412,23 @@ function revenueMoney(value){
 function revenueNumber(value, digits=2){
   return Number(value || 0).toLocaleString('th-TH', { minimumFractionDigits:digits, maximumFractionDigits:digits });
 }
+function revenueMonthLabel(month){
+  const [year, monthNumber] = month.split('-').map(Number);
+  return new Date(year, monthNumber - 1, 1).toLocaleDateString('th-TH', { month:'long', year:'numeric' });
+}
+function revenueScaleLabel(value){
+  const amount = Number(value) || 0;
+  if (amount >= 1000000) return `${(amount / 1000000).toLocaleString('th-TH', { maximumFractionDigits:1 })} ล.`;
+  if (amount >= 1000) return `${(amount / 1000).toLocaleString('th-TH', { maximumFractionDigits:0 })} พัน`;
+  return amount.toLocaleString('th-TH', { maximumFractionDigits:0 });
+}
+function revenueNiceMax(value){
+  if (!value || value <= 0) return 1;
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  const normalized = value / magnitude;
+  const rounded = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  return rounded * magnitude;
+}
 function revenueEsc(value){
   return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 }
@@ -1487,10 +1601,15 @@ onClickGuarded(document.getElementById('btnAddRDF3Sale'), async ()=>{
 
 function renderRevenueChart(rows){
   const chart = document.getElementById('revenueDailyChart');
-  const maxValue = Math.max(0, ...rows.flatMap(r => [Number(r.salesRevenue)||0, Number(r.tippingRevenue)||0]));
+  const rawMax = Math.max(0, ...rows.flatMap(r => [Number(r.salesRevenue)||0, Number(r.tippingRevenue)||0]));
+  const maxValue = revenueNiceMax(rawMax);
+  document.getElementById('revenueChartScale').innerHTML = [1, .75, .5, .25, 0]
+    .map(ratio => `<span style="top:${(1 - ratio) * 100}%">${revenueScaleLabel(maxValue * ratio)}</span>`).join('');
   chart.innerHTML = rows.map((r, index) => {
-    const salesHeight = maxValue ? (Number(r.salesRevenue)||0) / maxValue * 100 : 0;
-    const tippingHeight = maxValue ? (Number(r.tippingRevenue)||0) / maxValue * 100 : 0;
+    const salesValue = Number(r.salesRevenue) || 0;
+    const tippingValue = Number(r.tippingRevenue) || 0;
+    const salesHeight = salesValue ? Math.max(2, salesValue / maxValue * 100) : 0;
+    const tippingHeight = tippingValue ? Math.max(2, tippingValue / maxValue * 100) : 0;
     const label = index % 2 === 0 || rows.length <= 16 ? String(index + 1) : '';
     return `<div class="chart-day"><div class="chart-bar" style="height:${salesHeight}%" title="${revenueEsc(r.date)} ขายสินค้า ${revenueMoney(r.salesRevenue)}"></div><div class="chart-bar tipping" style="height:${tippingHeight}%" title="${revenueEsc(r.date)} Tipping Fee ${revenueMoney(r.tippingRevenue)}"></div><span class="chart-label">${label}</span></div>`;
   }).join('');
@@ -1499,6 +1618,8 @@ function renderRevenueChart(rows){
 async function loadRevenueDashboard(){
   const month = document.getElementById('revenueMonth').value || currentMonth;
   const data = await api(`/api/revenue/dashboard?month=${encodeURIComponent(month)}`);
+  document.getElementById('revenueReportPeriod').textContent = revenueMonthLabel(month);
+  document.getElementById('revenueGeneratedAt').textContent = `จัดทำเมื่อ ${new Date().toLocaleString('th-TH', { dateStyle:'medium', timeStyle:'short' })}`;
   document.getElementById('revSalesBase').textContent = revenueMoney(data.sales.base);
   document.getElementById('revSalesRange').textContent = `ช่วงประมาณการ ${revenueMoney(data.sales.low)} - ${revenueMoney(data.sales.high)} (±10%)`;
   document.getElementById('revTipping').textContent = revenueMoney(data.tipping.central);
@@ -1506,8 +1627,23 @@ async function loadRevenueDashboard(){
   document.getElementById('revTippingRange').textContent = `ช่วงประมาณการ ${revenueMoney(data.tipping.low)} - ${revenueMoney(data.tipping.high)}`;
   document.getElementById('revCompanyTotal').textContent = revenueMoney(data.company.central);
   document.getElementById('revCompanyRange').textContent = `ช่วงประมาณการ ${revenueMoney(data.company.low)} - ${revenueMoney(data.company.high)}`;
-  document.getElementById('revEligibleMSW').innerHTML = `${revenueNumber(data.tipping.eligibleCentralTons)} <small>ตันคิดค่ากำจัด</small>`;
+  document.getElementById('revEligibleMSW').innerHTML = `${revenueNumber(data.tipping.eligibleCentralTons)} <small>ตัน</small>`;
   document.getElementById('revExcludedMSW').textContent = `รับเข้า ${revenueNumber(data.tipping.totalMSW)} ตัน / หักบ้านมะเกลือ ${revenueNumber(data.tipping.excludedCentralTons)} ตัน`;
+
+  const status = document.getElementById('revenueDataStatus');
+  status.className = 'revenue-status' + (data.sales.unresolvedCount ? ' warn' : '');
+  status.textContent = data.sales.unresolvedCount
+    ? `รอระบุราคา ${data.sales.unresolvedCount} รายการ`
+    : 'ข้อมูลราคาครบถ้วน';
+
+  const totalSalesTons = data.sales.byProduct.reduce((sum, row) => sum + (Number(row.tons) || 0), 0);
+  document.getElementById('revTransactionCount').textContent = `${data.sales.transactionCount} รายการ · ${revenueNumber(totalSalesTons)} ตันมีราคา`;
+  const revenueDifference = Math.abs(Number(data.sales.base) - Number(data.tipping.central));
+  document.getElementById('revenueLeadText').textContent = Number(data.company.central) <= 0
+    ? 'ยังไม่มีข้อมูลรายได้ในเดือนนี้'
+    : Number(data.sales.base) >= Number(data.tipping.central)
+      ? `ยอดขายสินค้าเป็นรายได้หลัก สูงกว่า Tipping Fee ${revenueMoney(revenueDifference)}`
+      : `Tipping Fee เป็นรายได้หลัก สูงกว่ายอดขายสินค้า ${revenueMoney(revenueDifference)}`;
 
   const salesShare = Number(data.company.salesSharePct) || 0;
   const tippingShare = Number(data.company.tippingSharePct) || 0;
@@ -1515,17 +1651,31 @@ async function loadRevenueDashboard(){
   document.getElementById('revenueTippingShareBar').style.width = `${tippingShare}%`;
   document.getElementById('revenueSalesShareText').textContent = `${salesShare.toFixed(1)}%`;
   document.getElementById('revenueTippingShareText').textContent = `${tippingShare.toFixed(1)}%`;
+  document.getElementById('revenueSalesAmount').textContent = revenueMoney(data.sales.base);
+  document.getElementById('revenueTippingAmount').textContent = revenueMoney(data.tipping.central);
   const total = Number(data.company.central) || 0;
-  document.getElementById('revenueDonut').style.background = total > 0
-    ? `conic-gradient(var(--blue) 0 ${salesShare}%,var(--green) ${salesShare}% 100%)`
-    : 'var(--gray-bg)';
+  const salesArc = document.getElementById('revenueSalesArc');
+  const tippingArc = document.getElementById('revenueTippingArc');
+  salesArc.style.strokeDasharray = total > 0 ? `${salesShare} ${100 - salesShare}` : '0 100';
+  salesArc.style.strokeDashoffset = '0';
+  tippingArc.style.strokeDasharray = total > 0 ? `${tippingShare} ${100 - tippingShare}` : '0 100';
+  tippingArc.style.strokeDashoffset = `${-salesShare}`;
   document.getElementById('revenueMainSource').textContent = total <= 0 ? '-' : salesShare >= tippingShare ? 'ขายสินค้า' : 'Tipping Fee';
   renderRevenueChart(data.daily);
 
   const productBody = document.getElementById('revenueProductTable');
-  productBody.innerHTML = data.sales.byProduct.length ? data.sales.byProduct.map(r => `<tr><td class="left">${revenueEsc(revenueProductLabel[r.product] || r.product)}</td><td>${revenueNumber(r.tons)}</td><td>${revenueMoney(r.revenue)}</td></tr>`).join('') : revenueEmpty(3);
+  productBody.innerHTML = data.sales.byProduct.length ? data.sales.byProduct.map(r => {
+    const share = Number(data.sales.base) > 0 ? Number(r.revenue) / Number(data.sales.base) * 100 : 0;
+    return `<tr><td class="left"><strong>${revenueEsc(revenueProductLabel[r.product] || r.product)}</strong></td><td>${revenueNumber(r.tons)}</td><td>${revenueMoney(r.revenue)}</td><td class="revenue-share-cell">${share.toFixed(1)}%<div class="mini-track"><div class="mini-fill" style="width:${share}%"></div></div></td></tr>`;
+  }).join('') : revenueEmpty(4);
   const customerBody = document.getElementById('revenueCustomerSummaryTable');
-  customerBody.innerHTML = data.sales.byCustomer.length ? data.sales.byCustomer.map(r => `<tr><td class="left">${revenueEsc(r.customer)}</td><td>${revenueNumber(r.tons)}</td><td>${revenueMoney(r.revenue)}</td></tr>`).join('') : revenueEmpty(3);
+  const topCustomers = data.sales.byCustomer.slice(0, 10);
+  customerBody.innerHTML = topCustomers.length ? topCustomers.map((r, index) => {
+    const share = Number(data.sales.base) > 0 ? Number(r.revenue) / Number(data.sales.base) * 100 : 0;
+    return `<tr><td>${index + 1}</td><td class="left"><strong>${revenueEsc(r.customer)}</strong></td><td>${revenueNumber(r.tons)}</td><td>${revenueMoney(r.revenue)}</td><td class="revenue-share-cell">${share.toFixed(1)}%<div class="mini-track"><div class="mini-fill" style="width:${share}%"></div></div></td></tr>`;
+  }).join('') : revenueEmpty(5);
+
+  document.getElementById('revenueReportNote').textContent = `หมายเหตุ: รายได้ขายสินค้าใช้ราคากลางและแสดงช่วง ±10% · Tipping Fee อัตรา ${revenueNumber(data.tipping.ratePerTon)} บาท/ตัน โดยหักบ้านมะเกลือประมาณ ${revenueNumber(data.tipping.excludedMinTons)}-${revenueNumber(data.tipping.excludedMaxTons)} ตัน/เดือน`;
 
   const unresolvedPanel = document.getElementById('revenueUnresolvedPanel');
   unresolvedPanel.style.display = data.sales.unresolved.length ? '' : 'none';
@@ -1535,6 +1685,32 @@ async function loadRevenueDashboard(){
 onClickGuarded(document.getElementById('btnLoadRevenue'), async ()=>{
   try{ await Promise.all([loadRevenueDashboard(), loadTippingDaily()]); }
   catch(e){ toast(e.message, true); }
+});
+
+onClickGuarded(document.getElementById('btnExportRevenueImage'), async ()=>{
+  const area = document.getElementById('revenueExportArea');
+  try{
+    await loadRevenueDashboard();
+    area.classList.add('exporting');
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const canvas = await html2canvas(area, {
+      scale: 2,
+      backgroundColor: '#f8fafc',
+      logging: false,
+      useCORS: true,
+      windowWidth: 1220,
+    });
+    const link = document.createElement('a');
+    const month = document.getElementById('revenueMonth').value || currentMonth;
+    link.download = `GP1-Revenue-Summary-${month}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    toast('Export ภาพสรุปรายได้แล้ว');
+  }catch(e){
+    toast('ไม่สามารถ Export ภาพได้: ' + e.message, true);
+  }finally{
+    area.classList.remove('exporting');
+  }
 });
 
 async function initRevenue(){
