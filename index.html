@@ -22,7 +22,7 @@
   }
   header.topbar h1{margin:0; font-size:22px; font-weight:700;}
   header.topbar .sub{font-size:13px; color:#93c5fd; margin-top:2px;}
-  nav.tabs{display:flex; gap:6px; background:#0f172a; padding:0 22px;}
+  nav.tabs{display:flex; gap:6px; background:#0f172a; padding:0 22px; overflow-x:auto;}
   nav.tabs button{
     background:transparent; border:none; color:#93c5fd; padding:12px 18px; font-size:14px; font-weight:600;
     cursor:pointer; border-bottom:3px solid transparent;
@@ -98,6 +98,31 @@
   .hint{font-size:12px; color:var(--gray); margin-top:4px;}
   .kpi-card .target{font-size:11.5px; color:var(--gray); margin-top:4px;}
   .badge.outside{background:var(--gray-bg); color:var(--gray); margin-left:6px;}
+  .revenue-range{font-size:12px; color:var(--gray); margin-top:6px;}
+  .revenue-split{display:grid; grid-template-columns:minmax(180px,260px) 1fr; gap:24px; align-items:center;}
+  .revenue-donut{width:180px; height:180px; border-radius:50%; margin:auto; position:relative; background:conic-gradient(var(--blue) 0 50%,var(--green) 50% 100%);}
+  .revenue-donut::after{content:""; position:absolute; inset:38px; background:#fff; border-radius:50%;}
+  .revenue-donut-label{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1; text-align:center; font-size:12px; color:var(--gray);}
+  .revenue-donut-label strong{font-size:20px; color:var(--dark);}
+  .share-row{display:grid; grid-template-columns:120px 1fr 70px; gap:10px; align-items:center; margin:14px 0; font-size:13px;}
+  .share-track{height:12px; background:var(--gray-bg); border-radius:6px; overflow:hidden;}
+  .share-fill{height:100%; background:var(--blue); border-radius:6px;}
+  .share-fill.tipping{background:var(--green);}
+  .revenue-chart{display:flex; align-items:flex-end; gap:5px; min-height:230px; height:230px; padding:12px 4px 26px; overflow-x:auto; border-bottom:1px solid var(--border);}
+  .chart-day{height:100%; min-width:24px; flex:1; display:flex; align-items:flex-end; justify-content:center; gap:2px; position:relative;}
+  .chart-bar{width:9px; min-height:0; border-radius:3px 3px 0 0; background:var(--blue);}
+  .chart-bar.tipping{background:var(--green);}
+  .chart-label{position:absolute; bottom:-21px; font-size:10px; color:var(--gray);}
+  .chart-legend{display:flex; gap:18px; justify-content:flex-end; margin-top:12px; font-size:12px; color:var(--gray);}
+  .legend-dot{display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; background:var(--blue);}
+  .legend-dot.tipping{background:var(--green);}
+  .two-columns{display:grid; grid-template-columns:1fr 1fr; gap:22px;}
+  .warning-list{margin:0; padding-left:20px; color:#92400e; font-size:13px;}
+  @media(max-width:700px){
+    main{padding:14px;}
+    .revenue-split,.two-columns{grid-template-columns:1fr;}
+    .share-row{grid-template-columns:92px 1fr 58px;}
+  }
   footer{text-align:center; color:var(--gray); font-size:12px; padding:20px;}
 </style>
 </head>
@@ -118,6 +143,7 @@
   <button data-tab="report">รายงานประจำวัน</button>
   <button data-tab="grab">นำเข้า Grab Crane</button>
   <button data-tab="stock">สต็อก &amp; ผลผลิต</button>
+  <button data-tab="revenue">รายได้บริษัท</button>
 </nav>
 
 <main>
@@ -491,6 +517,176 @@
       </div>
     </section>
 
+  </section>
+
+  <!-- ===================== TAB: REVENUE ===================== -->
+  <section id="tab-revenue" class="tab-panel">
+    <section class="panel">
+      <h2><span>ภาพรวมรายได้บริษัท</span></h2>
+      <div class="row">
+        <label for="revenueMonth">เดือนรายงาน</label>
+        <input type="month" id="revenueMonth">
+        <button class="primary" id="btnLoadRevenue">แสดงผล</button>
+      </div>
+    </section>
+
+    <div class="cards-grid">
+      <div class="kpi-card blue">
+        <div class="name">รายได้จากการขายสินค้า</div>
+        <div class="value" id="revSalesBase">0 บาท</div>
+        <div class="revenue-range" id="revSalesRange">ช่วงประมาณการ 0 - 0 บาท</div>
+      </div>
+      <div class="kpi-card green">
+        <div class="name">รายได้ Tipping Fee</div>
+        <div class="value" id="revTipping">0 บาท</div>
+        <div class="revenue-range" id="revTippingDetail">ขยะที่คิดค่ากำจัด 0 ตัน</div>
+        <div class="revenue-range" id="revTippingRange">ช่วงประมาณการ 0 - 0 บาท</div>
+      </div>
+      <div class="kpi-card">
+        <div class="name">รายได้รวมบริษัท</div>
+        <div class="value" id="revCompanyTotal">0 บาท</div>
+        <div class="revenue-range" id="revCompanyRange">ช่วงประมาณการ 0 - 0 บาท</div>
+      </div>
+      <div class="kpi-card">
+        <div class="name">MSW เข้าโรงงาน / หักบ้านมะเกลือ</div>
+        <div class="value" id="revEligibleMSW">0 <small>ตันคิดค่ากำจัด</small></div>
+        <div class="revenue-range" id="revExcludedMSW">รับเข้า 0 ตัน / หัก 0 ตัน</div>
+      </div>
+    </div>
+
+    <section class="panel">
+      <h2>สัดส่วนรายได้ประจำเดือน</h2>
+      <div class="revenue-split">
+        <div class="revenue-donut" id="revenueDonut">
+          <div class="revenue-donut-label"><span>รายได้หลัก</span><strong id="revenueMainSource">-</strong></div>
+        </div>
+        <div>
+          <div class="share-row">
+            <span>ขายสินค้า</span>
+            <div class="share-track"><div class="share-fill" id="revenueSalesShareBar" style="width:0"></div></div>
+            <strong id="revenueSalesShareText">0%</strong>
+          </div>
+          <div class="share-row">
+            <span>Tipping Fee</span>
+            <div class="share-track"><div class="share-fill tipping" id="revenueTippingShareBar" style="width:0"></div></div>
+            <strong id="revenueTippingShareText">0%</strong>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>รายได้รายวัน</h2>
+      <div class="revenue-chart" id="revenueDailyChart"></div>
+      <div class="chart-legend">
+        <span><i class="legend-dot"></i>ขายสินค้า</span>
+        <span><i class="legend-dot tipping"></i>Tipping Fee</span>
+      </div>
+    </section>
+
+    <div class="two-columns">
+      <section class="panel">
+        <h2>ยอดขายแยกตามสินค้า</h2>
+        <table>
+          <thead><tr><th class="left">สินค้า</th><th>ตัน</th><th>รายได้กลาง</th></tr></thead>
+          <tbody id="revenueProductTable"></tbody>
+        </table>
+      </section>
+      <section class="panel">
+        <h2>ยอดขายแยกตามลูกค้า</h2>
+        <div class="scroll-table">
+          <table>
+            <thead><tr><th class="left">ลูกค้า</th><th>ตัน</th><th>รายได้กลาง</th></tr></thead>
+            <tbody id="revenueCustomerSummaryTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel" id="revenueUnresolvedPanel" style="display:none">
+      <h2>รายการขายที่ยังคำนวณราคาไม่ได้</h2>
+      <ul class="warning-list" id="revenueUnresolvedList"></ul>
+    </section>
+
+    <section class="panel">
+      <h2>ตั้งค่าลูกค้า</h2>
+      <div class="entry-form">
+        <div><label>ชื่อลูกค้า</label><input type="text" id="revenueCustomerName"></div>
+        <div><button class="primary" id="btnAddRevenueCustomer">+ เพิ่มลูกค้า</button></div>
+      </div>
+      <table>
+        <thead><tr><th class="left">ลูกค้า</th><th>จัดการ</th></tr></thead>
+        <tbody id="revenueCustomerTable"></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>ตั้งราคากลางตามลูกค้าและสินค้า</h2>
+      <div class="entry-form">
+        <div><label>มีผลตั้งแต่วันที่</label><input type="date" id="revenuePriceDate"></div>
+        <div><label>ลูกค้า</label><select id="revenuePriceCustomer"></select></div>
+        <div><label>สินค้า</label><select id="revenuePriceProduct"><option value="RDF2">RDF2</option><option value="RDF3">RDF3</option><option value="FineFraction">Fine Fraction</option></select></div>
+        <div><label>ราคากลาง (บาท/ตัน)</label><input type="number" id="revenuePricePerTon" min="0" step="0.01"></div>
+        <div><button class="primary" id="btnSaveRevenuePrice">บันทึกราคา</button></div>
+      </div>
+      <div class="scroll-table">
+        <table>
+          <thead><tr><th>มีผลตั้งแต่</th><th class="left">ลูกค้า</th><th>สินค้า</th><th>บาท/ตัน</th><th>จัดการ</th></tr></thead>
+          <tbody id="revenuePriceTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>ตั้งค่า Tipping Fee</h2>
+      <div class="entry-form">
+        <div><label>มีผลตั้งแต่วันที่</label><input type="date" id="tippingSettingDate"></div>
+        <div><label>ค่ากำจัด (บาท/ตัน)</label><input type="number" id="tippingRate" min="0" step="0.01" value="250"></div>
+        <div><label>บ้านมะเกลือค่ากลาง (ตัน/เดือน)</label><input type="number" id="tippingExcludedCentral" min="0" step="0.01" value="180"></div>
+        <div><label>ค่าต่ำสุด (ตัน/เดือน)</label><input type="number" id="tippingExcludedMin" min="0" step="0.01" value="160"></div>
+        <div><label>ค่าสูงสุด (ตัน/เดือน)</label><input type="number" id="tippingExcludedMax" min="0" step="0.01" value="200"></div>
+        <div><button class="primary" id="btnSaveTippingSetting">บันทึกค่า</button></div>
+      </div>
+      <div class="scroll-table">
+        <table>
+          <thead><tr><th>มีผลตั้งแต่</th><th>บาท/ตัน</th><th>ค่ากลาง</th><th>ช่วงประมาณการ</th><th>จัดการ</th></tr></thead>
+          <tbody id="tippingSettingTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>บันทึก MSW เข้าโรงงานรายวัน</h2>
+      <div class="entry-form">
+        <div><label>วันที่</label><input type="date" id="tippingEntryDate"></div>
+        <div><label>MSW เข้าโรงงาน (ตัน)</label><input type="number" id="tippingMSWTons" min="0" step="0.01"></div>
+        <div><label>หมายเหตุ</label><input type="text" id="tippingNote"></div>
+        <div><button class="primary" id="btnSaveTippingDaily">บันทึก MSW</button></div>
+      </div>
+      <div class="scroll-table">
+        <table>
+          <thead><tr><th>วันที่</th><th>MSW (ตัน)</th><th class="left">หมายเหตุ</th><th>จัดการ</th></tr></thead>
+          <tbody id="tippingDailyTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>บันทึกการขาย RDF3</h2>
+      <div class="entry-form">
+        <div><label>วันที่ขาย</label><input type="date" id="rdf3SaleDate"></div>
+        <div><label>ลูกค้า</label><select id="rdf3SaleCustomer"></select></div>
+        <div><label>จำนวน (ตัน)</label><input type="number" id="rdf3SaleTons" min="0" step="0.01"></div>
+        <div><label>หมายเหตุ</label><input type="text" id="rdf3SaleNote"></div>
+        <div><button class="primary" id="btnAddRDF3Sale">+ บันทึกการขาย RDF3</button></div>
+      </div>
+      <div class="scroll-table">
+        <table>
+          <thead><tr><th>วันที่</th><th class="left">ลูกค้า</th><th>ตัน</th><th class="left">หมายเหตุ</th><th>จัดการ</th></tr></thead>
+          <tbody id="rdf3SalesTable"></tbody>
+        </table>
+      </div>
+    </section>
   </section>
 
 </main>
@@ -1120,7 +1316,247 @@ async function loadStock(){
     : 'ยังไม่ได้ตั้งค่าสต็อกเริ่มต้น (ถือว่าเริ่มจาก 0)';
 }
 
+// ---------------- REVENUE TAB ----------------
+const revenueProductLabel = { RDF2:'RDF2', RDF3:'RDF3', FineFraction:'Fine Fraction' };
+let revenueCustomers = [];
+
+function revenueMoney(value){
+  return Number(value || 0).toLocaleString('th-TH', { maximumFractionDigits:0 }) + ' บาท';
+}
+function revenueNumber(value, digits=2){
+  return Number(value || 0).toLocaleString('th-TH', { minimumFractionDigits:digits, maximumFractionDigits:digits });
+}
+function revenueEsc(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+function revenueEmpty(cols, text='ยังไม่มีข้อมูล'){
+  return `<tr><td colspan="${cols}" class="empty-note">${text}</td></tr>`;
+}
+
+const currentMonth = todayStr().slice(0, 7);
+document.getElementById('revenueMonth').value = currentMonth;
+document.getElementById('revenuePriceDate').value = todayStr();
+document.getElementById('tippingSettingDate').value = todayStr();
+document.getElementById('tippingEntryDate').value = todayStr();
+document.getElementById('rdf3SaleDate').value = todayStr();
+
+function fillRevenueCustomerSelects(){
+  const options = revenueCustomers.map(r => `<option value="${revenueEsc(r.Name)}">${revenueEsc(r.Name)}</option>`).join('');
+  for (const id of ['revenuePriceCustomer','rdf3SaleCustomer']){
+    const el = document.getElementById(id);
+    const previous = el.value;
+    el.innerHTML = options || '<option value="">เพิ่มลูกค้าก่อน</option>';
+    if (revenueCustomers.some(r => r.Name === previous)) el.value = previous;
+  }
+}
+
+async function loadRevenueCustomers(){
+  const data = await api('/api/revenue/customers');
+  revenueCustomers = data.rows;
+  fillRevenueCustomerSelects();
+  const tbody = document.getElementById('revenueCustomerTable');
+  tbody.innerHTML = data.rows.length ? data.rows.map(r => `<tr><td class="left">${revenueEsc(r.Name)}</td><td><button class="danger" data-id="${revenueEsc(r.ID)}">ลบ</button></td></tr>`).join('') : revenueEmpty(2);
+  tbody.querySelectorAll('button[data-id]').forEach(btn => btn.addEventListener('click', async ()=>{
+    try{
+      await api(`/api/revenue/customers/${encodeURIComponent(btn.dataset.id)}`, { method:'DELETE' });
+      await loadRevenueCustomers();
+      toast('ลบลูกค้าแล้ว');
+    }catch(e){ toast(e.message, true); }
+  }));
+}
+
+onClickGuarded(document.getElementById('btnAddRevenueCustomer'), async ()=>{
+  const name = document.getElementById('revenueCustomerName').value.trim();
+  if (!name){ toast('กรุณาระบุชื่อลูกค้า', true); return; }
+  try{
+    const data = await api('/api/revenue/customers', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ name }) });
+    document.getElementById('revenueCustomerName').value = '';
+    await loadRevenueCustomers();
+    toast(data.existing ? 'มีลูกค้านี้อยู่แล้ว' : 'เพิ่มลูกค้าแล้ว');
+  }catch(e){ toast(e.message, true); }
+});
+
+async function loadRevenuePrices(){
+  const data = await api('/api/revenue/prices');
+  const tbody = document.getElementById('revenuePriceTable');
+  tbody.innerHTML = data.rows.length ? data.rows.map(r => `<tr><td>${revenueEsc(r.EffectiveDate)}</td><td class="left">${revenueEsc(r.Customer)}</td><td>${revenueEsc(revenueProductLabel[r.Product] || r.Product)}</td><td>${revenueNumber(r.PricePerTon, 2)}</td><td><button class="danger" data-id="${revenueEsc(r.ID)}">ลบ</button></td></tr>`).join('') : revenueEmpty(5);
+  tbody.querySelectorAll('button[data-id]').forEach(btn => btn.addEventListener('click', async ()=>{
+    try{
+      await api(`/api/revenue/prices/${encodeURIComponent(btn.dataset.id)}`, { method:'DELETE' });
+      await Promise.all([loadRevenuePrices(), loadRevenueDashboard()]);
+      toast('ลบราคาแล้ว');
+    }catch(e){ toast(e.message, true); }
+  }));
+}
+
+onClickGuarded(document.getElementById('btnSaveRevenuePrice'), async ()=>{
+  const effectiveDate = document.getElementById('revenuePriceDate').value;
+  const customer = document.getElementById('revenuePriceCustomer').value;
+  const product = document.getElementById('revenuePriceProduct').value;
+  const pricePerTon = document.getElementById('revenuePricePerTon').value;
+  if (!effectiveDate || !customer || pricePerTon === ''){ toast('กรุณาระบุวันที่ ลูกค้า และราคากลาง', true); return; }
+  try{
+    const data = await api('/api/revenue/prices', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ effectiveDate, customer, product, pricePerTon }) });
+    document.getElementById('revenuePricePerTon').value = '';
+    await Promise.all([loadRevenuePrices(), loadRevenueDashboard()]);
+    toast(data.updated ? 'อัปเดตราคาแล้ว' : 'บันทึกราคาแล้ว');
+  }catch(e){ toast(e.message, true); }
+});
+
+async function loadTippingSettings(){
+  const data = await api('/api/revenue/tipping-settings');
+  const r = data.current;
+  document.getElementById('tippingSettingDate').value = r.ID ? r.EffectiveDate : todayStr();
+  document.getElementById('tippingRate').value = r.RatePerTon;
+  document.getElementById('tippingExcludedCentral').value = r.ExcludedCentralTons;
+  document.getElementById('tippingExcludedMin').value = r.ExcludedMinTons;
+  document.getElementById('tippingExcludedMax').value = r.ExcludedMaxTons;
+  const tbody = document.getElementById('tippingSettingTable');
+  tbody.innerHTML = data.rows.length ? data.rows.map(row => `<tr><td>${revenueEsc(row.EffectiveDate)}</td><td>${revenueNumber(row.RatePerTon)}</td><td>${revenueNumber(row.ExcludedCentralTons)} ตัน</td><td>${revenueNumber(row.ExcludedMinTons)} - ${revenueNumber(row.ExcludedMaxTons)} ตัน</td><td><button class="danger" data-id="${revenueEsc(row.ID)}">ลบ</button></td></tr>`).join('') : revenueEmpty(5);
+  tbody.querySelectorAll('button[data-id]').forEach(btn => btn.addEventListener('click', async ()=>{
+    try{
+      await api(`/api/revenue/tipping-settings/${encodeURIComponent(btn.dataset.id)}`, { method:'DELETE' });
+      await Promise.all([loadTippingSettings(), loadRevenueDashboard()]);
+      toast('ลบค่าตั้ง Tipping Fee แล้ว');
+    }catch(e){ toast(e.message, true); }
+  }));
+}
+
+onClickGuarded(document.getElementById('btnSaveTippingSetting'), async ()=>{
+  try{
+    const data = await api('/api/revenue/tipping-settings', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+      effectiveDate:document.getElementById('tippingSettingDate').value,
+      ratePerTon:document.getElementById('tippingRate').value,
+      excludedCentralTons:document.getElementById('tippingExcludedCentral').value,
+      excludedMinTons:document.getElementById('tippingExcludedMin').value,
+      excludedMaxTons:document.getElementById('tippingExcludedMax').value,
+    }) });
+    await Promise.all([loadTippingSettings(), loadRevenueDashboard()]);
+    toast(data.updated ? 'อัปเดตค่า Tipping Fee แล้ว' : 'บันทึกค่า Tipping Fee แล้ว');
+  }catch(e){ toast(e.message, true); }
+});
+
+async function loadTippingDaily(){
+  const month = document.getElementById('revenueMonth').value || currentMonth;
+  const data = await api(`/api/revenue/tipping-daily?month=${encodeURIComponent(month)}`);
+  const tbody = document.getElementById('tippingDailyTable');
+  tbody.innerHTML = data.rows.length ? data.rows.map(r => `<tr><td>${revenueEsc(r.EntryDate)}</td><td>${revenueNumber(r.MSWTons)}</td><td class="left">${revenueEsc(r.Note)}</td><td><button class="danger" data-id="${revenueEsc(r.ID)}">ลบ</button></td></tr>`).join('') : revenueEmpty(4);
+  tbody.querySelectorAll('button[data-id]').forEach(btn => btn.addEventListener('click', async ()=>{
+    try{
+      await api(`/api/revenue/tipping-daily/${encodeURIComponent(btn.dataset.id)}`, { method:'DELETE' });
+      await Promise.all([loadTippingDaily(), loadRevenueDashboard()]);
+      toast('ลบข้อมูล MSW แล้ว');
+    }catch(e){ toast(e.message, true); }
+  }));
+}
+
+onClickGuarded(document.getElementById('btnSaveTippingDaily'), async ()=>{
+  const entryDate = document.getElementById('tippingEntryDate').value;
+  const mswTons = document.getElementById('tippingMSWTons').value;
+  if (!entryDate || mswTons === ''){ toast('กรุณาระบุวันที่และน้ำหนัก MSW', true); return; }
+  try{
+    const data = await api('/api/revenue/tipping-daily', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+      entryDate, mswTons, note:document.getElementById('tippingNote').value,
+    }) });
+    document.getElementById('tippingMSWTons').value = '';
+    document.getElementById('tippingNote').value = '';
+    document.getElementById('revenueMonth').value = entryDate.slice(0, 7);
+    await Promise.all([loadTippingDaily(), loadRevenueDashboard()]);
+    toast(data.updated ? 'อัปเดต MSW ของวันนี้แล้ว' : 'บันทึก MSW แล้ว');
+  }catch(e){ toast(e.message, true); }
+});
+
+async function loadRDF3Sales(){
+  const data = await api('/api/revenue/rdf3-sales');
+  const tbody = document.getElementById('rdf3SalesTable');
+  tbody.innerHTML = data.rows.length ? data.rows.map(r => `<tr><td>${revenueEsc(r.SaleDate)}</td><td class="left">${revenueEsc(r.Customer)}</td><td>${revenueNumber(r.Tons)}</td><td class="left">${revenueEsc(r.Note)}</td><td><button class="danger" data-id="${revenueEsc(r.ID)}">ลบ</button></td></tr>`).join('') : revenueEmpty(5);
+  tbody.querySelectorAll('button[data-id]').forEach(btn => btn.addEventListener('click', async ()=>{
+    try{
+      await api(`/api/revenue/rdf3-sales/${encodeURIComponent(btn.dataset.id)}`, { method:'DELETE' });
+      await Promise.all([loadRDF3Sales(), loadRevenueDashboard()]);
+      toast('ลบรายการขาย RDF3 แล้ว');
+    }catch(e){ toast(e.message, true); }
+  }));
+}
+
+onClickGuarded(document.getElementById('btnAddRDF3Sale'), async ()=>{
+  const saleDate = document.getElementById('rdf3SaleDate').value;
+  const customer = document.getElementById('rdf3SaleCustomer').value;
+  const tons = document.getElementById('rdf3SaleTons').value;
+  if (!saleDate || !customer || !tons){ toast('กรุณาระบุวันที่ ลูกค้า และจำนวนตัน RDF3', true); return; }
+  try{
+    await api('/api/revenue/rdf3-sales', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+      saleDate, customer, tons, note:document.getElementById('rdf3SaleNote').value,
+    }) });
+    document.getElementById('rdf3SaleTons').value = '';
+    document.getElementById('rdf3SaleNote').value = '';
+    document.getElementById('revenueMonth').value = saleDate.slice(0, 7);
+    await Promise.all([loadRDF3Sales(), loadRevenueDashboard()]);
+    toast('บันทึกการขาย RDF3 แล้ว');
+  }catch(e){ toast(e.message, true); }
+});
+
+function renderRevenueChart(rows){
+  const chart = document.getElementById('revenueDailyChart');
+  const maxValue = Math.max(0, ...rows.flatMap(r => [Number(r.salesRevenue)||0, Number(r.tippingRevenue)||0]));
+  chart.innerHTML = rows.map((r, index) => {
+    const salesHeight = maxValue ? (Number(r.salesRevenue)||0) / maxValue * 100 : 0;
+    const tippingHeight = maxValue ? (Number(r.tippingRevenue)||0) / maxValue * 100 : 0;
+    const label = index % 2 === 0 || rows.length <= 16 ? String(index + 1) : '';
+    return `<div class="chart-day"><div class="chart-bar" style="height:${salesHeight}%" title="${revenueEsc(r.date)} ขายสินค้า ${revenueMoney(r.salesRevenue)}"></div><div class="chart-bar tipping" style="height:${tippingHeight}%" title="${revenueEsc(r.date)} Tipping Fee ${revenueMoney(r.tippingRevenue)}"></div><span class="chart-label">${label}</span></div>`;
+  }).join('');
+}
+
+async function loadRevenueDashboard(){
+  const month = document.getElementById('revenueMonth').value || currentMonth;
+  const data = await api(`/api/revenue/dashboard?month=${encodeURIComponent(month)}`);
+  document.getElementById('revSalesBase').textContent = revenueMoney(data.sales.base);
+  document.getElementById('revSalesRange').textContent = `ช่วงประมาณการ ${revenueMoney(data.sales.low)} - ${revenueMoney(data.sales.high)} (±10%)`;
+  document.getElementById('revTipping').textContent = revenueMoney(data.tipping.central);
+  document.getElementById('revTippingDetail').textContent = `ขยะที่คิดค่ากำจัด ${revenueNumber(data.tipping.eligibleCentralTons)} ตัน × ${revenueNumber(data.tipping.ratePerTon)} บาท`;
+  document.getElementById('revTippingRange').textContent = `ช่วงประมาณการ ${revenueMoney(data.tipping.low)} - ${revenueMoney(data.tipping.high)}`;
+  document.getElementById('revCompanyTotal').textContent = revenueMoney(data.company.central);
+  document.getElementById('revCompanyRange').textContent = `ช่วงประมาณการ ${revenueMoney(data.company.low)} - ${revenueMoney(data.company.high)}`;
+  document.getElementById('revEligibleMSW').innerHTML = `${revenueNumber(data.tipping.eligibleCentralTons)} <small>ตันคิดค่ากำจัด</small>`;
+  document.getElementById('revExcludedMSW').textContent = `รับเข้า ${revenueNumber(data.tipping.totalMSW)} ตัน / หักบ้านมะเกลือ ${revenueNumber(data.tipping.excludedCentralTons)} ตัน`;
+
+  const salesShare = Number(data.company.salesSharePct) || 0;
+  const tippingShare = Number(data.company.tippingSharePct) || 0;
+  document.getElementById('revenueSalesShareBar').style.width = `${salesShare}%`;
+  document.getElementById('revenueTippingShareBar').style.width = `${tippingShare}%`;
+  document.getElementById('revenueSalesShareText').textContent = `${salesShare.toFixed(1)}%`;
+  document.getElementById('revenueTippingShareText').textContent = `${tippingShare.toFixed(1)}%`;
+  const total = Number(data.company.central) || 0;
+  document.getElementById('revenueDonut').style.background = total > 0
+    ? `conic-gradient(var(--blue) 0 ${salesShare}%,var(--green) ${salesShare}% 100%)`
+    : 'var(--gray-bg)';
+  document.getElementById('revenueMainSource').textContent = total <= 0 ? '-' : salesShare >= tippingShare ? 'ขายสินค้า' : 'Tipping Fee';
+  renderRevenueChart(data.daily);
+
+  const productBody = document.getElementById('revenueProductTable');
+  productBody.innerHTML = data.sales.byProduct.length ? data.sales.byProduct.map(r => `<tr><td class="left">${revenueEsc(revenueProductLabel[r.product] || r.product)}</td><td>${revenueNumber(r.tons)}</td><td>${revenueMoney(r.revenue)}</td></tr>`).join('') : revenueEmpty(3);
+  const customerBody = document.getElementById('revenueCustomerSummaryTable');
+  customerBody.innerHTML = data.sales.byCustomer.length ? data.sales.byCustomer.map(r => `<tr><td class="left">${revenueEsc(r.customer)}</td><td>${revenueNumber(r.tons)}</td><td>${revenueMoney(r.revenue)}</td></tr>`).join('') : revenueEmpty(3);
+
+  const unresolvedPanel = document.getElementById('revenueUnresolvedPanel');
+  unresolvedPanel.style.display = data.sales.unresolved.length ? '' : 'none';
+  document.getElementById('revenueUnresolvedList').innerHTML = data.sales.unresolved.map(r => `<li>${revenueEsc(r.date)} · ${revenueEsc(revenueProductLabel[r.product] || r.product)} · ${revenueEsc(r.customer || 'ไม่ระบุลูกค้า')} · ${revenueNumber(r.tons)} ตัน</li>`).join('');
+}
+
+onClickGuarded(document.getElementById('btnLoadRevenue'), async ()=>{
+  try{ await Promise.all([loadRevenueDashboard(), loadTippingDaily()]); }
+  catch(e){ toast(e.message, true); }
+});
+
+async function initRevenue(){
+  try{
+    await loadRevenueCustomers();
+    await Promise.all([loadRevenuePrices(), loadTippingSettings(), loadTippingDaily(), loadRDF3Sales(), loadRevenueDashboard()]);
+  }catch(e){ toast(e.message, true); }
+}
+
 loadYieldTable(); loadBaseline(); loadSalesTable(); loadStock();
+initRevenue();
 </script>
 </body>
 </html>

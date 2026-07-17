@@ -535,6 +535,324 @@ async function handleStock(req, res) {
   });
 }
 
+// ---------- Company Revenue (isolated from existing stock logic) ----------
+
+const REVENUE_PRODUCTS = ['RDF2', 'RDF3', 'FineFraction'];
+const DEFAULT_TIPPING_SETTING = {
+  EffectiveDate: '2000-01-01',
+  RatePerTon: 250,
+  ExcludedCentralTons: 180,
+  ExcludedMinTons: 160,
+  ExcludedMaxTons: 200,
+};
+
+function cleanText(value) {
+  return String(value || '').trim();
+}
+
+function sameText(a, b) {
+  return cleanText(a).toLocaleLowerCase('th-TH') === cleanText(b).toLocaleLowerCase('th-TH');
+}
+
+function validMonth(month) {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(String(month || ''));
+}
+
+function monthBounds(month) {
+  const [year, monthNumber] = month.split('-').map(Number);
+  const days = new Date(year, monthNumber, 0).getDate();
+  return {
+    start: `${month}-01`,
+    end: `${month}-${String(days).padStart(2, '0')}`,
+    days,
+  };
+}
+
+function applicableRow(rows, date, dateField) {
+  const matches = rows
+    .filter((row) => String(row[dateField]) <= date)
+    .sort((a, b) => String(a[dateField]).localeCompare(String(b[dateField])));
+  return matches.length ? matches[matches.length - 1] : null;
+}
+
+function applicableRevenuePrice(priceRows, customer, product, date) {
+  return applicableRow(
+    priceRows.filter((row) => sameText(row.Customer, customer) && row.Product === product),
+    date,
+    'EffectiveDate',
+  );
+}
+
+async function handleRevenueCustomers(req, res, parts) {
+  if (req.method === 'GET' && parts.length === 0) {
+    const rows = await store.readSheet('RevenueCustomers');
+    rows.sort((a, b) => cleanText(a.Name).localeCompare(cleanText(b.Name), 'th'));
+    return sendJson(res, 200, { ok: true, rows });
+  }
+  if (req.method === 'POST' && parts.length === 0) {
+    const body = await readBody(req);
+    const name = cleanText(body.name);
+    if (!name) return sendJson(res, 400, { ok: false, error: 'ต้องระบุชื่อลูกค้า' });
+    const rows = await store.readSheet('RevenueCustomers');
+    const existing = rows.find((row) => sameText(row.Name, name));
+    if (existing) return sendJson(res, 200, { ok: true, row: existing, existing: true });
+    const row = await store.appendRow('RevenueCustomers', { Name: name, Active: true });
+    return sendJson(res, 200, { ok: true, row });
+  }
+  if (req.method === 'DELETE' && parts.length === 1) {
+    const deleted = await store.deleteRow('RevenueCustomers', parts[0]);
+    return sendJson(res, 200, { ok: deleted });
+  }
+  return sendJson(res, 404, { ok: false, error: 'not found' });
+}
+
+async function handleRevenuePrices(req, res, parts) {
+  if (req.method === 'GET' && parts.length === 0) {
+    const rows = await store.readSheet('RevenuePrices');
+    rows.sort((a, b) => String(b.EffectiveDate).localeCompare(String(a.EffectiveDate)));
+    return sendJson(res, 200, { ok: true, rows });
+  }
+  if (req.method === 'POST' && parts.length === 0) {
+    const body = await readBody(req);
+    const effectiveDate = cleanText(body.effectiveDate);
+    const customer = cleanText(body.customer);
+    const product = cleanText(body.product);
+    const pricePerTon = Number(body.pricePerTon);
+    if (!effectiveDate || !customer || !REVENUE_PRODUCTS.includes(product) || !Number.isFinite(pricePerTon) || pricePerTon < 0) {
+      return sendJson(res, 400, { ok: false, error: 'กรุณาระบุวันที่ ลูกค้า สินค้า และราคาต่อตันให้ถูกต้อง' });
+    }
+    const customers = await store.readSheet('RevenueCustomers');
+    if (!customers.some((row) => sameText(row.Name, customer))) {
+      return sendJson(res, 400, { ok: false, error: 'ไม่พบลูกค้าในรายการ Setup' });
+    }
+    const rows = await store.readSheet('RevenuePrices');
+    const existing = rows.find((row) => row.EffectiveDate === effectiveDate && row.Product === product && sameText(row.Customer, customer));
+    const data = { EffectiveDate: effectiveDate, Customer: customer, Product: product, PricePerTon: pricePerTon };
+    const row = existing
+      ? await store.updateRow('RevenuePrices', existing.ID, data)
+      : await store.appendRow('RevenuePrices', data);
+    return sendJson(res, 200, { ok: true, row, updated: !!existing });
+  }
+  if (req.method === 'DELETE' && parts.length === 1) {
+    const deleted = await store.deleteRow('RevenuePrices', parts[0]);
+    return sendJson(res, 200, { ok: deleted });
+  }
+  return sendJson(res, 404, { ok: false, error: 'not found' });
+}
+
+async function handleRevenueRDF3Sales(req, res, parts) {
+  if (req.method === 'GET' && parts.length === 0) {
+    const rows = await store.readSheet('RevenueRDF3Sales');
+    rows.sort((a, b) => String(b.SaleDate).localeCompare(String(a.SaleDate)));
+    return sendJson(res, 200, { ok: true, rows });
+  }
+  if (req.method === 'POST' && parts.length === 0) {
+    const body = await readBody(req);
+    const saleDate = cleanText(body.saleDate);
+    const customer = cleanText(body.customer);
+    const tons = Number(body.tons);
+    if (!saleDate || !customer || !Number.isFinite(tons) || tons <= 0) {
+      return sendJson(res, 400, { ok: false, error: 'กรุณาระบุวันที่ ลูกค้า และจำนวนตัน RDF3' });
+    }
+    const customers = await store.readSheet('RevenueCustomers');
+    if (!customers.some((row) => sameText(row.Name, customer))) {
+      return sendJson(res, 400, { ok: false, error: 'ไม่พบลูกค้าในรายการ Setup' });
+    }
+    const row = await store.appendRow('RevenueRDF3Sales', {
+      SaleDate: saleDate, Customer: customer, Tons: tons, Note: cleanText(body.note),
+    });
+    return sendJson(res, 200, { ok: true, row });
+  }
+  if (req.method === 'DELETE' && parts.length === 1) {
+    const deleted = await store.deleteRow('RevenueRDF3Sales', parts[0]);
+    return sendJson(res, 200, { ok: deleted });
+  }
+  return sendJson(res, 404, { ok: false, error: 'not found' });
+}
+
+async function handleRevenueTippingSettings(req, res, parts) {
+  if (req.method === 'GET' && parts.length === 0) {
+    const rows = await store.readSheet('RevenueTippingSettings');
+    rows.sort((a, b) => String(b.EffectiveDate).localeCompare(String(a.EffectiveDate)));
+    const current = applicableRow(rows, lib.nowInBangkok().date, 'EffectiveDate') || DEFAULT_TIPPING_SETTING;
+    return sendJson(res, 200, { ok: true, rows, current });
+  }
+  if (req.method === 'POST' && parts.length === 0) {
+    const body = await readBody(req);
+    const data = {
+      EffectiveDate: cleanText(body.effectiveDate),
+      RatePerTon: Number(body.ratePerTon),
+      ExcludedCentralTons: Number(body.excludedCentralTons),
+      ExcludedMinTons: Number(body.excludedMinTons),
+      ExcludedMaxTons: Number(body.excludedMaxTons),
+    };
+    if (!data.EffectiveDate || !Number.isFinite(data.RatePerTon) || data.RatePerTon < 0
+      || !Number.isFinite(data.ExcludedCentralTons) || !Number.isFinite(data.ExcludedMinTons)
+      || !Number.isFinite(data.ExcludedMaxTons) || data.ExcludedMinTons > data.ExcludedCentralTons
+      || data.ExcludedCentralTons > data.ExcludedMaxTons) {
+      return sendJson(res, 400, { ok: false, error: 'ค่าตั้ง Tipping Fee หรือช่วงบ้านมะเกลือไม่ถูกต้อง' });
+    }
+    const rows = await store.readSheet('RevenueTippingSettings');
+    const existing = rows.find((row) => row.EffectiveDate === data.EffectiveDate);
+    const row = existing
+      ? await store.updateRow('RevenueTippingSettings', existing.ID, data)
+      : await store.appendRow('RevenueTippingSettings', data);
+    return sendJson(res, 200, { ok: true, row, updated: !!existing });
+  }
+  if (req.method === 'DELETE' && parts.length === 1) {
+    const deleted = await store.deleteRow('RevenueTippingSettings', parts[0]);
+    return sendJson(res, 200, { ok: deleted });
+  }
+  return sendJson(res, 404, { ok: false, error: 'not found' });
+}
+
+async function handleRevenueTippingDaily(req, res, parts, query) {
+  if (req.method === 'GET' && parts.length === 0) {
+    let rows = await store.readSheet('RevenueTippingDaily');
+    if (query.month) rows = rows.filter((row) => String(row.EntryDate).startsWith(`${query.month}-`));
+    rows.sort((a, b) => String(b.EntryDate).localeCompare(String(a.EntryDate)));
+    return sendJson(res, 200, { ok: true, rows });
+  }
+  if (req.method === 'POST' && parts.length === 0) {
+    const body = await readBody(req);
+    const entryDate = cleanText(body.entryDate);
+    const mswTons = Number(body.mswTons);
+    if (!entryDate || !Number.isFinite(mswTons) || mswTons < 0) {
+      return sendJson(res, 400, { ok: false, error: 'กรุณาระบุวันที่และน้ำหนัก MSW ให้ถูกต้อง' });
+    }
+    const rows = await store.readSheet('RevenueTippingDaily');
+    const existing = rows.find((row) => row.EntryDate === entryDate);
+    const data = { EntryDate: entryDate, MSWTons: mswTons, Note: cleanText(body.note) };
+    const row = existing
+      ? await store.updateRow('RevenueTippingDaily', existing.ID, data)
+      : await store.appendRow('RevenueTippingDaily', data);
+    return sendJson(res, 200, { ok: true, row, updated: !!existing });
+  }
+  if (req.method === 'DELETE' && parts.length === 1) {
+    const deleted = await store.deleteRow('RevenueTippingDaily', parts[0]);
+    return sendJson(res, 200, { ok: deleted });
+  }
+  return sendJson(res, 404, { ok: false, error: 'not found' });
+}
+
+async function handleRevenueDashboard(req, res, query) {
+  const nowBkk = lib.nowInBangkok();
+  const month = validMonth(query.month) ? query.month : nowBkk.date.slice(0, 7);
+  const bounds = monthBounds(month);
+  const [stockSales, rdf3Sales, prices, tippingRows, tippingSettings] = await Promise.all([
+    store.readSheet('Sales'),
+    store.readSheet('RevenueRDF3Sales'),
+    store.readSheet('RevenuePrices'),
+    store.readSheet('RevenueTippingDaily'),
+    store.readSheet('RevenueTippingSettings'),
+  ]);
+
+  const sales = stockSales
+    .filter((row) => row.SaleDate >= bounds.start && row.SaleDate <= bounds.end && ['RDF2', 'FineFraction'].includes(row.Material))
+    .map((row) => ({
+      source: 'stock', sourceId: row.ID, date: row.SaleDate, product: row.Material,
+      customer: cleanText(row.Customer), tons: Number(row.Tons) || 0,
+    }));
+  for (const row of rdf3Sales) {
+    if (row.SaleDate < bounds.start || row.SaleDate > bounds.end) continue;
+    sales.push({
+      source: 'rdf3', sourceId: row.ID, date: row.SaleDate, product: 'RDF3',
+      customer: cleanText(row.Customer), tons: Number(row.Tons) || 0,
+    });
+  }
+
+  const pricedSales = sales.map((sale) => {
+    const price = applicableRevenuePrice(prices, sale.customer, sale.product, sale.date);
+    const pricePerTon = price ? Number(price.PricePerTon) || 0 : null;
+    return { ...sale, pricePerTon, revenue: pricePerTon === null ? null : sale.tons * pricePerTon };
+  });
+  const unresolvedSales = pricedSales.filter((sale) => sale.pricePerTon === null);
+  const salesBase = pricedSales.reduce((sum, sale) => sum + (sale.revenue || 0), 0);
+  const productMap = Object.fromEntries(REVENUE_PRODUCTS.map((product) => [
+    product, { product, tons: 0, revenue: 0 },
+  ]));
+  const customerMap = {};
+  const dailyMap = {};
+  for (let day = 1; day <= bounds.days; day += 1) {
+    const date = `${month}-${String(day).padStart(2, '0')}`;
+    dailyMap[date] = { date, salesRevenue: 0, tippingRevenue: 0, mswTons: 0 };
+  }
+  for (const sale of pricedSales) {
+    if (sale.revenue !== null) {
+      productMap[sale.product] = productMap[sale.product] || { product: sale.product, tons: 0, revenue: 0 };
+      productMap[sale.product].tons += sale.tons;
+      productMap[sale.product].revenue += sale.revenue;
+      const customerKey = sale.customer || '(ไม่ระบุลูกค้า)';
+      customerMap[customerKey] = customerMap[customerKey] || { customer: customerKey, tons: 0, revenue: 0 };
+      customerMap[customerKey].tons += sale.tons;
+      customerMap[customerKey].revenue += sale.revenue;
+      dailyMap[sale.date].salesRevenue += sale.revenue;
+    }
+  }
+
+  const monthTippingRows = tippingRows.filter((row) => row.EntryDate >= bounds.start && row.EntryDate <= bounds.end);
+  const totalMSW = monthTippingRows.reduce((sum, row) => sum + (Number(row.MSWTons) || 0), 0);
+  const setting = applicableRow(tippingSettings, bounds.end, 'EffectiveDate') || DEFAULT_TIPPING_SETTING;
+  const rate = Number(setting.RatePerTon) || 0;
+  const excludedCentral = Math.min(totalMSW, Number(setting.ExcludedCentralTons) || 0);
+  const excludedMin = Math.min(totalMSW, Number(setting.ExcludedMinTons) || 0);
+  const excludedMax = Math.min(totalMSW, Number(setting.ExcludedMaxTons) || 0);
+  for (const row of monthTippingRows) {
+    const msw = Number(row.MSWTons) || 0;
+    const allocatedExcluded = totalMSW > 0 ? excludedCentral * msw / totalMSW : 0;
+    dailyMap[row.EntryDate].mswTons += msw;
+    dailyMap[row.EntryDate].tippingRevenue += Math.max(0, msw - allocatedExcluded) * rate;
+  }
+  const tippingCentral = Math.max(0, totalMSW - excludedCentral) * rate;
+  const tippingLow = Math.max(0, totalMSW - excludedMax) * rate;
+  const tippingHigh = Math.max(0, totalMSW - excludedMin) * rate;
+  const salesLow = salesBase * 0.9;
+  const salesHigh = salesBase * 1.1;
+  const companyCentral = salesBase + tippingCentral;
+  const salesShare = companyCentral > 0 ? salesBase / companyCentral * 100 : 0;
+
+  return sendJson(res, 200, {
+    ok: true,
+    month,
+    sales: {
+      base: salesBase, low: salesLow, high: salesHigh,
+      transactionCount: pricedSales.length,
+      unresolvedCount: unresolvedSales.length,
+      unresolved: unresolvedSales,
+      byProduct: Object.values(productMap).sort((a, b) => b.revenue - a.revenue),
+      byCustomer: Object.values(customerMap).sort((a, b) => b.revenue - a.revenue),
+    },
+    tipping: {
+      totalMSW, ratePerTon: rate,
+      excludedCentralTons: excludedCentral,
+      excludedMinTons: excludedMin,
+      excludedMaxTons: excludedMax,
+      eligibleCentralTons: Math.max(0, totalMSW - excludedCentral),
+      central: tippingCentral, low: tippingLow, high: tippingHigh,
+    },
+    company: {
+      central: companyCentral,
+      low: salesLow + tippingLow,
+      high: salesHigh + tippingHigh,
+      salesSharePct: salesShare,
+      tippingSharePct: 100 - salesShare,
+    },
+    daily: Object.values(dailyMap),
+  });
+}
+
+async function handleRevenue(req, res, parts, query) {
+  const section = parts[0];
+  const rest = parts.slice(1);
+  if (section === 'customers') return handleRevenueCustomers(req, res, rest);
+  if (section === 'prices') return handleRevenuePrices(req, res, rest);
+  if (section === 'rdf3-sales') return handleRevenueRDF3Sales(req, res, rest);
+  if (section === 'tipping-settings') return handleRevenueTippingSettings(req, res, rest);
+  if (section === 'tipping-daily') return handleRevenueTippingDaily(req, res, rest, query);
+  if (section === 'dashboard' && req.method === 'GET') return handleRevenueDashboard(req, res, query);
+  return sendJson(res, 404, { ok: false, error: 'unknown revenue route' });
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const parsed = url.parse(req.url, true);
@@ -561,6 +879,7 @@ const server = http.createServer(async (req, res) => {
         if (rest[0] === 'baseline') return await handleStockBaseline(req, res);
         if (rest.length === 0 && req.method === 'GET') return await handleStock(req, res);
       }
+      if (resource === 'revenue') return await handleRevenue(req, res, rest, query);
       return sendJson(res, 404, { ok: false, error: 'unknown api route' });
     }
 

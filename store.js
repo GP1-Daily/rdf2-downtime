@@ -1,7 +1,9 @@
 const path = require('path');
 const ExcelJS = require('exceljs');
 
-const XLSX_PATH = path.join(__dirname, 'RDF2_Downtime.xlsx');
+const XLSX_PATH = process.env.RDF2_XLSX_PATH
+  ? path.resolve(process.env.RDF2_XLSX_PATH)
+  : path.join(__dirname, 'RDF2_Downtime.xlsx');
 
 const SHEETS = {
   Downtime: ['ID', 'EntryDate', 'StartTime', 'EndTime', 'Reason', 'Note', 'CreatedAt'],
@@ -10,6 +12,11 @@ const SHEETS = {
   YieldSettings: ['ID', 'EffectiveDate', 'RDF2Pct', 'FineFractionPct', 'HeavyFractionPct', 'MetalPct', 'CreatedAt'],
   StockBaseline: ['ID', 'BaselineDate', 'RDF2Tons', 'FineFractionTons', 'MetalTons', 'CreatedAt'],
   Sales: ['ID', 'SaleDate', 'Material', 'Customer', 'Tons', 'Note', 'CreatedAt'],
+  RevenueCustomers: ['ID', 'Name', 'Active', 'CreatedAt'],
+  RevenuePrices: ['ID', 'EffectiveDate', 'Customer', 'Product', 'PricePerTon', 'CreatedAt'],
+  RevenueRDF3Sales: ['ID', 'SaleDate', 'Customer', 'Tons', 'Note', 'CreatedAt'],
+  RevenueTippingSettings: ['ID', 'EffectiveDate', 'RatePerTon', 'ExcludedCentralTons', 'ExcludedMinTons', 'ExcludedMaxTons', 'CreatedAt'],
+  RevenueTippingDaily: ['ID', 'EntryDate', 'MSWTons', 'Note', 'CreatedAt'],
 };
 
 // Serialize ALL access (reads and writes) to the workbook file through one

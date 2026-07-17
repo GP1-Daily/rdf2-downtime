@@ -54,6 +54,40 @@ const TABLES = {
       Tons: 'tons', Note: 'note', CreatedAt: 'created_at',
     },
   },
+  RevenueCustomers: {
+    table: 'revenue_customers',
+    columns: {
+      ID: 'id', Name: 'name', Active: 'active', CreatedAt: 'created_at',
+    },
+  },
+  RevenuePrices: {
+    table: 'revenue_prices',
+    columns: {
+      ID: 'id', EffectiveDate: 'effective_date', Customer: 'customer', Product: 'product',
+      PricePerTon: 'price_per_ton', CreatedAt: 'created_at',
+    },
+  },
+  RevenueRDF3Sales: {
+    table: 'revenue_rdf3_sales',
+    columns: {
+      ID: 'id', SaleDate: 'sale_date', Customer: 'customer', Tons: 'tons',
+      Note: 'note', CreatedAt: 'created_at',
+    },
+  },
+  RevenueTippingSettings: {
+    table: 'revenue_tipping_settings',
+    columns: {
+      ID: 'id', EffectiveDate: 'effective_date', RatePerTon: 'rate_per_ton',
+      ExcludedCentralTons: 'excluded_central_tons', ExcludedMinTons: 'excluded_min_tons',
+      ExcludedMaxTons: 'excluded_max_tons', CreatedAt: 'created_at',
+    },
+  },
+  RevenueTippingDaily: {
+    table: 'revenue_tipping_daily',
+    columns: {
+      ID: 'id', EntryDate: 'entry_date', MSWTons: 'msw_tons', Note: 'note', CreatedAt: 'created_at',
+    },
+  },
 };
 
 let schemaReady = null;
@@ -115,6 +149,52 @@ function ensureSchema() {
         note TEXT DEFAULT '',
         created_at TIMESTAMPTZ DEFAULT now()
       );
+      CREATE TABLE IF NOT EXISTS revenue_customers (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        active BOOLEAN NOT NULL DEFAULT true,
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS revenue_customers_name_idx
+        ON revenue_customers (lower(name));
+      CREATE TABLE IF NOT EXISTS revenue_prices (
+        id SERIAL PRIMARY KEY,
+        effective_date TEXT NOT NULL,
+        customer TEXT NOT NULL,
+        product TEXT NOT NULL,
+        price_per_ton NUMERIC NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS revenue_prices_key_idx
+        ON revenue_prices (effective_date, lower(customer), product);
+      CREATE TABLE IF NOT EXISTS revenue_rdf3_sales (
+        id SERIAL PRIMARY KEY,
+        sale_date TEXT NOT NULL,
+        customer TEXT NOT NULL,
+        tons NUMERIC NOT NULL,
+        note TEXT DEFAULT '',
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+      CREATE TABLE IF NOT EXISTS revenue_tipping_settings (
+        id SERIAL PRIMARY KEY,
+        effective_date TEXT NOT NULL,
+        rate_per_ton NUMERIC NOT NULL DEFAULT 250,
+        excluded_central_tons NUMERIC NOT NULL DEFAULT 180,
+        excluded_min_tons NUMERIC NOT NULL DEFAULT 160,
+        excluded_max_tons NUMERIC NOT NULL DEFAULT 200,
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS revenue_tipping_settings_date_idx
+        ON revenue_tipping_settings (effective_date);
+      CREATE TABLE IF NOT EXISTS revenue_tipping_daily (
+        id SERIAL PRIMARY KEY,
+        entry_date TEXT NOT NULL,
+        msw_tons NUMERIC NOT NULL,
+        note TEXT DEFAULT '',
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS revenue_tipping_daily_date_idx
+        ON revenue_tipping_daily (entry_date);
     `);
   }
   return schemaReady;

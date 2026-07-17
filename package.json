@@ -4,7 +4,8 @@
   "description": "RDF2 Machine Downtime & Line Time Logger + Grab Crane CSV Report",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
   },
   "keywords": [],
   "author": "",
