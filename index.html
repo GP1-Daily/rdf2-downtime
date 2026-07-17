@@ -93,6 +93,7 @@
   .toast{position:fixed; bottom:20px; right:20px; background:var(--dark); color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; opacity:0; transition:.3s; pointer-events:none; z-index:50;}
   .toast.show{opacity:1;}
   .toast.err{background:var(--red);}
+  .stock-paused{display:none!important;}
   .quick-actions{display:flex; flex-wrap:wrap; gap:14px; margin-bottom:16px;}
   .quick-actions button{flex:1 1 250px; min-width:0;}
   .csv-drop{border:2px dashed var(--border); border-radius:10px; padding:24px; text-align:center; color:var(--gray);}
@@ -251,7 +252,7 @@
   <button data-tab="today" class="active">บันทึกข้อมูลวันนี้</button>
   <button data-tab="report">รายงานประจำวัน</button>
   <button data-tab="grab">นำเข้า Grab Crane</button>
-  <button data-tab="stock">สต็อก &amp; ผลผลิต</button>
+  <button data-tab="stock">ผลผลิต</button>
   <button data-tab="delivery">แผนส่งรายสัปดาห์</button>
   <button data-tab="revenue">รายได้บริษัท</button>
 </nav>
@@ -412,7 +413,7 @@
 
     <section class="panel">
       <h2>ผลผลิต (คำนวณจากขยะขาเข้า × Yield %)</h2>
-      <div id="productionNoYield" class="empty-note" style="display:none;">ยังไม่ได้ตั้งค่า Yield % — ไปตั้งค่าที่แท็บ "สต็อก &amp; ผลผลิต" ก่อน</div>
+      <div id="productionNoYield" class="empty-note" style="display:none;">ยังไม่ได้ตั้งค่า Yield % — ไปตั้งค่าที่แท็บ "ผลผลิต" ก่อน</div>
       <div id="productionContent">
         <div class="row" style="margin-bottom:12px; font-size:13px; color:var(--gray);">
           ขยะขาเข้า (จาก Grab Crane): <b id="prodIncoming" style="color:var(--dark);">-</b>
@@ -504,10 +505,10 @@
     </section>
   </section>
 
-  <!-- ===================== TAB: STOCK & PRODUCTION ===================== -->
+  <!-- ===================== TAB: PRODUCTION ===================== -->
   <section id="tab-stock" class="tab-panel">
 
-    <section class="panel">
+    <section class="panel stock-paused" aria-hidden="true">
       <h2>สต็อกปัจจุบัน</h2>
       <div class="cards-grid">
         <div class="kpi-card blue">
@@ -562,7 +563,7 @@
       </div>
     </section>
 
-    <section class="panel">
+    <section class="panel stock-paused" aria-hidden="true">
       <h2>สต็อกเริ่มต้น (ตั้งครั้งเดียวตอนเริ่มใช้ระบบ)</h2>
       <div class="entry-form">
         <div>
@@ -1382,7 +1383,7 @@ async function loadYieldTable(){
   tbody.querySelectorAll('button[data-id]').forEach(btn => {
     btn.addEventListener('click', async () => {
       await api(`/api/yield/${btn.dataset.id}`, { method:'DELETE' });
-      loadYieldTable(); loadStock();
+      loadYieldTable();
     });
   });
 }
@@ -1400,7 +1401,7 @@ onClickGuarded(document.getElementById('btnAddYield'), async ()=>{
     await api('/api/yield', { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ effectiveDate, rdf2Pct, fineFractionPct, heavyFractionPct, metalPct }) });
     toast('บันทึกค่า Yield แล้ว');
-    loadYieldTable(); loadStock();
+    loadYieldTable();
   }catch(e){ toast(e.message, true); }
 });
 
@@ -1426,7 +1427,6 @@ onClickGuarded(document.getElementById('btnSaveBaseline'), async ()=>{
         metalTons: document.getElementById('baselineMetal').value || 0,
       }) });
     toast('บันทึกสต็อกเริ่มต้นแล้ว');
-    loadStock();
   }catch(e){ toast(e.message, true); }
 });
 
@@ -1445,7 +1445,7 @@ async function loadSalesTable(){
     btn.addEventListener('click', async () => {
       try{
         await api(`/api/sales/${btn.dataset.id}`, { method:'DELETE' });
-        await Promise.all([loadSalesTable(), loadStock(), loadRevenueDashboard()]);
+        await Promise.all([loadSalesTable(), loadRevenueDashboard()]);
         toast('ลบรายการขายแล้ว');
       }catch(e){ toast(e.message, true); }
     });
@@ -1468,7 +1468,7 @@ onClickGuarded(document.getElementById('btnAddSale'), async ()=>{
     document.getElementById('saleNote').value = '';
     document.getElementById('revenueMonth').value = saleDate.slice(0, 7);
     toast('บันทึกการขายแล้ว');
-    await Promise.all([loadSalesTable(), loadStock(), loadRevenueDashboard()]);
+    await Promise.all([loadSalesTable(), loadRevenueDashboard()]);
   }catch(e){ toast(e.message, true); }
 });
 
@@ -1971,7 +1971,7 @@ async function initRevenue(){
   }catch(e){ toast(e.message, true); }
 }
 
-loadYieldTable(); loadBaseline(); loadSalesTable(); loadStock();
+loadYieldTable(); loadSalesTable();
 initDeliveryPlans();
 initRevenue();
 </script>
