@@ -77,6 +77,16 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   await post('/api/revenue/prices', { effectiveDate: '2026-07-01', customer: 'ลูกค้า A', product: 'FineFraction', pricePerTon: 500 });
   await post('/api/revenue/prices', { effectiveDate: '2026-07-01', customer: 'ลูกค้า A', product: 'RDF3', pricePerTon: 1500 });
   await post('/api/revenue/prices', { effectiveDate: '2026-07-01', customer: 'ลูกค้า B', product: 'RDF2', pricePerTon: 800 });
+  await post('/api/yield', { effectiveDate: '2026-07-01', rdf2Pct: 40, fineFractionPct: 20, heavyFractionPct: 15, metalPct: 5 });
+  await post('/api/yield', { effectiveDate: '2026-07-08', rdf2Pct: 50, fineFractionPct: 10, heavyFractionPct: 20, metalPct: 5 });
+  await post('/api/grab/import', {
+    reportDate: '2026-07-06', sourceFile: 'test.csv', replace: true,
+    rows: [{ dateTime: '2026-07-06 08:00', weight: 10 }, { dateTime: '2026-07-06 09:00', weight: 20 }],
+  });
+  await post('/api/grab/import', {
+    reportDate: '2026-07-08', sourceFile: 'test.csv', replace: true,
+    rows: [{ dateTime: '2026-07-08 08:00', weight: 40 }],
+  });
   await post('/api/sales', { saleDate: '2026-07-05', material: 'RDF2', customer: 'ลูกค้า A', tons: 10 });
   await post('/api/sales', { saleDate: '2026-07-06', material: 'FineFraction', customer: 'ลูกค้า A', tons: 2 });
   await post('/api/sales', { saleDate: '2026-07-06', material: 'RDF2', customer: 'ยังไม่ Setup', tons: 1 });
@@ -135,4 +145,28 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
     missingPriceCount: 0,
     customerCount: 2,
   });
+
+  const weeklyResponse = await fetch(`${baseUrl}/api/weekly-report?weekStart=2026-07-06`);
+  const weekly = await weeklyResponse.json();
+  assert.equal(weekly.ok, true);
+  assert.deepEqual(weekly.incoming, { totalGrabs: 3, totalTons: 70, avgTonsPerGrab: 70 / 3 });
+  assert.equal(weekly.production.calculatedIncomingTons, 70);
+  assert.equal(weekly.production.uncalculatedIncomingTons, 0);
+  assert.deepEqual(weekly.production.missingYieldDates, []);
+  assert.deepEqual(Object.fromEntries(weekly.production.products.map((row) => [row.product, row.tons])), {
+    RDF2: 32,
+    FineFraction: 10,
+    HeavyFraction: 12.5,
+    Water: 12,
+  });
+  assert.equal(weekly.production.products.some((row) => row.product === 'Metal'), false);
+  assert.equal(weekly.sales.transactionCount, 3);
+  assert.equal(weekly.sales.totalTons, 7);
+  assert.deepEqual(Object.fromEntries(weekly.sales.byProduct.map((row) => [row.product, row.tons])), {
+    RDF2: 1,
+    RDF3: 4,
+    FineFraction: 2,
+  });
+  assert.equal(weekly.sales.byCustomer.find((row) => row.customer === 'ลูกค้า A').totalTons, 6);
+  assert.equal(weekly.sales.byCustomer.find((row) => row.customer === 'ยังไม่ Setup').totalTons, 1);
 });

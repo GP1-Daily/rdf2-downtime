@@ -865,6 +865,131 @@ async function handleRevenue(req, res, parts, query) {
   return sendJson(res, 404, { ok: false, error: 'unknown revenue route' });
 }
 
+// ---------- Weekly Production & Sales Report ----------
+
+const WEEKLY_PRODUCTION_PRODUCTS = [
+  { product: 'RDF2', tonsKey: 'rdf2' },
+  { product: 'FineFraction', tonsKey: 'fineFraction' },
+  { product: 'HeavyFraction', tonsKey: 'heavyFraction' },
+  { product: 'Water', tonsKey: 'water' },
+];
+
+async function handleWeeklyReport(req, res, query) {
+  const requested = cleanText(query.weekStart);
+  const weekStart = validIsoDate(requested) ? requested : mondayForDate(lib.nowInBangkok().date);
+  if (mondayForDate(weekStart) !== weekStart) {
+    return sendJson(res, 400, { ok: false, error: 'วันเริ่มสัปดาห์ต้องเป็นวันจันทร์' });
+  }
+
+  const weekEndExclusive = lib.addDays(weekStart, 7);
+  const weekEnd = lib.addDays(weekStart, 6);
+  const dates = Array.from({ length: 7 }, (_, index) => lib.addDays(weekStart, index));
+  const [grabRows, yieldRows, stockSales, rdf3Sales] = await Promise.all([
+    store.readSheet('GrabCrane'),
+    store.readSheet('YieldSettings'),
+    store.readSheet('Sales'),
+    store.readSheet('RevenueRDF3Sales'),
+  ]);
+
+  const productionTons = Object.fromEntries(WEEKLY_PRODUCTION_PRODUCTS.map((item) => [item.tonsKey, 0]));
+  let incomingWaste = 0;
+  let calculatedIncomingWaste = 0;
+  let totalGrabs = 0;
+  const missingYieldDates = [];
+  const daily = dates.map((date) => {
+    const rows = grabRows.filter((row) => row.ReportDate === date);
+    const dayIncomingWaste = rows.reduce((sum, row) => sum + (Number(row.Weight) || 0), 0);
+    const yieldSetting = getApplicableYield(yieldRows, date);
+    const production = computeProduction(dayIncomingWaste, yieldSetting);
+    incomingWaste += dayIncomingWaste;
+    totalGrabs += rows.length;
+    if (dayIncomingWaste > 0 && !yieldSetting) missingYieldDates.push(date);
+    if (production) {
+      calculatedIncomingWaste += dayIncomingWaste;
+      for (const item of WEEKLY_PRODUCTION_PRODUCTS) {
+        productionTons[item.tonsKey] += production.tons[item.tonsKey];
+      }
+    }
+    return {
+      date,
+      grabCount: rows.length,
+      incomingWaste: dayIncomingWaste,
+      hasYieldSetting: !!yieldSetting,
+    };
+  });
+
+  const productionProducts = WEEKLY_PRODUCTION_PRODUCTS.map((item) => ({
+    product: item.product,
+    tons: productionTons[item.tonsKey],
+    effectiveYieldPct: calculatedIncomingWaste > 0
+      ? productionTons[item.tonsKey] / calculatedIncomingWaste * 100
+      : 0,
+  }));
+
+  const salesRows = stockSales
+    .filter((row) => row.SaleDate >= weekStart && row.SaleDate < weekEndExclusive
+      && ['RDF2', 'FineFraction'].includes(row.Material))
+    .map((row) => ({
+      date: row.SaleDate,
+      product: row.Material,
+      customer: cleanText(row.Customer) || '(ไม่ระบุลูกค้า)',
+      tons: Number(row.Tons) || 0,
+    }));
+  for (const row of rdf3Sales) {
+    if (row.SaleDate < weekStart || row.SaleDate >= weekEndExclusive) continue;
+    salesRows.push({
+      date: row.SaleDate,
+      product: 'RDF3',
+      customer: cleanText(row.Customer) || '(ไม่ระบุลูกค้า)',
+      tons: Number(row.Tons) || 0,
+    });
+  }
+
+  const salesProductMap = Object.fromEntries(REVENUE_PRODUCTS.map((product) => [product, 0]));
+  const salesCustomerMap = new Map();
+  for (const sale of salesRows) {
+    salesProductMap[sale.product] += sale.tons;
+    if (!salesCustomerMap.has(sale.customer)) {
+      salesCustomerMap.set(sale.customer, {
+        customer: sale.customer,
+        totalTons: 0,
+        products: Object.fromEntries(REVENUE_PRODUCTS.map((product) => [product, 0])),
+      });
+    }
+    const customer = salesCustomerMap.get(sale.customer);
+    customer.totalTons += sale.tons;
+    customer.products[sale.product] += sale.tons;
+  }
+
+  const salesByCustomer = [...salesCustomerMap.values()]
+    .sort((a, b) => b.totalTons - a.totalTons || a.customer.localeCompare(b.customer, 'th'));
+
+  return sendJson(res, 200, {
+    ok: true,
+    weekStart,
+    weekEnd,
+    weekEndExclusive,
+    incoming: {
+      totalGrabs,
+      totalTons: incomingWaste,
+      avgTonsPerGrab: totalGrabs > 0 ? incomingWaste / totalGrabs : null,
+    },
+    production: {
+      calculatedIncomingTons: calculatedIncomingWaste,
+      uncalculatedIncomingTons: incomingWaste - calculatedIncomingWaste,
+      missingYieldDates,
+      products: productionProducts,
+    },
+    sales: {
+      transactionCount: salesRows.length,
+      totalTons: salesRows.reduce((sum, row) => sum + row.tons, 0),
+      byProduct: REVENUE_PRODUCTS.map((product) => ({ product, tons: salesProductMap[product] })),
+      byCustomer: salesByCustomer,
+    },
+    daily,
+  });
+}
+
 // ---------- Weekly Delivery Plan (Monday 00:00 to next Monday 00:00) ----------
 
 function deliveryActualRows(stockSales, rdf3Sales, weekStart, weekEndExclusive) {
@@ -1041,6 +1166,7 @@ const server = http.createServer(async (req, res) => {
         if (rest.length === 0 && req.method === 'DELETE') return await handleGrabDelete(req, res, query);
       }
       if (resource === 'production') return await handleProduction(req, res, query);
+      if (resource === 'weekly-report' && req.method === 'GET') return await handleWeeklyReport(req, res, query);
       if (resource === 'yield') return await handleYield(req, res, rest);
       if (resource === 'sales') return await handleSales(req, res, rest);
       if (resource === 'delivery-plans') return await handleDeliveryPlans(req, res, rest, query);

@@ -221,7 +221,49 @@
   .delivery-dashboard-export.exporting{width:1180px; max-width:none;}
   .delivery-customer-card.exporting{width:1120px; max-width:none;}
   .delivery-dashboard-export.exporting .delivery-customer-export,.delivery-customer-card.exporting .delivery-customer-export{display:none;}
+  .weekly-report-toolbar h2{margin-bottom:0;}
+  .weekly-report-toolbar .row{justify-content:flex-end;}
+  .weekly-report-export{background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; overflow:hidden; color:#172033;}
+  .weekly-report-export.exporting{width:1180px; max-width:none;}
+  .weekly-report-head{background:#17243a; color:#fff; padding:20px 26px; display:flex; align-items:center; justify-content:space-between; gap:20px;}
+  .weekly-report-title{font-size:23px; line-height:1.25; font-weight:800;}
+  .weekly-report-subtitle{font-size:10.5px; color:#cbd5e1; margin-top:4px;}
+  .weekly-report-period{font-size:15px; font-weight:700; color:#dbe7f5; text-align:right;}
+  .weekly-incoming-strip{display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:24px; padding:20px 26px; background:#fff; border-bottom:1px solid #dbe2ea;}
+  .weekly-incoming-label{font-size:13px; font-weight:800; color:#475569;}
+  .weekly-incoming-meta{font-size:11px; color:#64748b; margin-top:4px;}
+  .weekly-incoming-value{font-size:36px; line-height:1.1; font-weight:800; color:#172033; text-align:right; white-space:nowrap;}
+  .weekly-report-body{padding:18px 20px 22px; display:flex; flex-direction:column; gap:18px;}
+  .weekly-report-section{background:#fff; border:1px solid #dbe2ea; border-radius:6px; overflow:hidden;}
+  .weekly-section-head{padding:14px 18px; border-bottom:1px solid #dbe2ea; display:flex; align-items:center; justify-content:space-between; gap:18px;}
+  .weekly-section-title{font-size:17px; font-weight:800; color:#172033;}
+  .weekly-section-summary{font-size:11px; color:#64748b; text-align:right;}
+  .weekly-production-grid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr));}
+  .weekly-production-item{min-width:0; min-height:130px; padding:18px; border-right:1px solid #e2e8f0; border-top:4px solid #2563eb; display:flex; flex-direction:column; justify-content:center;}
+  .weekly-production-item:last-child{border-right:0;}
+  .weekly-production-item.fine{border-top-color:#16a34a;}
+  .weekly-production-item.heavy{border-top-color:#d97706;}
+  .weekly-production-item.water{border-top-color:#0891b2;}
+  .weekly-production-name{font-size:12px; font-weight:700; color:#64748b;}
+  .weekly-production-tons{font-size:25px; line-height:1.2; font-weight:800; color:#172033; margin-top:7px; overflow-wrap:anywhere;}
+  .weekly-production-yield{font-size:10.5px; color:#64748b; margin-top:4px;}
+  .weekly-yield-warning{display:none; margin:0 18px 16px; padding:9px 11px; border-left:4px solid #d97706; background:#fffbeb; color:#92400e; font-size:11px; font-weight:700;}
+  .weekly-yield-warning.show{display:block;}
+  .weekly-sales-product-totals{display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:12px; font-size:11px; color:#64748b;}
+  .weekly-sales-product-totals strong{color:#172033; font-size:13px;}
+  .weekly-sales-scroll{overflow-x:auto;}
+  .weekly-sales-table{min-width:720px; font-size:12px;}
+  .weekly-sales-table th{background:#edf2f7;}
+  .weekly-sales-table th,.weekly-sales-table td{padding:10px 12px;}
+  .weekly-sales-table tfoot td{font-weight:800; background:#f8fafc; border-top:2px solid #cbd5e1;}
+  .weekly-customer-total{font-weight:800; color:#172033;}
+  .weekly-report-export.exporting .weekly-sales-scroll{overflow:visible;}
   .warning-list{margin:0; padding-left:20px; color:#92400e; font-size:13px;}
+  @media(max-width:900px){
+    .weekly-production-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+    .weekly-production-item:nth-child(2){border-right:0;}
+    .weekly-production-item:nth-child(-n+2){border-bottom:1px solid #e2e8f0;}
+  }
   @media(max-width:700px){
     main{padding:14px;}
     .revenue-toolbar .row{justify-content:flex-start;}
@@ -237,6 +279,14 @@
     .delivery-customer-list{padding:12px;}
     .delivery-product{grid-template-columns:1fr; gap:14px;}
     .delivery-metrics{grid-template-columns:1fr 1fr;}
+    .weekly-report-toolbar .row{justify-content:flex-start;}
+    .weekly-report-head,.weekly-incoming-strip,.weekly-section-head{align-items:flex-start; grid-template-columns:1fr; flex-direction:column;}
+    .weekly-report-period,.weekly-incoming-value,.weekly-section-summary{text-align:left;}
+    .weekly-report-body{padding:12px;}
+    .weekly-production-grid{grid-template-columns:1fr;}
+    .weekly-production-item{min-height:105px; border-right:0; border-bottom:1px solid #e2e8f0;}
+    .weekly-production-item:last-child{border-bottom:0;}
+    .weekly-sales-product-totals{justify-content:flex-start;}
     .quick-actions button{flex-basis:100%;}
   }
   footer{text-align:center; color:var(--gray); font-size:12px; padding:20px;}
@@ -257,6 +307,7 @@
 <nav class="tabs">
   <button data-tab="today" class="active">บันทึกข้อมูลวันนี้</button>
   <button data-tab="report">รายงานประจำวัน</button>
+  <button data-tab="weekly-report">รายงานรายสัปดาห์</button>
   <button data-tab="grab">นำเข้า Grab Crane</button>
   <button data-tab="stock">ผลผลิต</button>
   <button data-tab="delivery">แผนส่งรายสัปดาห์</button>
@@ -455,6 +506,69 @@
       </div>
     </section>
 
+  </section>
+
+  <!-- ===================== TAB: WEEKLY PRODUCTION REPORT ===================== -->
+  <section id="tab-weekly-report" class="tab-panel">
+    <section class="panel weekly-report-toolbar">
+      <h2>
+        รายงานการผลิตและการขายรายสัปดาห์
+        <span class="row"><button class="primary" id="btnExportWeeklyReport">ดาวน์โหลดภาพ PNG</button></span>
+      </h2>
+      <div class="row" style="margin-top:14px;">
+        <button id="btnWeeklyReportPrev" title="สัปดาห์ก่อนหน้า">‹</button>
+        <label for="weeklyReportStart">วันจันทร์เริ่มสัปดาห์</label>
+        <input type="date" id="weeklyReportStart">
+        <button id="btnWeeklyReportNext" title="สัปดาห์ถัดไป">›</button>
+        <button class="primary" id="btnLoadWeeklyReport">แสดงผล</button>
+      </div>
+    </section>
+
+    <div class="weekly-report-export" id="weeklyReportExport">
+      <header class="weekly-report-head">
+        <div>
+          <div class="weekly-report-title">สรุปการผลิตและการขายรายสัปดาห์</div>
+          <div class="weekly-report-subtitle">GREEN POWER 1 CO., LTD. · RDF PRODUCTION</div>
+        </div>
+        <div class="weekly-report-period" id="weeklyReportPeriod">-</div>
+      </header>
+
+      <div class="weekly-incoming-strip">
+        <div>
+          <div class="weekly-incoming-label">ขยะเข้าสู่กระบวนการผลิตทั้งหมด</div>
+          <div class="weekly-incoming-meta" id="weeklyIncomingMeta">0 Grab · เฉลี่ย 0 ตัน/Grab</div>
+        </div>
+        <div class="weekly-incoming-value" id="weeklyIncomingTons">0.00 ตัน</div>
+      </div>
+
+      <div class="weekly-report-body">
+        <section class="weekly-report-section">
+          <div class="weekly-section-head">
+            <div class="weekly-section-title">ผลผลิตจาก Yield</div>
+            <div class="weekly-section-summary" id="weeklyProductionSummary">คำนวณจากขยะเข้า 0.00 ตัน</div>
+          </div>
+          <div class="weekly-production-grid" id="weeklyProductionGrid"></div>
+          <div class="weekly-yield-warning" id="weeklyYieldWarning"></div>
+        </section>
+
+        <section class="weekly-report-section">
+          <div class="weekly-section-head">
+            <div>
+              <div class="weekly-section-title">สรุปการขายแยกตามลูกค้า</div>
+              <div class="weekly-section-summary" id="weeklySalesSummary" style="text-align:left;">0 รายการ · 0.00 ตัน</div>
+            </div>
+            <div class="weekly-sales-product-totals" id="weeklySalesProductTotals"></div>
+          </div>
+          <div class="weekly-sales-scroll">
+            <table class="weekly-sales-table">
+              <thead><tr><th class="left">ลูกค้า</th><th>RDF2</th><th>RDF3</th><th>Fine Fraction</th><th>รวม (ตัน)</th></tr></thead>
+              <tbody id="weeklySalesTable"></tbody>
+              <tfoot id="weeklySalesTotal"></tfoot>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
   </section>
 
   <!-- ===================== TAB: GRAB CRANE IMPORT ===================== -->
@@ -919,6 +1033,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     btn.classList.add('active');
     document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
     if (btn.dataset.tab === 'delivery') loadDeliveryDashboard().catch(e => toast(e.message, true));
+    if (btn.dataset.tab === 'weekly-report') loadWeeklyReport().catch(e => toast(e.message, true));
   });
 });
 
@@ -1554,6 +1669,93 @@ function deliverySafeFileName(value){
   return String(value || '').replace(/[\\/:*?"<>|]/g, '-').trim() || 'Customer';
 }
 
+// ---------------- WEEKLY PRODUCTION REPORT TAB ----------------
+const weeklyProductionLabels = {
+  RDF2:'RDF2', FineFraction:'Fine Fraction', HeavyFraction:'Heavy Fraction', Water:'น้ำ',
+};
+const weeklyProductionClasses = {
+  RDF2:'rdf2', FineFraction:'fine', HeavyFraction:'heavy', Water:'water',
+};
+
+async function loadWeeklyReport(){
+  const input = document.getElementById('weeklyReportStart');
+  const weekStart = deliveryMondayFor(input.value || todayStr());
+  input.value = weekStart;
+  const data = await api(`/api/weekly-report?weekStart=${encodeURIComponent(weekStart)}`);
+  const period = deliveryWeekLabel(data.weekStart, data.weekEndExclusive);
+  document.getElementById('weeklyReportPeriod').textContent = period;
+  document.getElementById('weeklyIncomingTons').textContent = `${revenueNumber(data.incoming.totalTons)} ตัน`;
+  const average = data.incoming.avgTonsPerGrab === null ? '-' : revenueNumber(data.incoming.avgTonsPerGrab);
+  document.getElementById('weeklyIncomingMeta').textContent = `${data.incoming.totalGrabs} Grab · เฉลี่ย ${average} ตัน/Grab`;
+  document.getElementById('weeklyProductionSummary').textContent = `คำนวณจากขยะเข้า ${revenueNumber(data.production.calculatedIncomingTons)} ตัน`;
+
+  document.getElementById('weeklyProductionGrid').innerHTML = data.production.products.map(row => `
+    <div class="weekly-production-item ${revenueEsc(weeklyProductionClasses[row.product] || '')}">
+      <div class="weekly-production-name">${revenueEsc(weeklyProductionLabels[row.product] || row.product)}</div>
+      <div class="weekly-production-tons">${revenueNumber(row.tons)} ตัน</div>
+      <div class="weekly-production-yield">Yield เฉลี่ย ${revenueNumber(row.effectiveYieldPct)}%</div>
+    </div>`).join('');
+
+  const yieldWarning = document.getElementById('weeklyYieldWarning');
+  yieldWarning.textContent = data.production.missingYieldDates.length
+    ? `ยังคำนวณผลผลิตไม่ครบ ${revenueNumber(data.production.uncalculatedIncomingTons)} ตัน เนื่องจากไม่มีค่า Yield ในวันที่ ${data.production.missingYieldDates.map(deliveryDateLabel).join(', ')}`
+    : '';
+  yieldWarning.classList.toggle('show', data.production.missingYieldDates.length > 0);
+
+  document.getElementById('weeklySalesSummary').textContent = `${data.sales.transactionCount} รายการ · ${revenueNumber(data.sales.totalTons)} ตัน`;
+  document.getElementById('weeklySalesProductTotals').innerHTML = data.sales.byProduct.map(row =>
+    `<span>${revenueEsc(revenueProductLabel[row.product] || row.product)} <strong>${revenueNumber(row.tons)} ตัน</strong></span>`
+  ).join('');
+
+  const tbody = document.getElementById('weeklySalesTable');
+  tbody.innerHTML = data.sales.byCustomer.length ? data.sales.byCustomer.map(row => `
+    <tr>
+      <td class="left"><strong>${revenueEsc(row.customer)}</strong></td>
+      <td>${revenueNumber(row.products.RDF2)}</td>
+      <td>${revenueNumber(row.products.RDF3)}</td>
+      <td>${revenueNumber(row.products.FineFraction)}</td>
+      <td class="weekly-customer-total">${revenueNumber(row.totalTons)}</td>
+    </tr>`).join('') : revenueEmpty(5, 'ยังไม่มีรายการขายในสัปดาห์นี้');
+  const productTotals = Object.fromEntries(data.sales.byProduct.map(row => [row.product, row.tons]));
+  document.getElementById('weeklySalesTotal').innerHTML = `<tr>
+    <td class="left">รวมทั้งหมด</td>
+    <td>${revenueNumber(productTotals.RDF2)}</td>
+    <td>${revenueNumber(productTotals.RDF3)}</td>
+    <td>${revenueNumber(productTotals.FineFraction)}</td>
+    <td>${revenueNumber(data.sales.totalTons)}</td>
+  </tr>`;
+}
+
+document.getElementById('btnLoadWeeklyReport').addEventListener('click', ()=>{
+  loadWeeklyReport().catch(e => toast(e.message, true));
+});
+document.getElementById('weeklyReportStart').addEventListener('change', ()=>{
+  loadWeeklyReport().catch(e => toast(e.message, true));
+});
+document.getElementById('btnWeeklyReportPrev').addEventListener('click', ()=>{
+  const input = document.getElementById('weeklyReportStart');
+  input.value = deliveryAddDays(deliveryMondayFor(input.value || todayStr()), -7);
+  loadWeeklyReport().catch(e => toast(e.message, true));
+});
+document.getElementById('btnWeeklyReportNext').addEventListener('click', ()=>{
+  const input = document.getElementById('weeklyReportStart');
+  input.value = deliveryAddDays(deliveryMondayFor(input.value || todayStr()), 7);
+  loadWeeklyReport().catch(e => toast(e.message, true));
+});
+onClickGuarded(document.getElementById('btnExportWeeklyReport'), async ()=>{
+  try{
+    await loadWeeklyReport();
+    const weekStart = document.getElementById('weeklyReportStart').value;
+    await exportDeliveryElement(document.getElementById('weeklyReportExport'), `GP1-Weekly-Production-${weekStart}.png`);
+    toast('Export รายงานรายสัปดาห์แล้ว');
+  }catch(e){ toast('ไม่สามารถ Export ภาพได้: ' + e.message, true); }
+});
+
+function initWeeklyReport(){
+  document.getElementById('weeklyReportStart').value = deliveryMondayFor(todayStr());
+  loadWeeklyReport().catch(e => toast(e.message, true));
+}
+
 let deliveryLastDashboard = null;
 
 async function exportDeliveryElement(area, fileName){
@@ -1999,6 +2201,7 @@ async function initRevenue(){
 }
 
 loadYieldTable(); loadSalesTable();
+initWeeklyReport();
 initDeliveryPlans();
 initRevenue();
 </script>
