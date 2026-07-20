@@ -72,9 +72,11 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   }
 
   await post('/api/revenue/customers', { name: 'ลูกค้า A' });
+  await post('/api/revenue/customers', { name: 'ลูกค้า B' });
   await post('/api/revenue/prices', { effectiveDate: '2026-07-01', customer: 'ลูกค้า A', product: 'RDF2', pricePerTon: 1000 });
   await post('/api/revenue/prices', { effectiveDate: '2026-07-01', customer: 'ลูกค้า A', product: 'FineFraction', pricePerTon: 500 });
   await post('/api/revenue/prices', { effectiveDate: '2026-07-01', customer: 'ลูกค้า A', product: 'RDF3', pricePerTon: 1500 });
+  await post('/api/revenue/prices', { effectiveDate: '2026-07-01', customer: 'ลูกค้า B', product: 'RDF2', pricePerTon: 800 });
   await post('/api/sales', { saleDate: '2026-07-05', material: 'RDF2', customer: 'ลูกค้า A', tons: 10 });
   await post('/api/sales', { saleDate: '2026-07-06', material: 'FineFraction', customer: 'ลูกค้า A', tons: 2 });
   await post('/api/sales', { saleDate: '2026-07-06', material: 'RDF2', customer: 'ยังไม่ Setup', tons: 1 });
@@ -86,6 +88,7 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   await post('/api/delivery-plans', { weekStart: '2026-07-06', customer: 'ลูกค้า A', product: 'RDF2', planTons: 6 });
   await post('/api/delivery-plans', { weekStart: '2026-07-06', customer: 'ลูกค้า A', product: 'RDF3', planTons: 5 });
   await post('/api/delivery-plans', { weekStart: '2026-07-06', customer: 'ลูกค้า A', product: 'FineFraction', planTons: 3 });
+  await post('/api/delivery-plans', { weekStart: '2026-07-06', customer: 'ลูกค้า B', product: 'RDF2', planTons: 2 });
   await post('/api/delivery-plans', { weekStart: '2026-07-07', customer: 'ลูกค้า A', product: 'RDF2', planTons: 1 }, 400);
 
   const response = await fetch(`${baseUrl}/api/revenue/dashboard?month=2026-07`);
@@ -115,7 +118,7 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   assert.equal(planDashboard.ok, true);
   assert.equal(planDashboard.weekEnd, '2026-07-12');
   assert.equal(planDashboard.weekEndExclusive, '2026-07-13');
-  assert.equal(planDashboard.customers.length, 1);
+  assert.equal(planDashboard.customers.length, 2);
   const planProducts = Object.fromEntries(planDashboard.customers[0].products.map((row) => [row.product, row]));
   assert.equal(planProducts.RDF2.actualTons, 0, 'Sunday before the week must not count toward Actual');
   assert.equal(planProducts.RDF2.diffTons, -6);
@@ -125,4 +128,11 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   assert.equal(planProducts.FineFraction.actualTons, 2);
   assert.equal(planProducts.FineFraction.opportunityLoss, 500);
   assert.equal(planDashboard.customers[0].opportunityLoss, 8000);
+  assert.equal(planDashboard.customers[1].opportunityLoss, 1600);
+  assert.deepEqual(planDashboard.summary, {
+    shortfallTons: 10,
+    opportunityLoss: 9600,
+    missingPriceCount: 0,
+    customerCount: 2,
+  });
 });

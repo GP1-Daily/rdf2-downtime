@@ -955,11 +955,24 @@ async function handleDeliveryPlanDashboard(req, res, query) {
       || b.shortfallTons - a.shortfallTons
       || a.customer.localeCompare(b.customer, 'th'));
 
+  const summary = customers.reduce((result, customer) => {
+    result.shortfallTons += customer.shortfallTons;
+    result.opportunityLoss += customer.opportunityLoss;
+    result.missingPriceCount += customer.missingPriceCount;
+    return result;
+  }, {
+    shortfallTons: 0,
+    opportunityLoss: 0,
+    missingPriceCount: 0,
+    customerCount: customers.length,
+  });
+
   return sendJson(res, 200, {
     ok: true,
     weekStart,
     weekEnd,
     weekEndExclusive,
+    summary,
     customers,
   });
 }

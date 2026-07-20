@@ -177,6 +177,12 @@
   .delivery-dashboard-head{background:#17243a; color:#fff; padding:20px 26px; display:flex; align-items:center; justify-content:space-between; gap:18px;}
   .delivery-dashboard-title{font-size:23px; line-height:1.25; font-weight:800;}
   .delivery-dashboard-period{font-size:15px; font-weight:700; text-align:right; color:#dbe7f5;}
+  .delivery-week-summary{background:#fff; border-bottom:1px solid #dbe2ea; padding:16px 26px; display:flex; align-items:center; justify-content:space-between; gap:24px;}
+  .delivery-week-summary-label{font-size:13px; font-weight:800; color:#475569;}
+  .delivery-week-summary-detail{font-size:11px; color:#64748b; margin-top:3px;}
+  .delivery-week-summary-warning{display:none; font-size:10px; font-weight:700; color:#92400e; margin-top:4px;}
+  .delivery-week-summary-warning.show{display:block;}
+  .delivery-week-summary-value{font-size:30px; line-height:1.15; font-weight:800; color:#b91c1c; text-align:right; white-space:nowrap;}
   .delivery-customer-list{padding:18px 20px; display:flex; flex-direction:column; gap:16px;}
   .delivery-customer-card{background:#fff; border:1px solid #dbe2ea; border-radius:6px; overflow:hidden;}
   .delivery-customer-head{display:flex; align-items:center; justify-content:space-between; gap:18px; padding:14px 18px; border-bottom:1px solid #dbe2ea; background:#f8fafc;}
@@ -226,8 +232,8 @@
     .revenue-source{min-height:0;}
     .revenue-share-body{padding:12px 12px 24px;}
     .revenue-report-body{padding:0 12px 12px;}
-    .delivery-dashboard-head,.delivery-customer-head{align-items:flex-start; flex-direction:column;}
-    .delivery-dashboard-period,.delivery-customer-loss{text-align:left;}
+    .delivery-dashboard-head,.delivery-week-summary,.delivery-customer-head{align-items:flex-start; flex-direction:column;}
+    .delivery-dashboard-period,.delivery-week-summary-value,.delivery-customer-loss{text-align:left;}
     .delivery-customer-list{padding:12px;}
     .delivery-product{grid-template-columns:1fr; gap:14px;}
     .delivery-metrics{grid-template-columns:1fr 1fr;}
@@ -609,6 +615,14 @@
         <div class="delivery-dashboard-title">แผนส่งสินค้าแยกตามลูกค้า</div>
         <div class="delivery-dashboard-period" id="deliveryDashboardPeriod">-</div>
       </header>
+      <div class="delivery-week-summary">
+        <div>
+          <div class="delivery-week-summary-label">ค่าเสียโอกาสรวมทั้งสัปดาห์</div>
+          <div class="delivery-week-summary-detail" id="deliveryWeeklyOpportunityDetail">ตกแผนรวม 0.00 ตัน · 0 ลูกค้า</div>
+          <div class="delivery-week-summary-warning" id="deliveryWeeklyPriceWarning"></div>
+        </div>
+        <div class="delivery-week-summary-value" id="deliveryWeeklyOpportunityLoss">0 บาท</div>
+      </div>
       <div class="delivery-customer-list" id="deliveryCustomerDashboards">
         <div class="delivery-empty">ยังไม่มี Plan ในสัปดาห์นี้</div>
       </div>
@@ -1614,6 +1628,19 @@ async function loadDeliveryDashboard(){
   deliveryLastDashboard = data;
   const period = deliveryWeekLabel(data.weekStart, data.weekEndExclusive);
   document.getElementById('deliveryDashboardPeriod').textContent = period;
+  const summary = data.summary || data.customers.reduce((result, customer) => {
+    result.shortfallTons += Number(customer.shortfallTons) || 0;
+    result.opportunityLoss += Number(customer.opportunityLoss) || 0;
+    result.missingPriceCount += Number(customer.missingPriceCount) || 0;
+    return result;
+  }, { shortfallTons:0, opportunityLoss:0, missingPriceCount:0, customerCount:data.customers.length });
+  document.getElementById('deliveryWeeklyOpportunityLoss').textContent = revenueMoney(summary.opportunityLoss);
+  document.getElementById('deliveryWeeklyOpportunityDetail').textContent = `ตกแผนรวม ${revenueNumber(summary.shortfallTons)} ตัน · ${summary.customerCount} ลูกค้า`;
+  const priceWarning = document.getElementById('deliveryWeeklyPriceWarning');
+  priceWarning.textContent = summary.missingPriceCount
+    ? `ยอดนี้ยังไม่ครบ เนื่องจากขาดราคากลาง ${summary.missingPriceCount} รายการ`
+    : '';
+  priceWarning.classList.toggle('show', summary.missingPriceCount > 0);
   const list = document.getElementById('deliveryCustomerDashboards');
   list.innerHTML = data.customers.length
     ? data.customers.map((customer, index) => renderDeliveryCustomer(customer, period, index)).join('')
