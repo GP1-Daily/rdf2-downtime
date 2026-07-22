@@ -314,23 +314,37 @@
 <nav class="tabs">
   <button data-tab="home" class="active">Home</button>
   <div class="nav-context"><span>Current workspace</span><strong id="currentSection">Executive Overview</strong></div>
-  <button type="button" class="nav-start-working" id="btnStartWorking">Start Working <b>&rarr;</b></button>
 </nav>
 
 <main>
 
   <!-- ===================== TAB: HOME ===================== -->
   <section id="tab-home" class="tab-panel active">
-    <header class="home-masthead">
-      <div class="home-masthead-copy">
-        <span>GP1 EXECUTIVE OVERVIEW</span>
-        <h2>Performance &amp; Revenue</h2>
-        <p id="homeDateLabel">-</p>
-      </div>
-      <div class="home-masthead-actions">
-        <div class="home-live-visual" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
-        <div class="home-live-state"><i></i><div><span>Live Data</span><strong id="homeDataStatus">Data Online</strong></div></div>
-        <button type="button" id="btnRefreshHome" title="Refresh dashboard" aria-label="Refresh dashboard">&#8635;</button>
+    <section class="home-motion-hero" aria-labelledby="homeHeroTitle">
+      <canvas id="homeMotionCanvas" aria-hidden="true"></canvas>
+      <div class="home-motion-content">
+        <div class="home-motion-copy">
+          <span>GP1 REAL-TIME OPERATIONS</span>
+          <h2 id="homeHeroTitle">Performance<br>&amp; Revenue</h2>
+          <p id="homeDateLabel">-</p>
+          <div class="home-motion-actions">
+            <button type="button" class="home-start-working" id="btnStartWorking">Start Working <b>&rarr;</b></button>
+            <button type="button" class="home-refresh" id="btnRefreshHome" title="Refresh dashboard" aria-label="Refresh dashboard">&#8635;</button>
+            <div class="home-live-state"><i></i><div><span>Live Data</span><strong id="homeDataStatus">Data Online</strong></div></div>
+          </div>
+        </div>
+        <div class="home-motion-readouts" aria-label="Real-time summary">
+          <div class="home-motion-readout revenue">
+            <span>Estimated Revenue</span>
+            <strong id="homeHeroRevenue">-</strong>
+            <small id="homeHeroMix">Sales 0% / Tipping 0%</small>
+          </div>
+          <div class="home-motion-readout kpi">
+            <span>KPI On Target</span>
+            <strong id="homeHeroKPI">0/5</strong>
+            <small>Monthly performance cycle</small>
+          </div>
+        </div>
       </div>
       <div class="home-periods">
         <div><span>KPI Cycle</span><strong id="homeKPICycle">-</strong></div>
@@ -338,9 +352,9 @@
         <div><span>Revenue Month</span><strong id="homeMonthLabel">-</strong></div>
         <div><span>Last Sync</span><strong id="homeLastSync">-</strong></div>
       </div>
-    </header>
+    </section>
 
-    <section class="home-main-board">
+    <section class="home-main-board" data-motion-section>
       <article class="home-board-section home-kpi-section">
         <header class="home-section-heading">
           <div><span>MONTHLY PERFORMANCE</span><h2>Key Performance Indicators</h2></div>
@@ -388,7 +402,7 @@
       </article>
     </section>
 
-    <section class="home-snapshot" aria-label="Operations snapshot">
+    <section class="home-snapshot" aria-label="Operations snapshot" data-motion-section>
       <div class="home-snapshot-title"><span>LIVE TRACKING</span><strong>Operations Snapshot</strong></div>
       <article>
         <span>Today Line Performance</span>
