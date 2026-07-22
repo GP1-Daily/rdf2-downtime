@@ -95,6 +95,29 @@ const TABLES = {
       PlanTons: 'plan_tons', CreatedAt: 'created_at',
     },
   },
+  KPIDailyHistory: {
+    table: 'kpi_daily_history',
+    columns: {
+      ID: 'id', EntryDate: 'entry_date', RDF2Tons: 'rdf2_tons', RDF3Tons: 'rdf3_tons',
+      FineFractionTons: 'fine_fraction_tons', MSWTons: 'msw_tons', Source: 'source',
+      CreatedAt: 'created_at',
+    },
+  },
+  KPIComplaints: {
+    table: 'kpi_complaints',
+    columns: {
+      ID: 'id', EntryDate: 'entry_date', Customer: 'customer', Detail: 'detail',
+      CreatedAt: 'created_at',
+    },
+  },
+  KPITargetSettings: {
+    table: 'kpi_target_settings',
+    columns: {
+      ID: 'id', EffectiveDate: 'effective_date', RDF2Target: 'rdf2_target',
+      RDF3Target: 'rdf3_target', FineFractionTarget: 'fine_fraction_target',
+      MSWTarget: 'msw_target', ComplaintLimit: 'complaint_limit', CreatedAt: 'created_at',
+    },
+  },
 };
 
 let schemaReady = null;
@@ -212,6 +235,37 @@ function ensureSchema() {
       );
       CREATE UNIQUE INDEX IF NOT EXISTS weekly_delivery_plans_key_idx
         ON weekly_delivery_plans (week_start, lower(customer), product);
+      CREATE TABLE IF NOT EXISTS kpi_daily_history (
+        id SERIAL PRIMARY KEY,
+        entry_date TEXT NOT NULL,
+        rdf2_tons NUMERIC NOT NULL DEFAULT 0,
+        rdf3_tons NUMERIC NOT NULL DEFAULT 0,
+        fine_fraction_tons NUMERIC NOT NULL DEFAULT 0,
+        msw_tons NUMERIC NOT NULL DEFAULT 0,
+        source TEXT DEFAULT 'xlsx',
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS kpi_daily_history_date_idx
+        ON kpi_daily_history (entry_date);
+      CREATE TABLE IF NOT EXISTS kpi_complaints (
+        id SERIAL PRIMARY KEY,
+        entry_date TEXT NOT NULL,
+        customer TEXT DEFAULT '',
+        detail TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+      CREATE TABLE IF NOT EXISTS kpi_target_settings (
+        id SERIAL PRIMARY KEY,
+        effective_date TEXT NOT NULL,
+        rdf2_target NUMERIC NOT NULL DEFAULT 1000,
+        rdf3_target NUMERIC NOT NULL DEFAULT 800,
+        fine_fraction_target NUMERIC NOT NULL DEFAULT 800,
+        msw_target NUMERIC NOT NULL DEFAULT 8000,
+        complaint_limit NUMERIC NOT NULL DEFAULT 2,
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS kpi_target_settings_date_idx
+        ON kpi_target_settings (effective_date);
     `);
   }
   return schemaReady;

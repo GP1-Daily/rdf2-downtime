@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
+const ExcelJS = require('exceljs');
 
 // Uses Postgres (e.g. free Supabase) when DATABASE_URL is set - needed for
 // cloud deploys with no persistent local disk. Falls back to the local
@@ -865,6 +866,364 @@ async function handleRevenue(req, res, parts, query) {
   return sendJson(res, 404, { ok: false, error: 'unknown revenue route' });
 }
 
+// ---------- Monthly KPI (21st through the following 20th) ----------
+
+const DEFAULT_KPI_TARGET = {
+  EffectiveDate: '2000-01-01',
+  RDF2Target: 1000,
+  RDF3Target: 800,
+  FineFractionTarget: 800,
+  MSWTarget: 8000,
+  ComplaintLimit: 2,
+};
+
+const KPI_METRICS = [
+  { key: 'rdf2', label: 'RDF2 Delivery', targetKey: 'RDF2Target', unit: 'ตัน' },
+  { key: 'rdf3', label: 'RDF3 Delivery', targetKey: 'RDF3Target', unit: 'ตัน' },
+  { key: 'fineFraction', label: 'Fine Fraction Delivery', targetKey: 'FineFractionTarget', unit: 'ตัน' },
+  { key: 'msw', label: 'MSW to Production', targetKey: 'MSWTarget', unit: 'ตัน' },
+  { key: 'complaints', label: 'Customer Complaints', targetKey: 'ComplaintLimit', unit: 'เรื่อง', limit: true },
+];
+
+function shiftMonth(month, offset) {
+  const [year, monthNumber] = month.split('-').map(Number);
+  const date = new Date(Date.UTC(year, monthNumber - 1 + offset, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function kpiPeriodForDate(date) {
+  const month = date.slice(0, 7);
+  return Number(date.slice(8, 10)) >= 21 ? month : shiftMonth(month, -1);
+}
+
+function kpiPeriodBounds(period) {
+  const nextMonth = shiftMonth(period, 1);
+  return { period, start: `${period}-21`, end: `${nextMonth}-20` };
+}
+
+function excelDateString(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, '0')}-${String(value.getUTCDate()).padStart(2, '0')}`;
+  }
+  const text = cleanText(value);
+  if (validIsoDate(text)) return text;
+  const match = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if (!match) return '';
+  const year = Number(match[3]) > 2400 ? Number(match[3]) - 543 : Number(match[3]);
+  const date = `${year}-${String(Number(match[2])).padStart(2, '0')}-${String(Number(match[1])).padStart(2, '0')}`;
+  return validIsoDate(date) ? date : '';
+}
+
+function excelCellNumber(cell) {
+  const value = cell.value;
+  if (value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, 'result')) {
+    return Number(value.result) || 0;
+  }
+  return Number(value) || 0;
+}
+
+function addToDateMap(map, date, amount) {
+  map.set(date, (map.get(date) || 0) + (Number(amount) || 0));
+}
+
+function kpiPeriodSummary(period, data) {
+  const bounds = kpiPeriodBounds(period);
+  const dates = Array.from(
+    { length: lib.daysBetween(bounds.start, bounds.end) + 1 },
+    (_, index) => lib.addDays(bounds.start, index),
+  );
+  const automatic = {
+    rdf2: new Map(), rdf3: new Map(), fineFraction: new Map(), msw: new Map(),
+  };
+  const automaticDates = {
+    rdf2: new Set(), rdf3: new Set(), fineFraction: new Set(), msw: new Set(),
+  };
+
+  for (const row of data.stockSales) {
+    if (row.SaleDate < bounds.start || row.SaleDate > bounds.end) continue;
+    if (row.Material === 'RDF2') {
+      addToDateMap(automatic.rdf2, row.SaleDate, row.Tons);
+      automaticDates.rdf2.add(row.SaleDate);
+    } else if (row.Material === 'FineFraction') {
+      addToDateMap(automatic.fineFraction, row.SaleDate, row.Tons);
+      automaticDates.fineFraction.add(row.SaleDate);
+    }
+  }
+  for (const row of data.rdf3Sales) {
+    if (row.SaleDate < bounds.start || row.SaleDate > bounds.end) continue;
+    addToDateMap(automatic.rdf3, row.SaleDate, row.Tons);
+    automaticDates.rdf3.add(row.SaleDate);
+  }
+  for (const row of data.grabRows) {
+    if (row.ReportDate < bounds.start || row.ReportDate > bounds.end) continue;
+    addToDateMap(automatic.msw, row.ReportDate, row.Weight);
+    automaticDates.msw.add(row.ReportDate);
+  }
+
+  const historyByDate = new Map(data.historyRows.map((row) => [row.EntryDate, row]));
+  const actual = { rdf2: 0, rdf3: 0, fineFraction: 0, msw: 0, complaints: 0 };
+  const sourceDates = { live: new Set(), history: new Set() };
+  const daily = dates.map((date) => {
+    const historical = historyByDate.get(date);
+    const values = {};
+    const sources = {};
+    for (const metric of ['rdf2', 'rdf3', 'fineFraction', 'msw']) {
+      const historyKey = {
+        rdf2: 'RDF2Tons', rdf3: 'RDF3Tons', fineFraction: 'FineFractionTons', msw: 'MSWTons',
+      }[metric];
+      if (automaticDates[metric].has(date)) {
+        values[metric] = automatic[metric].get(date) || 0;
+        sources[metric] = 'live';
+        sourceDates.live.add(date);
+      } else if (historical) {
+        values[metric] = Number(historical[historyKey]) || 0;
+        sources[metric] = 'history';
+        sourceDates.history.add(date);
+      } else {
+        values[metric] = 0;
+        sources[metric] = 'none';
+      }
+      actual[metric] += values[metric];
+    }
+    return { date, ...values, sources };
+  });
+
+  const complaints = data.complaintRows
+    .filter((row) => row.EntryDate >= bounds.start && row.EntryDate <= bounds.end)
+    .sort((a, b) => String(b.EntryDate).localeCompare(String(a.EntryDate)));
+  actual.complaints = complaints.length;
+  const targetSetting = applicableRow(data.targetRows, bounds.end, 'EffectiveDate') || DEFAULT_KPI_TARGET;
+  const metrics = KPI_METRICS.map((metric) => {
+    const target = Number(targetSetting[metric.targetKey]) || 0;
+    const value = actual[metric.key];
+    const achieved = metric.limit ? value < target : value >= target;
+    return {
+      key: metric.key,
+      label: metric.label,
+      unit: metric.unit,
+      actual: value,
+      target,
+      limit: !!metric.limit,
+      achieved,
+      completionPct: metric.limit
+        ? (value < target ? 100 : Math.max(0, target / Math.max(value, 1) * 100))
+        : (target > 0 ? value / target * 100 : 0),
+    };
+  });
+
+  return {
+    period,
+    startDate: bounds.start,
+    endDate: bounds.end,
+    actual,
+    metrics,
+    passedCount: metrics.filter((metric) => metric.achieved).length,
+    totalCount: metrics.length,
+    complaints,
+    target: {
+      id: targetSetting.ID || null,
+      effectiveDate: targetSetting.EffectiveDate,
+      rdf2: Number(targetSetting.RDF2Target) || 0,
+      rdf3: Number(targetSetting.RDF3Target) || 0,
+      fineFraction: Number(targetSetting.FineFractionTarget) || 0,
+      msw: Number(targetSetting.MSWTarget) || 0,
+      complaints: Number(targetSetting.ComplaintLimit) || 0,
+    },
+    source: { liveDays: sourceDates.live.size, historyDays: sourceDates.history.size },
+    daily,
+  };
+}
+
+async function loadKPIData() {
+  const [stockSales, rdf3Sales, grabRows, historyRows, complaintRows, targetRows] = await Promise.all([
+    store.readSheet('Sales'),
+    store.readSheet('RevenueRDF3Sales'),
+    store.readSheet('GrabCrane'),
+    store.readSheet('KPIDailyHistory'),
+    store.readSheet('KPIComplaints'),
+    store.readSheet('KPITargetSettings'),
+  ]);
+  return { stockSales, rdf3Sales, grabRows, historyRows, complaintRows, targetRows };
+}
+
+async function handleKPIDashboard(req, res, query) {
+  const fallbackPeriod = kpiPeriodForDate(lib.nowInBangkok().date);
+  const period = validMonth(query.period) ? query.period : fallbackPeriod;
+  const data = await loadKPIData();
+  const selected = kpiPeriodSummary(period, data);
+  const history = Array.from({ length: 6 }, (_, index) => {
+    const summary = kpiPeriodSummary(shiftMonth(period, index - 5), data);
+    return {
+      period: summary.period,
+      startDate: summary.startDate,
+      endDate: summary.endDate,
+      passedCount: summary.passedCount,
+      totalCount: summary.totalCount,
+      metrics: summary.metrics,
+    };
+  });
+  return sendJson(res, 200, { ok: true, selected, history });
+}
+
+async function handleKPIComplaints(req, res, parts, query) {
+  if (req.method === 'GET' && parts.length === 0) {
+    let rows = await store.readSheet('KPIComplaints');
+    if (validMonth(query.period)) {
+      const bounds = kpiPeriodBounds(query.period);
+      rows = rows.filter((row) => row.EntryDate >= bounds.start && row.EntryDate <= bounds.end);
+    }
+    rows.sort((a, b) => String(b.EntryDate).localeCompare(String(a.EntryDate)));
+    return sendJson(res, 200, { ok: true, rows });
+  }
+  if (req.method === 'POST' && parts.length === 0) {
+    const body = await readBody(req);
+    const entryDate = cleanText(body.entryDate);
+    const detail = cleanText(body.detail);
+    if (!validIsoDate(entryDate) || !detail) {
+      return sendJson(res, 400, { ok: false, error: 'กรุณาระบุวันที่และรายละเอียดข้อร้องเรียน' });
+    }
+    const row = await store.appendRow('KPIComplaints', {
+      EntryDate: entryDate,
+      Customer: cleanText(body.customer),
+      Detail: detail,
+    });
+    return sendJson(res, 200, { ok: true, row });
+  }
+  if (req.method === 'DELETE' && parts.length === 1) {
+    const deleted = await store.deleteRow('KPIComplaints', parts[0]);
+    return sendJson(res, 200, { ok: deleted });
+  }
+  return sendJson(res, 404, { ok: false, error: 'unknown KPI complaint route' });
+}
+
+async function handleKPITargets(req, res, parts) {
+  if (req.method === 'GET' && parts.length === 0) {
+    const rows = await store.readSheet('KPITargetSettings');
+    rows.sort((a, b) => String(b.EffectiveDate).localeCompare(String(a.EffectiveDate)));
+    return sendJson(res, 200, { ok: true, rows });
+  }
+  if (req.method === 'POST' && parts.length === 0) {
+    const body = await readBody(req);
+    const data = {
+      EffectiveDate: cleanText(body.effectiveDate),
+      RDF2Target: Number(body.rdf2Target),
+      RDF3Target: Number(body.rdf3Target),
+      FineFractionTarget: Number(body.fineFractionTarget),
+      MSWTarget: Number(body.mswTarget),
+      ComplaintLimit: Number(body.complaintLimit),
+    };
+    if (!validIsoDate(data.EffectiveDate)
+      || ![data.RDF2Target, data.RDF3Target, data.FineFractionTarget, data.MSWTarget].every((value) => Number.isFinite(value) && value >= 0)
+      || !Number.isFinite(data.ComplaintLimit) || data.ComplaintLimit <= 0) {
+      return sendJson(res, 400, { ok: false, error: 'กรุณากรอกเป้าหมาย KPI ให้ถูกต้อง' });
+    }
+    const rows = await store.readSheet('KPITargetSettings');
+    const existing = rows.find((row) => row.EffectiveDate === data.EffectiveDate);
+    const row = existing
+      ? await store.updateRow('KPITargetSettings', existing.ID, data)
+      : await store.appendRow('KPITargetSettings', data);
+    return sendJson(res, 200, { ok: true, row, updated: !!existing });
+  }
+  if (req.method === 'DELETE' && parts.length === 1) {
+    const deleted = await store.deleteRow('KPITargetSettings', parts[0]);
+    return sendJson(res, 200, { ok: deleted });
+  }
+  return sendJson(res, 404, { ok: false, error: 'unknown KPI target route' });
+}
+
+async function handleKPIImport(req, res) {
+  if (req.method !== 'POST') return sendJson(res, 404, { ok: false, error: 'not found' });
+  const body = await readBody(req);
+  const fileName = cleanText(body.fileName) || 'KPI_Dashboard.xlsx';
+  const encoded = cleanText(body.base64).replace(/^data:.*;base64,/, '');
+  if (!encoded) return sendJson(res, 400, { ok: false, error: 'กรุณาเลือกไฟล์ KPI_Dashboard.xlsx' });
+
+  const workbook = new ExcelJS.Workbook();
+  try {
+    await workbook.xlsx.load(Buffer.from(encoded, 'base64'));
+  } catch (_) {
+    return sendJson(res, 400, { ok: false, error: 'ไฟล์ Excel ไม่ถูกต้องหรือไม่สามารถอ่านได้' });
+  }
+  const worksheet = workbook.getWorksheet('Daily Entry');
+  if (!worksheet) return sendJson(res, 400, { ok: false, error: 'ไม่พบชีต Daily Entry ในไฟล์' });
+
+  const imported = [];
+  worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const entryDate = excelDateString(row.getCell(1).value);
+    if (!entryDate) return;
+    const record = {
+      entryDate,
+      rdf2Tons: excelCellNumber(row.getCell(2)),
+      rdf3Tons: excelCellNumber(row.getCell(3)),
+      fineFractionTons: excelCellNumber(row.getCell(4)),
+      mswTons: excelCellNumber(row.getCell(5)),
+      customer: cleanText(row.getCell(6).value),
+      detail: cleanText(row.getCell(7).value),
+    };
+    if (record.rdf2Tons || record.rdf3Tons || record.fineFractionTons || record.mswTons || record.customer || record.detail) {
+      imported.push(record);
+    }
+  });
+
+  const [historyRows, complaintRows] = await Promise.all([
+    store.readSheet('KPIDailyHistory'),
+    store.readSheet('KPIComplaints'),
+  ]);
+  const historyByDate = new Map(historyRows.map((row) => [row.EntryDate, row]));
+  const complaintKeys = new Set(complaintRows.map((row) => `${row.EntryDate}|${cleanText(row.Customer).toLowerCase()}|${cleanText(row.Detail).toLowerCase()}`));
+  let historyCreated = 0;
+  let historyUpdated = 0;
+  let complaintsCreated = 0;
+  for (const record of imported) {
+    const historyData = {
+      EntryDate: record.entryDate,
+      RDF2Tons: record.rdf2Tons,
+      RDF3Tons: record.rdf3Tons,
+      FineFractionTons: record.fineFractionTons,
+      MSWTons: record.mswTons,
+      Source: fileName,
+    };
+    const existing = historyByDate.get(record.entryDate);
+    if (existing) {
+      await store.updateRow('KPIDailyHistory', existing.ID, historyData);
+      historyUpdated += 1;
+    } else {
+      const row = await store.appendRow('KPIDailyHistory', historyData);
+      historyByDate.set(record.entryDate, row);
+      historyCreated += 1;
+    }
+    if (record.customer || record.detail) {
+      const detail = record.detail || 'ไม่ระบุรายละเอียด';
+      const key = `${record.entryDate}|${record.customer.toLowerCase()}|${detail.toLowerCase()}`;
+      if (!complaintKeys.has(key)) {
+        await store.appendRow('KPIComplaints', {
+          EntryDate: record.entryDate, Customer: record.customer, Detail: detail,
+        });
+        complaintKeys.add(key);
+        complaintsCreated += 1;
+      }
+    }
+  }
+  return sendJson(res, 200, {
+    ok: true,
+    parsedRows: imported.length,
+    historyCreated,
+    historyUpdated,
+    complaintsCreated,
+  });
+}
+
+async function handleKPI(req, res, parts, query) {
+  const section = parts[0];
+  const rest = parts.slice(1);
+  if (section === 'dashboard' && req.method === 'GET') return handleKPIDashboard(req, res, query);
+  if (section === 'complaints') return handleKPIComplaints(req, res, rest, query);
+  if (section === 'targets') return handleKPITargets(req, res, rest);
+  if (section === 'import') return handleKPIImport(req, res);
+  return sendJson(res, 404, { ok: false, error: 'unknown KPI route' });
+}
+
 // ---------- Weekly Production & Sales Report ----------
 
 const WEEKLY_PRODUCTION_PRODUCTS = [
@@ -1175,6 +1534,7 @@ const server = http.createServer(async (req, res) => {
         if (rest.length === 0 && req.method === 'GET') return await handleStock(req, res);
       }
       if (resource === 'revenue') return await handleRevenue(req, res, rest, query);
+      if (resource === 'kpi') return await handleKPI(req, res, rest, query);
       return sendJson(res, 404, { ok: false, error: 'unknown api route' });
     }
 

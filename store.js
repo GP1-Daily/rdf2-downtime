@@ -18,6 +18,9 @@ const SHEETS = {
   RevenueTippingSettings: ['ID', 'EffectiveDate', 'RatePerTon', 'ExcludedCentralTons', 'ExcludedMinTons', 'ExcludedMaxTons', 'CreatedAt'],
   RevenueTippingDaily: ['ID', 'EntryDate', 'MSWTons', 'Note', 'CreatedAt'],
   WeeklyDeliveryPlans: ['ID', 'WeekStart', 'Customer', 'Product', 'PlanTons', 'CreatedAt'],
+  KPIDailyHistory: ['ID', 'EntryDate', 'RDF2Tons', 'RDF3Tons', 'FineFractionTons', 'MSWTons', 'Source', 'CreatedAt'],
+  KPIComplaints: ['ID', 'EntryDate', 'Customer', 'Detail', 'CreatedAt'],
+  KPITargetSettings: ['ID', 'EffectiveDate', 'RDF2Target', 'RDF3Target', 'FineFractionTarget', 'MSWTarget', 'ComplaintLimit', 'CreatedAt'],
 };
 
 // Serialize ALL access (reads and writes) to the workbook file through one

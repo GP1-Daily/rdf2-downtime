@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kpi.css">
 <style>
   :root{
     --green:#16a34a; --green-bg:#dcfce7;
@@ -312,6 +313,7 @@
   <button data-tab="stock">ผลผลิต</button>
   <button data-tab="delivery">แผนส่งรายสัปดาห์</button>
   <button data-tab="revenue">รายได้บริษัท</button>
+  <button data-tab="kpi">Monthly KPI</button>
 </nav>
 
 <main>
@@ -976,6 +978,120 @@
           <tbody id="rdf3SalesTable"></tbody>
         </table>
       </div>
+    </section>
+  </section>
+
+  <!-- ===================== TAB: MONTHLY KPI ===================== -->
+  <section id="tab-kpi" class="tab-panel">
+    <section class="panel kpi-toolbar-panel">
+      <h2>
+        <span>Monthly KPI Dashboard</span>
+        <button class="primary" id="btnExportKPI">ดาวน์โหลดภาพ PNG</button>
+      </h2>
+      <div class="kpi-period-controls">
+        <button type="button" id="btnKPIPrevious" aria-label="รอบก่อนหน้า" title="รอบก่อนหน้า">&#8249;</button>
+        <label for="kpiPeriod">รอบ KPI เริ่มเดือน</label>
+        <input type="month" id="kpiPeriod">
+        <button type="button" id="btnKPINext" aria-label="รอบถัดไป" title="รอบถัดไป">&#8250;</button>
+        <button type="button" class="primary" id="btnLoadKPI">แสดงผล</button>
+      </div>
+    </section>
+
+    <div id="kpiExportArea" class="monthly-kpi-report">
+      <header class="monthly-kpi-head">
+        <div>
+          <div class="monthly-kpi-title">MONTHLY KPI PERFORMANCE</div>
+          <div class="monthly-kpi-company">GREEN POWER 1 CO., LTD. · RDF PRODUCTION</div>
+        </div>
+        <div class="monthly-kpi-period">
+          <strong id="kpiPeriodLabel">-</strong>
+          <span>รอบวันที่ 21-20</span>
+        </div>
+      </header>
+
+      <section class="monthly-kpi-overview">
+        <div class="kpi-score-ring" id="kpiScoreRing">
+          <div><strong id="kpiScoreValue">0/5</strong><span>KPI ผ่านเป้า</span></div>
+        </div>
+        <div class="kpi-overview-copy">
+          <div class="kpi-overview-label">Overall Performance</div>
+          <div class="kpi-overview-status" id="kpiOverallStatus">กำลังโหลดข้อมูล</div>
+          <div class="kpi-overview-source" id="kpiSourceStatus">-</div>
+        </div>
+        <div class="kpi-overview-date">
+          <span>ข้อมูล ณ วันที่</span>
+          <strong id="kpiAsOfDate">-</strong>
+        </div>
+      </section>
+
+      <section class="monthly-kpi-metrics" id="kpiMetricGrid"></section>
+
+      <section class="monthly-kpi-history">
+        <div class="monthly-kpi-section-head">
+          <strong>6-Period Performance Trend</strong>
+          <span>ยอดจริงเทียบเป้าหมายรายรอบ</span>
+        </div>
+        <div class="kpi-history-table-wrap">
+          <table class="kpi-history-table">
+            <thead id="kpiHistoryHead"></thead>
+            <tbody id="kpiHistoryBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="monthly-kpi-complaints">
+        <div class="monthly-kpi-section-head">
+          <strong>Customer Complaint Summary</strong>
+          <span id="kpiComplaintSummary">0 เรื่อง</span>
+        </div>
+        <div id="kpiComplaintExportList" class="kpi-complaint-export-list"></div>
+      </section>
+    </div>
+
+    <section class="panel">
+      <h2>บันทึกข้อร้องเรียนลูกค้า</h2>
+      <div class="entry-form kpi-complaint-form">
+        <div><label>วันที่</label><input type="date" id="kpiComplaintDate"></div>
+        <div><label>ลูกค้า</label><input type="text" id="kpiComplaintCustomer" list="kpiComplaintCustomerList" placeholder="ชื่อลูกค้า"></div>
+        <datalist id="kpiComplaintCustomerList"></datalist>
+        <div class="kpi-detail-field"><label>รายละเอียด</label><input type="text" id="kpiComplaintDetail" placeholder="รายละเอียดข้อร้องเรียน"></div>
+        <div><button class="primary" id="btnSaveKPIComplaint">บันทึกข้อร้องเรียน</button></div>
+      </div>
+      <div class="scroll-table">
+        <table>
+          <thead><tr><th>วันที่</th><th class="left">ลูกค้า</th><th class="left">รายละเอียด</th><th>จัดการ</th></tr></thead>
+          <tbody id="kpiComplaintTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>KPI Target Settings</h2>
+      <div class="entry-form kpi-target-form">
+        <div><label>มีผลตั้งแต่วันที่</label><input type="date" id="kpiTargetDate"></div>
+        <div><label>RDF2 (ตัน)</label><input type="number" id="kpiTargetRDF2" min="0" step="0.01" value="1000"></div>
+        <div><label>RDF3 (ตัน)</label><input type="number" id="kpiTargetRDF3" min="0" step="0.01" value="800"></div>
+        <div><label>Fine Fraction (ตัน)</label><input type="number" id="kpiTargetFine" min="0" step="0.01" value="800"></div>
+        <div><label>MSW to Production (ตัน)</label><input type="number" id="kpiTargetMSW" min="0" step="0.01" value="8000"></div>
+        <div><label>Complaint ต้องน้อยกว่า</label><input type="number" id="kpiTargetComplaint" min="1" step="1" value="2"></div>
+        <div><button class="primary" id="btnSaveKPITarget">บันทึกเป้าหมาย</button></div>
+      </div>
+      <div class="scroll-table">
+        <table>
+          <thead><tr><th>มีผลตั้งแต่</th><th>RDF2</th><th>RDF3</th><th>Fine Fraction</th><th>MSW</th><th>Complaint</th><th>จัดการ</th></tr></thead>
+          <tbody id="kpiTargetTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>นำเข้าข้อมูลย้อนหลังจาก Monthly KPI Dashboard</h2>
+      <div class="kpi-import-row">
+        <input type="file" id="kpiWorkbookFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+        <button class="primary" id="btnImportKPIWorkbook">นำเข้า KPI_Dashboard.xlsx</button>
+      </div>
+      <div class="hint">ระบบอ่านชีต Daily Entry และใช้ข้อมูลย้อนหลังเฉพาะวันที่ยังไม่มียอดจริงจาก Sales หรือ Grab Crane จึงไม่นับข้อมูลซ้ำ</div>
+      <div id="kpiImportResult" class="kpi-import-result"></div>
     </section>
   </section>
 
@@ -2205,5 +2321,6 @@ initWeeklyReport();
 initDeliveryPlans();
 initRevenue();
 </script>
+<script src="kpi.js"></script>
 </body>
 </html>
