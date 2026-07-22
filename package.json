@@ -1,7 +1,7 @@
 {
-  "name": "rdf2_downtime",
+  "name": "gp1-connect",
   "version": "1.0.0",
-  "description": "RDF2 Machine Downtime & Line Time Logger + Grab Crane CSV Report",
+  "description": "GP1 integrated operations and performance management system",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

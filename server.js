@@ -2,7 +2,6 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
-const ExcelJS = require('exceljs');
 
 // Uses Postgres (e.g. free Supabase) when DATABASE_URL is set - needed for
 // cloud deploys with no persistent local disk. Falls back to the local
@@ -901,27 +900,6 @@ function kpiPeriodBounds(period) {
   return { period, start: `${period}-21`, end: `${nextMonth}-20` };
 }
 
-function excelDateString(value) {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, '0')}-${String(value.getUTCDate()).padStart(2, '0')}`;
-  }
-  const text = cleanText(value);
-  if (validIsoDate(text)) return text;
-  const match = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
-  if (!match) return '';
-  const year = Number(match[3]) > 2400 ? Number(match[3]) - 543 : Number(match[3]);
-  const date = `${year}-${String(Number(match[2])).padStart(2, '0')}-${String(Number(match[1])).padStart(2, '0')}`;
-  return validIsoDate(date) ? date : '';
-}
-
-function excelCellNumber(cell) {
-  const value = cell.value;
-  if (value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, 'result')) {
-    return Number(value.result) || 0;
-  }
-  return Number(value) || 0;
-}
-
 function addToDateMap(map, date, amount) {
   map.set(date, (map.get(date) || 0) + (Number(amount) || 0));
 }
@@ -1131,96 +1109,12 @@ async function handleKPITargets(req, res, parts) {
   return sendJson(res, 404, { ok: false, error: 'unknown KPI target route' });
 }
 
-async function handleKPIImport(req, res) {
-  if (req.method !== 'POST') return sendJson(res, 404, { ok: false, error: 'not found' });
-  const body = await readBody(req);
-  const fileName = cleanText(body.fileName) || 'KPI_Dashboard.xlsx';
-  const encoded = cleanText(body.base64).replace(/^data:.*;base64,/, '');
-  if (!encoded) return sendJson(res, 400, { ok: false, error: 'กรุณาเลือกไฟล์ KPI_Dashboard.xlsx' });
-
-  const workbook = new ExcelJS.Workbook();
-  try {
-    await workbook.xlsx.load(Buffer.from(encoded, 'base64'));
-  } catch (_) {
-    return sendJson(res, 400, { ok: false, error: 'ไฟล์ Excel ไม่ถูกต้องหรือไม่สามารถอ่านได้' });
-  }
-  const worksheet = workbook.getWorksheet('Daily Entry');
-  if (!worksheet) return sendJson(res, 400, { ok: false, error: 'ไม่พบชีต Daily Entry ในไฟล์' });
-
-  const imported = [];
-  worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-    if (rowNumber === 1) return;
-    const entryDate = excelDateString(row.getCell(1).value);
-    if (!entryDate) return;
-    const record = {
-      entryDate,
-      rdf2Tons: excelCellNumber(row.getCell(2)),
-      rdf3Tons: excelCellNumber(row.getCell(3)),
-      fineFractionTons: excelCellNumber(row.getCell(4)),
-      mswTons: excelCellNumber(row.getCell(5)),
-      customer: cleanText(row.getCell(6).value),
-      detail: cleanText(row.getCell(7).value),
-    };
-    if (record.rdf2Tons || record.rdf3Tons || record.fineFractionTons || record.mswTons || record.customer || record.detail) {
-      imported.push(record);
-    }
-  });
-
-  const [historyRows, complaintRows] = await Promise.all([
-    store.readSheet('KPIDailyHistory'),
-    store.readSheet('KPIComplaints'),
-  ]);
-  const historyByDate = new Map(historyRows.map((row) => [row.EntryDate, row]));
-  const complaintKeys = new Set(complaintRows.map((row) => `${row.EntryDate}|${cleanText(row.Customer).toLowerCase()}|${cleanText(row.Detail).toLowerCase()}`));
-  let historyCreated = 0;
-  let historyUpdated = 0;
-  let complaintsCreated = 0;
-  for (const record of imported) {
-    const historyData = {
-      EntryDate: record.entryDate,
-      RDF2Tons: record.rdf2Tons,
-      RDF3Tons: record.rdf3Tons,
-      FineFractionTons: record.fineFractionTons,
-      MSWTons: record.mswTons,
-      Source: fileName,
-    };
-    const existing = historyByDate.get(record.entryDate);
-    if (existing) {
-      await store.updateRow('KPIDailyHistory', existing.ID, historyData);
-      historyUpdated += 1;
-    } else {
-      const row = await store.appendRow('KPIDailyHistory', historyData);
-      historyByDate.set(record.entryDate, row);
-      historyCreated += 1;
-    }
-    if (record.customer || record.detail) {
-      const detail = record.detail || 'ไม่ระบุรายละเอียด';
-      const key = `${record.entryDate}|${record.customer.toLowerCase()}|${detail.toLowerCase()}`;
-      if (!complaintKeys.has(key)) {
-        await store.appendRow('KPIComplaints', {
-          EntryDate: record.entryDate, Customer: record.customer, Detail: detail,
-        });
-        complaintKeys.add(key);
-        complaintsCreated += 1;
-      }
-    }
-  }
-  return sendJson(res, 200, {
-    ok: true,
-    parsedRows: imported.length,
-    historyCreated,
-    historyUpdated,
-    complaintsCreated,
-  });
-}
-
 async function handleKPI(req, res, parts, query) {
   const section = parts[0];
   const rest = parts.slice(1);
   if (section === 'dashboard' && req.method === 'GET') return handleKPIDashboard(req, res, query);
   if (section === 'complaints') return handleKPIComplaints(req, res, rest, query);
   if (section === 'targets') return handleKPITargets(req, res, rest);
-  if (section === 'import') return handleKPIImport(req, res);
   return sendJson(res, 404, { ok: false, error: 'unknown KPI route' });
 }
 

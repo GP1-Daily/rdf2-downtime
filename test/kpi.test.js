@@ -6,7 +6,6 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const test = require('node:test');
-const ExcelJS = require('exceljs');
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -39,16 +38,7 @@ async function waitForServer(baseUrl, child, getError) {
   throw new Error(`server did not start: ${getError()}`);
 }
 
-async function makeLegacyWorkbook() {
-  const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet('Daily Entry');
-  sheet.addRow(['Date', 'RDF2', 'RDF3', 'Fine', 'MSW', 'Customer', 'Complaint']);
-  sheet.addRow([new Date(Date.UTC(2026, 5, 21)), 100, 50, 30, 200, 'Customer A', 'Late delivery']);
-  sheet.addRow([new Date(Date.UTC(2026, 5, 22)), 10, 20, 10, 100, '', '']);
-  return (await workbook.xlsx.writeBuffer()).toString('base64');
-}
-
-test('monthly KPI uses live data before imported history and evaluates the 21-20 period', async (t) => {
+test('monthly KPI uses live operational data and evaluates the 21-20 period', async (t) => {
   const port = await freePort();
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rdf2-kpi-test-'));
   const workbookPath = path.join(tempDir, 'test.xlsx');
@@ -82,16 +72,6 @@ test('monthly KPI uses live data before imported history and evaluates the 21-20
     return data;
   }
 
-  const base64 = await makeLegacyWorkbook();
-  const firstImport = await request('/api/kpi/import', 'POST', { fileName: 'KPI_Dashboard.xlsx', base64 });
-  assert.equal(firstImport.parsedRows, 2);
-  assert.equal(firstImport.historyCreated, 2);
-  assert.equal(firstImport.complaintsCreated, 1);
-
-  const secondImport = await request('/api/kpi/import', 'POST', { fileName: 'KPI_Dashboard.xlsx', base64 });
-  assert.equal(secondImport.historyUpdated, 2);
-  assert.equal(secondImport.complaintsCreated, 0, 're-import must not duplicate complaints');
-
   await request('/api/sales', 'POST', {
     saleDate: '2026-06-21', material: 'RDF2', customer: 'Customer A', tons: 40,
   });
@@ -108,21 +88,24 @@ test('monthly KPI uses live data before imported history and evaluates the 21-20
   });
   await request('/api/kpi/targets', 'POST', {
     effectiveDate: '2026-06-21',
-    rdf2Target: 50,
-    rdf3Target: 80,
-    fineFractionTarget: 35,
-    mswTarget: 350,
+    rdf2Target: 40,
+    rdf3Target: 60,
+    fineFractionTarget: 5,
+    mswTarget: 250,
     complaintLimit: 2,
+  });
+  await request('/api/kpi/complaints', 'POST', {
+    entryDate: '2026-06-22', customer: 'Customer A', detail: 'Late delivery',
   });
 
   const dashboard = await request('/api/kpi/dashboard?period=2026-06');
   assert.equal(dashboard.selected.startDate, '2026-06-21');
   assert.equal(dashboard.selected.endDate, '2026-07-20');
   assert.deepEqual(dashboard.selected.actual, {
-    rdf2: 50,
-    rdf3: 80,
-    fineFraction: 35,
-    msw: 350,
+    rdf2: 40,
+    rdf3: 60,
+    fineFraction: 5,
+    msw: 250,
     complaints: 1,
   });
   assert.equal(dashboard.selected.passedCount, 5, 'meeting a delivery target exactly must pass');

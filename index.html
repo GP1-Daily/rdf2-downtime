@@ -3,10 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RDF2 Downtime Logger</title>
+<title>GP1 Connect</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="home.css">
 <link rel="stylesheet" href="kpi.css">
 <style>
   :root{
@@ -297,8 +298,8 @@
 
 <header class="topbar">
   <div>
-    <h1>RDF2 Downtime Logger</h1>
-    <div class="sub">บันทึกเวลาหยุดเครื่อง / Start-Stop Line / นำเข้าข้อมูล Grab Crane</div>
+    <h1>GP1 Connect</h1>
+    <div class="sub">Operations &amp; Performance Management</div>
   </div>
   <div class="row">
     <span id="clock" class="sub" style="color:#fff;font-size:16px;font-weight:700;"></span>
@@ -306,20 +307,151 @@
 </header>
 
 <nav class="tabs">
-  <button data-tab="today" class="active">บันทึกข้อมูลวันนี้</button>
-  <button data-tab="report">รายงานประจำวัน</button>
-  <button data-tab="weekly-report">รายงานรายสัปดาห์</button>
-  <button data-tab="grab">นำเข้า Grab Crane</button>
-  <button data-tab="stock">ผลผลิต</button>
-  <button data-tab="delivery">แผนส่งรายสัปดาห์</button>
-  <button data-tab="revenue">รายได้บริษัท</button>
-  <button data-tab="kpi">Monthly KPI</button>
+  <button data-tab="home" class="active">Home</button>
+  <div class="section-jump">
+    <label for="sectionJump">Open Section</label>
+    <select id="sectionJump">
+      <option value="">Open Section</option>
+      <optgroup label="Operations">
+        <option value="today">Control Room</option>
+        <option value="grab">Grab Crane</option>
+        <option value="stock">Production &amp; Yield</option>
+      </optgroup>
+      <optgroup label="Reports &amp; Analytics">
+        <option value="report">Daily Report</option>
+        <option value="weekly-report">Weekly Report</option>
+        <option value="kpi">Monthly KPI</option>
+      </optgroup>
+      <optgroup label="Commercial">
+        <option value="delivery">Sales Plan</option>
+        <option value="revenue">Revenue Dashboard</option>
+      </optgroup>
+    </select>
+  </div>
+  <div class="nav-current" id="currentSection">Home</div>
 </nav>
 
 <main>
 
+  <!-- ===================== TAB: HOME ===================== -->
+  <section id="tab-home" class="tab-panel active">
+    <section class="home-overview-band">
+      <div>
+        <div class="home-eyebrow">GP1 OPERATIONS CENTER</div>
+        <h2>Operations Overview</h2>
+        <div class="home-overview-date" id="homeDateLabel">-</div>
+      </div>
+      <div class="home-overview-actions">
+        <div class="home-online"><span></span>System Online</div>
+        <button type="button" id="btnRefreshHome" title="Refresh dashboard">&#8635; Refresh Data</button>
+      </div>
+    </section>
+
+    <section class="home-status-strip">
+      <div class="home-status-item">
+        <span>Today</span>
+        <strong id="homeTodayStatus">Loading</strong>
+      </div>
+      <div class="home-status-item">
+        <span>Current Week</span>
+        <strong id="homeWeekLabel">-</strong>
+      </div>
+      <div class="home-status-item">
+        <span>Revenue Month</span>
+        <strong id="homeMonthLabel">-</strong>
+      </div>
+      <div class="home-status-item">
+        <span>Last Sync</span>
+        <strong id="homeLastSync">-</strong>
+      </div>
+    </section>
+
+    <section class="home-category">
+      <header class="home-category-head">
+        <div><span>01</span><h2>Operations</h2></div>
+        <p>Live plant activity</p>
+      </header>
+      <div class="home-module-grid home-module-grid-three">
+        <button type="button" class="home-module blue" data-open-tab="today">
+          <span class="home-module-head"><b>CR</b><em id="homeLineState">Checking</em></span>
+          <span class="home-module-title">Control Room</span>
+          <strong class="home-module-value" id="homeLineValue">-</strong>
+          <span class="home-module-meta" id="homeLineMeta">-</span>
+          <span class="home-module-open">Open <b>&rarr;</b></span>
+        </button>
+        <button type="button" class="home-module teal" data-open-tab="grab">
+          <span class="home-module-head"><b>GC</b><em>Today</em></span>
+          <span class="home-module-title">Grab Crane</span>
+          <strong class="home-module-value" id="homeGrabValue">-</strong>
+          <span class="home-module-meta" id="homeGrabMeta">-</span>
+          <span class="home-module-open">Open <b>&rarr;</b></span>
+        </button>
+        <button type="button" class="home-module amber" data-open-tab="stock">
+          <span class="home-module-head"><b>PY</b><em>This Week</em></span>
+          <span class="home-module-title">Production &amp; Yield</span>
+          <strong class="home-module-value" id="homeProductionValue">-</strong>
+          <span class="home-module-meta" id="homeProductionMeta">-</span>
+          <span class="home-module-open">Open <b>&rarr;</b></span>
+        </button>
+      </div>
+    </section>
+
+    <section class="home-category">
+      <header class="home-category-head">
+        <div><span>02</span><h2>Reports &amp; Analytics</h2></div>
+        <p>Performance reporting</p>
+      </header>
+      <div class="home-module-grid home-module-grid-three">
+        <button type="button" class="home-module green" data-open-tab="report">
+          <span class="home-module-head"><b>DR</b><em>Today</em></span>
+          <span class="home-module-title">Daily Report</span>
+          <strong class="home-module-value" id="homeDailyValue">-</strong>
+          <span class="home-module-meta" id="homeDailyMeta">-</span>
+          <span class="home-module-open">Open <b>&rarr;</b></span>
+        </button>
+        <button type="button" class="home-module violet" data-open-tab="weekly-report">
+          <span class="home-module-head"><b>WR</b><em>This Week</em></span>
+          <span class="home-module-title">Weekly Report</span>
+          <strong class="home-module-value" id="homeWeeklyValue">-</strong>
+          <span class="home-module-meta" id="homeWeeklyMeta">-</span>
+          <span class="home-module-open">Open <b>&rarr;</b></span>
+        </button>
+        <button type="button" class="home-module red" data-open-tab="kpi">
+          <span class="home-module-head"><b>KPI</b><em id="homeKPIPeriod">21-20</em></span>
+          <span class="home-module-title">Monthly KPI</span>
+          <strong class="home-module-value" id="homeKPIValue">-</strong>
+          <span class="home-module-meta" id="homeKPIMeta">-</span>
+          <span class="home-module-open">Open <b>&rarr;</b></span>
+        </button>
+      </div>
+    </section>
+
+    <section class="home-category">
+      <header class="home-category-head">
+        <div><span>03</span><h2>Commercial</h2></div>
+        <p>Plan and financial performance</p>
+      </header>
+      <div class="home-module-grid home-module-grid-two">
+        <button type="button" class="home-module slate" data-open-tab="delivery">
+          <span class="home-module-head"><b>SP</b><em>This Week</em></span>
+          <span class="home-module-title">Sales Plan</span>
+          <strong class="home-module-value" id="homeDeliveryValue">-</strong>
+          <span class="home-module-meta" id="homeDeliveryMeta">-</span>
+          <span class="home-module-open">Open <b>&rarr;</b></span>
+        </button>
+        <button type="button" class="home-module emerald" data-open-tab="revenue">
+          <span class="home-module-head"><b>RD</b><em id="homeRevenuePeriod">This Month</em></span>
+          <span class="home-module-title">Revenue Dashboard</span>
+          <strong class="home-module-value" id="homeRevenueValue">-</strong>
+          <span class="home-module-meta" id="homeRevenueMeta">-</span>
+          <span class="home-module-open">Open <b>&rarr;</b></span>
+        </button>
+      </div>
+    </section>
+  </section>
+
   <!-- ===================== TAB: TODAY ===================== -->
-  <section id="tab-today" class="tab-panel active">
+  <section id="tab-today" class="tab-panel">
 
     <section class="panel">
       <h2>
@@ -1084,20 +1216,11 @@
       </div>
     </section>
 
-    <section class="panel">
-      <h2>นำเข้าข้อมูลย้อนหลังจาก Monthly KPI Dashboard</h2>
-      <div class="kpi-import-row">
-        <input type="file" id="kpiWorkbookFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
-        <button class="primary" id="btnImportKPIWorkbook">นำเข้า KPI_Dashboard.xlsx</button>
-      </div>
-      <div class="hint">ระบบอ่านชีต Daily Entry และใช้ข้อมูลย้อนหลังเฉพาะวันที่ยังไม่มียอดจริงจาก Sales หรือ Grab Crane จึงไม่นับข้อมูลซ้ำ</div>
-      <div id="kpiImportResult" class="kpi-import-result"></div>
-    </section>
   </section>
 
 </main>
 
-<footer>RDF2 Downtime Logger</footer>
+<footer>GP1 Connect · Green Power 1 Co., Ltd.</footer>
 <div class="toast" id="toast"></div>
 
 <script src="html2canvas.min.js"></script>
@@ -1142,16 +1265,36 @@ function onClickGuarded(el, handler){
 }
 
 // ---------------- Tabs ----------------
-document.querySelectorAll('nav.tabs button').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
-    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
-    if (btn.dataset.tab === 'delivery') loadDeliveryDashboard().catch(e => toast(e.message, true));
-    if (btn.dataset.tab === 'weekly-report') loadWeeklyReport().catch(e => toast(e.message, true));
-  });
+const TAB_TITLES = {
+  home:'Home', today:'Control Room', report:'Daily Report', 'weekly-report':'Weekly Report',
+  grab:'Grab Crane', stock:'Production & Yield', delivery:'Sales Plan',
+  revenue:'Revenue Dashboard', kpi:'Monthly KPI',
+};
+
+function openAppTab(tab, updateHash=true){
+  if (!TAB_TITLES[tab] || !document.getElementById('tab-'+tab)) tab = 'home';
+  document.querySelectorAll('.tab-panel').forEach(panel=>panel.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  const homeButton = document.querySelector('nav.tabs button[data-tab="home"]');
+  homeButton.classList.toggle('active', tab === 'home');
+  document.getElementById('sectionJump').value = tab === 'home' ? '' : tab;
+  document.getElementById('currentSection').textContent = TAB_TITLES[tab];
+  if (updateHash) history.replaceState(null, '', '#'+tab);
+  if (tab === 'delivery') loadDeliveryDashboard().catch(e => toast(e.message, true));
+  if (tab === 'weekly-report') loadWeeklyReport().catch(e => toast(e.message, true));
+  document.dispatchEvent(new CustomEvent('gp1:tabchange', { detail:{ tab } }));
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+document.querySelector('nav.tabs button[data-tab="home"]').addEventListener('click', ()=>openAppTab('home'));
+document.getElementById('sectionJump').addEventListener('change', (event)=>{
+  if (event.target.value) openAppTab(event.target.value);
 });
+document.querySelectorAll('[data-open-tab]').forEach(button=>{
+  button.addEventListener('click', ()=>openAppTab(button.dataset.openTab));
+});
+const initialTab = location.hash.replace('#','');
+openAppTab(TAB_TITLES[initialTab] ? initialTab : 'home', false);
 
 function tickClock(){
   const d = new Date();
@@ -2322,5 +2465,6 @@ initDeliveryPlans();
 initRevenue();
 </script>
 <script src="kpi.js"></script>
+<script src="home.js"></script>
 </body>
 </html>

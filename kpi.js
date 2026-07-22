@@ -238,37 +238,6 @@
     } catch (error) { toast(error.message, true); }
   });
 
-  function bufferToBase64(buffer) {
-    const bytes = new Uint8Array(buffer);
-    let binary = '';
-    const chunkSize = 32768;
-    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-      binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
-    }
-    return btoa(binary);
-  }
-
-  onClickGuarded(document.getElementById('btnImportKPIWorkbook'), async () => {
-    const input = document.getElementById('kpiWorkbookFile');
-    const file = input.files?.[0];
-    if (!file) { toast('กรุณาเลือกไฟล์ KPI_Dashboard.xlsx', true); return; }
-    const resultBox = document.getElementById('kpiImportResult');
-    resultBox.textContent = 'กำลังนำเข้าข้อมูล...';
-    try {
-      const base64 = bufferToBase64(await file.arrayBuffer());
-      const result = await api('/api/kpi/import', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileName: file.name, base64 }),
-      });
-      resultBox.textContent = `อ่าน ${result.parsedRows} วัน · เพิ่มประวัติ ${result.historyCreated} วัน · อัปเดต ${result.historyUpdated} วัน · เพิ่มข้อร้องเรียน ${result.complaintsCreated} เรื่อง`;
-      await loadDashboard();
-      toast('นำเข้าข้อมูล KPI เรียบร้อยแล้ว');
-    } catch (error) {
-      resultBox.textContent = '';
-      toast(error.message, true);
-    }
-  });
-
   onClickGuarded(document.getElementById('btnExportKPI'), async () => {
     const area = document.getElementById('kpiExportArea');
     try {
@@ -298,9 +267,13 @@
   document.getElementById('kpiPeriod').value = currentKPIPeriod();
   document.getElementById('kpiComplaintDate').value = todayStr();
   document.getElementById('kpiTargetDate').value = `${currentKPIPeriod()}-21`;
-  document.querySelector('button[data-tab="kpi"]').addEventListener('click', () => {
+  function loadKPIOnce() {
     if (loadedOnce) return;
     loadedOnce = true;
     refreshAll().catch((error) => toast(error.message, true));
+  }
+  document.addEventListener('gp1:tabchange', (event) => {
+    if (event.detail?.tab === 'kpi') loadKPIOnce();
   });
+  if (document.getElementById('tab-kpi').classList.contains('active')) loadKPIOnce();
 })();

@@ -67,9 +67,6 @@
 .kpi-complaint-form{grid-template-columns:150px minmax(170px,1fr) minmax(260px,2fr) auto;}
 .kpi-detail-field{min-width:0;}
 .kpi-target-form{grid-template-columns:repeat(auto-fit,minmax(135px,1fr));}
-.kpi-import-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
-.kpi-import-row input{flex:1 1 330px;min-width:0;}
-.kpi-import-result{font-size:12px;font-weight:700;color:#166534;margin-top:10px;min-height:18px;}
 .monthly-kpi-report.exporting{width:1160px;max-width:none;}
 .monthly-kpi-report.exporting .kpi-history-table-wrap{overflow:visible;}
 
