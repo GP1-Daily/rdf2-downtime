@@ -420,9 +420,14 @@
       }
 
       if (weekly) {
-        const rdf2 = weekly.production.products.find((row) => row.product === 'RDF2');
-        setText('homeWeeklyValue', `${num(weekly.incoming.totalTons)} / ${num(weekly.sales.totalTons)} ตัน`);
-        setText('homeWeeklyMeta', `ขยะเข้า / ยอดขาย · ผลิต RDF2 ${num(rdf2?.tons)} ตัน · ${weekly.sales.transactionCount} รายการขาย`);
+        const mswKpi = weekly.kpi?.msw;
+        const actualMSW = Number(mswKpi?.actualTons ?? weekly.incoming.totalTons) || 0;
+        const weeklyTarget = mswKpi ? Number(mswKpi.weeklyTargetTons) || 0 : 2000;
+        const achievement = Number(mswKpi?.attainmentPct)
+          || (weeklyTarget > 0 ? actualMSW / weeklyTarget * 100 : 0);
+        const diff = Number(mswKpi?.diffTons ?? (actualMSW - weeklyTarget)) || 0;
+        setText('homeWeeklyValue', `${num(actualMSW)} / ${num(weeklyTarget, 0)} ตัน`);
+        setText('homeWeeklyMeta', `Actual / Target · ทำได้ ${num(achievement, 1)}% · ${diff >= 0 ? 'เกินเป้า' : 'ขาดอีก'} ${num(Math.abs(diff))} ตัน`);
       }
 
       if (delivery) {

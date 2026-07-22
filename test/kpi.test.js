@@ -72,6 +72,12 @@ test('monthly KPI uses live operational data and evaluates the 21-20 period', as
     return data;
   }
 
+  const defaultWeekly = await request('/api/weekly-report?weekStart=2026-06-15');
+  assert.equal(defaultWeekly.kpi.msw.monthlyTargetTons, 8000);
+  assert.equal(defaultWeekly.kpi.msw.weeklyTargetTons, 2000);
+  assert.equal(defaultWeekly.kpi.msw.actualTons, 0);
+  assert.equal(defaultWeekly.kpi.msw.attainmentPct, 0);
+
   await request('/api/sales', 'POST', {
     saleDate: '2026-06-21', material: 'RDF2', customer: 'Customer A', tons: 40,
   });
@@ -97,6 +103,14 @@ test('monthly KPI uses live operational data and evaluates the 21-20 period', as
   await request('/api/kpi/complaints', 'POST', {
     entryDate: '2026-06-22', customer: 'Customer A', detail: 'Late delivery',
   });
+
+  const weekly = await request('/api/weekly-report?weekStart=2026-06-15');
+  assert.equal(weekly.kpi.msw.monthlyTargetTons, 250);
+  assert.equal(weekly.kpi.msw.weeklyTargetTons, 62.5);
+  assert.equal(weekly.kpi.msw.actualTons, 250);
+  assert.equal(weekly.kpi.msw.diffTons, 187.5);
+  assert.equal(weekly.kpi.msw.attainmentPct, 400);
+  assert.equal(weekly.kpi.msw.passed, true);
 
   const dashboard = await request('/api/kpi/dashboard?period=2026-06');
   assert.equal(dashboard.selected.startDate, '2026-06-21');

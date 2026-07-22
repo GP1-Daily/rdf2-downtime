@@ -1137,11 +1137,12 @@ async function handleWeeklyReport(req, res, query) {
   const weekEndExclusive = lib.addDays(weekStart, 7);
   const weekEnd = lib.addDays(weekStart, 6);
   const dates = Array.from({ length: 7 }, (_, index) => lib.addDays(weekStart, index));
-  const [grabRows, yieldRows, stockSales, rdf3Sales] = await Promise.all([
+  const [grabRows, yieldRows, stockSales, rdf3Sales, kpiTargetRows] = await Promise.all([
     store.readSheet('GrabCrane'),
     store.readSheet('YieldSettings'),
     store.readSheet('Sales'),
     store.readSheet('RevenueRDF3Sales'),
+    store.readSheet('KPITargetSettings'),
   ]);
 
   const productionTons = Object.fromEntries(WEEKLY_PRODUCTION_PRODUCTS.map((item) => [item.tonsKey, 0]));
@@ -1178,6 +1179,14 @@ async function handleWeeklyReport(req, res, query) {
       ? productionTons[item.tonsKey] / calculatedIncomingWaste * 100
       : 0,
   }));
+
+  const kpiTargetSetting = applicableRow(kpiTargetRows, weekEnd, 'EffectiveDate') || DEFAULT_KPI_TARGET;
+  const monthlyMSWTargetTons = Math.max(0, Number(kpiTargetSetting.MSWTarget) || 0);
+  const weeklyMSWTargetTons = monthlyMSWTargetTons / 4;
+  const mswDiffTons = incomingWaste - weeklyMSWTargetTons;
+  const mswAttainmentPct = weeklyMSWTargetTons > 0
+    ? incomingWaste / weeklyMSWTargetTons * 100
+    : null;
 
   const salesRows = stockSales
     .filter((row) => row.SaleDate >= weekStart && row.SaleDate < weekEndExclusive
@@ -1222,6 +1231,17 @@ async function handleWeeklyReport(req, res, query) {
     weekStart,
     weekEnd,
     weekEndExclusive,
+    kpi: {
+      msw: {
+        monthlyTargetTons: monthlyMSWTargetTons,
+        weeklyTargetTons: weeklyMSWTargetTons,
+        actualTons: incomingWaste,
+        diffTons: mswDiffTons,
+        shortfallTons: Math.max(0, -mswDiffTons),
+        attainmentPct: mswAttainmentPct,
+        passed: weeklyMSWTargetTons > 0 ? incomingWaste >= weeklyMSWTargetTons : null,
+      },
+    },
     incoming: {
       totalGrabs,
       totalTons: incomingWaste,

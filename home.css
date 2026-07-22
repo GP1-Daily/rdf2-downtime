@@ -26,12 +26,17 @@
 .home-motion-copy h2{margin:7px 0 0;color:#fff;font-size:44px;line-height:1.08;font-weight:700;letter-spacing:0;}
 .home-motion-copy p{margin:12px 0 0;color:#aeb9c8;font-size:10px;}
 .home-motion-actions{display:flex;align-items:center;gap:10px;margin-top:24px;}
-.home-start-working{min-height:42px;padding:10px 17px;border:1px solid var(--brand-bright);border-radius:6px;background:var(--brand);color:#fff;font-size:11px;font-weight:700;box-shadow:0 8px 20px rgba(15,138,95,.25);}
-.home-start-working:hover{border-color:#52d89d;background:var(--brand-bright);color:#fff;box-shadow:0 11px 24px rgba(15,138,95,.3);transform:translateY(-2px);}
-.home-start-working b{margin-left:8px;font-size:14px;}
-.home-refresh{width:42px;height:42px;display:grid;place-items:center;flex:0 0 auto;padding:0;border:1px solid rgba(255,255,255,.2);border-radius:6px;background:rgba(255,255,255,.06);color:#fff;font-size:18px;line-height:1;}
-.home-refresh:hover{border-color:rgba(255,255,255,.42);background:rgba(255,255,255,.12);color:#fff;transform:rotate(18deg);}
-.home-refresh:disabled{opacity:.55;animation:refreshSpin 1s linear infinite;}
+.home-start-working{min-height:44px;display:inline-flex;align-items:center;gap:12px;padding:6px 7px 6px 17px;border:1px solid rgba(110,231,183,.34);border-radius:999px;background:rgba(15,138,95,.22);color:#f0fdf4;font-size:11px;font-weight:700;box-shadow:0 9px 24px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.1);backdrop-filter:blur(8px);}
+.home-start-working:hover{border-color:rgba(110,231,183,.64);background:rgba(15,138,95,.36);color:#fff;box-shadow:0 12px 28px rgba(0,0,0,.2),0 0 0 4px rgba(52,211,153,.07);transform:translateY(-1px);}
+.home-start-working b{width:30px;height:30px;display:grid;place-items:center;flex:0 0 auto;border-radius:50%;background:#34d399;color:#063f2c;font-size:14px;line-height:1;transition:transform .2s,background .2s;}
+.home-start-working:hover b{background:#6ee7b7;transform:translateX(2px);}
+.home-refresh{width:40px;height:40px;display:grid;place-items:center;flex:0 0 auto;padding:0;border:0;border-radius:50%;background:rgba(255,255,255,.075);color:#d9e6e0;font-size:18px;line-height:1;box-shadow:inset 0 0 0 1px rgba(255,255,255,.13);}
+.home-refresh span{display:block;transition:transform .25s,color .2s;}
+.home-refresh:hover{background:rgba(52,211,153,.12);color:#6ee7b7;box-shadow:inset 0 0 0 1px rgba(110,231,183,.3);transform:translateY(-1px);}
+.home-refresh:hover span{transform:rotate(28deg);}
+.home-refresh:disabled{opacity:.55;transform:none;}
+.home-refresh:disabled span{animation:refreshSpin 1s linear infinite;}
+.home-start-working:focus-visible,.home-refresh:focus-visible{outline:2px solid #6ee7b7;outline-offset:3px;}
 .home-live-state{display:flex;align-items:center;gap:8px;margin-left:4px;color:#cbd5e1;}
 .home-live-state>i{width:7px;height:7px;flex:0 0 auto;border-radius:50%;background:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.14);}
 .home-live-state div{display:flex;flex-direction:column;min-width:0;}
@@ -115,6 +120,7 @@
 .home-snapshot article{min-width:0;padding:18px 20px;border-left:1px solid #e5e9ef;}
 .home-snapshot article>span{display:block;color:#94a3b8;font-size:8px;font-weight:700;text-transform:uppercase;}
 .home-snapshot article>strong{display:block;margin-top:4px;color:#172033;font-size:17px;line-height:1.25;font-weight:700;overflow-wrap:anywhere;}
+.home-snapshot article.msw>strong{color:var(--brand-dark);}
 .home-snapshot article.loss>strong{color:#dc2626;}
 .home-snapshot article>small{display:block;margin-top:4px;color:#64748b;font-size:8px;line-height:1.45;overflow-wrap:anywhere;}
 
@@ -218,7 +224,7 @@ body.workspace-launcher-open{overflow:hidden;}
   .home-motion-hero{min-height:482px;padding:23px 18px 0;}
   .home-motion-mark{top:45px;right:-110px;width:290px;opacity:.045;}
   .home-motion-copy h2{font-size:33px;}
-  .home-start-working{padding:9px 14px;}
+  .home-start-working{padding:6px 7px 6px 14px;}
   .home-live-state{margin-left:0;}
   .home-live-state span{font-size:6px;}
   .home-live-state strong{max-width:74px;font-size:8px;white-space:normal;}
