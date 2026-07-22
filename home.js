@@ -1,5 +1,8 @@
 (() => {
   let lastLoadedAt = 0;
+  const launcher = document.getElementById('workspaceLauncher');
+  const launcherDialog = launcher.querySelector('.workspace-launcher-dialog');
+  let launcherTrigger = null;
 
   function setText(id, value) {
     const element = document.getElementById(id);
@@ -56,6 +59,36 @@
 
   function successful(result) {
     return result.status === 'fulfilled' ? result.value : null;
+  }
+
+  function setWorkspaceMode(mode) {
+    launcher.querySelectorAll('[data-workspace-mode]').forEach((button) => {
+      button.setAttribute('aria-selected', String(button.dataset.workspaceMode === mode));
+    });
+    launcher.querySelectorAll('[data-workspace-panel]').forEach((panel) => {
+      panel.hidden = panel.dataset.workspacePanel !== mode;
+    });
+  }
+
+  function openWorkspaceLauncher() {
+    launcherTrigger = document.activeElement;
+    launcher.hidden = false;
+    launcher.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('workspace-launcher-open');
+    requestAnimationFrame(() => launcherDialog.focus());
+  }
+
+  function closeWorkspaceLauncher() {
+    launcher.hidden = true;
+    launcher.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('workspace-launcher-open');
+    if (launcherTrigger instanceof HTMLElement) launcherTrigger.focus();
+  }
+
+  function animateDashboardUpdate() {
+    const home = document.getElementById('tab-home');
+    home.classList.remove('home-data-updated');
+    requestAnimationFrame(() => requestAnimationFrame(() => home.classList.add('home-data-updated')));
   }
 
   function renderKPI(data) {
@@ -173,6 +206,7 @@
       const failed = results.filter((result) => result.status === 'rejected').length;
       setText('homeDataStatus', failed ? `${5 - failed}/5 Sources Online` : 'All Data Online');
       setText('homeLastSync', new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }));
+      animateDashboardUpdate();
       lastLoadedAt = Date.now();
     } finally {
       refreshButton.disabled = false;
@@ -182,10 +216,40 @@
   document.getElementById('btnRefreshHome').addEventListener('click', () => {
     loadHomeDashboard().catch((error) => toast(error.message, true));
   });
+  document.getElementById('btnStartWorking').addEventListener('click', openWorkspaceLauncher);
+  document.getElementById('btnCloseWorkspace').addEventListener('click', closeWorkspaceLauncher);
+  document.getElementById('workspaceLauncherBackdrop').addEventListener('click', closeWorkspaceLauncher);
+  launcher.querySelectorAll('[data-workspace-mode]').forEach((button) => {
+    button.addEventListener('click', () => setWorkspaceMode(button.dataset.workspaceMode));
+  });
+  launcher.querySelectorAll('[data-open-tab]').forEach((button) => {
+    button.addEventListener('click', closeWorkspaceLauncher);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (launcher.hidden) return;
+    if (event.key === 'Escape') {
+      closeWorkspaceLauncher();
+      return;
+    }
+    if (event.key === 'Tab') {
+      const focusable = [...launcher.querySelectorAll('button:not([disabled])')]
+        .filter((element) => element.offsetParent !== null);
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  });
   document.addEventListener('gp1:tabchange', (event) => {
     if (event.detail?.tab === 'home' && Date.now() - lastLoadedAt > 60000) {
       loadHomeDashboard().catch((error) => toast(error.message, true));
     }
   });
+  setText('footerYear', new Date().getFullYear());
   loadHomeDashboard().catch((error) => toast(error.message, true));
 })();

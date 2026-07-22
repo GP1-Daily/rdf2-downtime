@@ -22,12 +22,13 @@
   *{box-sizing:border-box;}
   body{margin:0; font-family:"Anuphan",Tahoma,"Segoe UI",Arial,sans-serif; line-height:1.45; background:#f3f5f7; color:var(--dark);}
   header.topbar{
-    background:#111c2e; color:#fff; padding:18px 30px;
+    background:#fff; color:#111827; padding:14px 30px;
     display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;
+    border-bottom:1px solid #e5e9ef;
   }
-  header.topbar h1{margin:0; font-size:22px; font-weight:700; line-height:1.25;}
-  header.topbar .sub{font-size:13px; line-height:1.4; color:#93c5fd; margin-top:2px;}
-  nav.tabs{display:flex; align-items:stretch; gap:0; min-height:48px; background:#fff; padding:0 30px; border-bottom:1px solid #dfe4ea; overflow-x:auto;}
+  header.topbar h1{margin:0; font-size:20px; font-weight:700; line-height:1.2;}
+  header.topbar .sub{font-size:10px; line-height:1.4; color:#64748b; margin-top:2px;}
+  nav.tabs{display:flex; align-items:center; gap:0; min-height:50px; background:#fff; padding:0 30px; border-bottom:1px solid #dfe4ea; overflow-x:auto;}
   nav.tabs button{
     background:transparent; border:none; color:#475569; padding:12px 8px; font-size:13px; font-weight:700; line-height:1.4; white-space:nowrap;
     cursor:pointer; border-bottom:3px solid transparent;
@@ -291,24 +292,29 @@
     .weekly-sales-product-totals{justify-content:flex-start;}
     .quick-actions button{flex-basis:100%;}
   }
-  footer{text-align:center; color:var(--gray); font-size:12px; padding:20px;}
+  footer{font-size:12px;}
 </style>
 </head>
 <body>
 
 <header class="topbar">
-  <div>
-    <h1>GP1 Connect</h1>
-    <div class="sub">Operations &amp; Performance Management</div>
+  <div class="brand-lockup">
+    <div class="brand-mark" aria-hidden="true">GP1</div>
+    <div>
+      <h1>GP1 Connect</h1>
+      <div class="sub">Operations &amp; Performance Management</div>
+    </div>
   </div>
-  <div class="row">
-    <span id="clock" class="sub" style="color:#fff;font-size:16px;font-weight:700;"></span>
+  <div class="topbar-tools">
+    <div class="topbar-system"><i></i><span>System Live</span></div>
+    <div class="topbar-time"><small>Bangkok</small><strong id="clock"></strong></div>
   </div>
 </header>
 
 <nav class="tabs">
   <button data-tab="home" class="active">Home</button>
   <div class="nav-context"><span>Current workspace</span><strong id="currentSection">Executive Overview</strong></div>
+  <button type="button" class="nav-start-working" id="btnStartWorking">Start Working <b>&rarr;</b></button>
 </nav>
 
 <main>
@@ -322,7 +328,8 @@
         <p id="homeDateLabel">-</p>
       </div>
       <div class="home-masthead-actions">
-        <div class="home-live-state"><i></i><strong id="homeDataStatus">Data Online</strong></div>
+        <div class="home-live-visual" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="home-live-state"><i></i><div><span>Live Data</span><strong id="homeDataStatus">Data Online</strong></div></div>
         <button type="button" id="btnRefreshHome" title="Refresh dashboard" aria-label="Refresh dashboard">&#8635;</button>
       </div>
       <div class="home-periods">
@@ -400,31 +407,6 @@
       </article>
     </section>
 
-    <section class="workspace-section">
-      <header class="workspace-heading">
-        <div><span>WORKSPACE DIRECTORY</span><h2>Work Areas</h2></div>
-        <p>เลือกส่วนงานที่ต้องการบันทึก ตรวจสอบ หรือจัดการข้อมูล</p>
-      </header>
-      <div class="workspace-groups">
-        <div class="workspace-group">
-          <h3>Operations</h3>
-          <button type="button" class="workspace-link" data-open-tab="today"><span><b>Control Room</b><small>Line &amp; Downtime</small></span><em>&rarr;</em></button>
-          <button type="button" class="workspace-link" data-open-tab="grab"><span><b>Grab Crane</b><small>Daily CSV Data</small></span><em>&rarr;</em></button>
-          <button type="button" class="workspace-link" data-open-tab="stock"><span><b>Production Setup</b><small>Yield Settings</small></span><em>&rarr;</em></button>
-        </div>
-        <div class="workspace-group">
-          <h3>Reports</h3>
-          <button type="button" class="workspace-link" data-open-tab="report"><span><b>Daily Report</b><small>Daily Operating Summary</small></span><em>&rarr;</em></button>
-          <button type="button" class="workspace-link" data-open-tab="weekly-report"><span><b>Weekly Report</b><small>Production &amp; Sales Summary</small></span><em>&rarr;</em></button>
-          <button type="button" class="workspace-link" data-open-tab="kpi"><span><b>KPI Management</b><small>Targets &amp; Complaints</small></span><em>&rarr;</em></button>
-        </div>
-        <div class="workspace-group">
-          <h3>Commercial</h3>
-          <button type="button" class="workspace-link" data-open-tab="delivery"><span><b>Weekly Sales Plan</b><small>Plan, Actual &amp; Opportunity Loss</small></span><em>&rarr;</em></button>
-          <button type="button" class="workspace-link" data-open-tab="revenue"><span><b>Sales &amp; Revenue</b><small>Sales, MSW &amp; Price Setup</small></span><em>&rarr;</em></button>
-        </div>
-      </div>
-    </section>
   </section>
 
   <!-- ===================== TAB: TODAY ===================== -->
@@ -1197,7 +1179,42 @@
 
 </main>
 
-<footer>GP1 Connect · Green Power 1 Co., Ltd.</footer>
+<div class="workspace-launcher" id="workspaceLauncher" hidden aria-hidden="true">
+  <div class="workspace-launcher-backdrop" id="workspaceLauncherBackdrop"></div>
+  <section class="workspace-launcher-dialog" role="dialog" aria-modal="true" aria-labelledby="workspaceLauncherTitle" tabindex="-1">
+    <header class="workspace-launcher-head">
+      <div><span>GP1 WORKSPACE</span><h2 id="workspaceLauncherTitle">Choose Your Workspace</h2><p>เลือกประเภทงานและส่วนที่ต้องการเข้าใช้งาน</p></div>
+      <button type="button" id="btnCloseWorkspace" aria-label="Close workspace selector" title="Close">&times;</button>
+    </header>
+    <div class="workspace-mode" role="tablist" aria-label="Workspace type">
+      <button type="button" role="tab" aria-selected="true" data-workspace-mode="entry">Data Entry</button>
+      <button type="button" role="tab" aria-selected="false" data-workspace-mode="insights">Reports &amp; Insights</button>
+    </div>
+    <div class="workspace-launch-panel" data-workspace-panel="entry">
+      <button type="button" class="launcher-item" data-open-tab="today"><span>OPERATIONS</span><b>Control Room</b><small>Start-Stop Line &amp; Downtime</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" data-open-tab="grab"><span>OPERATIONS</span><b>Grab Crane</b><small>Import Daily CSV Data</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" data-open-tab="stock"><span>PRODUCTION</span><b>Production Setup</b><small>Yield Settings</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" data-open-tab="delivery"><span>PLANNING</span><b>Weekly Sales Plan</b><small>Plan &amp; Actual Setup</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" data-open-tab="revenue"><span>COMMERCIAL</span><b>Sales &amp; Revenue</b><small>Sales, MSW &amp; Price Setup</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" data-open-tab="kpi"><span>MANAGEMENT</span><b>KPI Management</b><small>Targets &amp; Complaints</small><em>&rarr;</em></button>
+    </div>
+    <div class="workspace-launch-panel" data-workspace-panel="insights" hidden>
+      <button type="button" class="launcher-item" data-open-tab="report"><span>DAILY</span><b>Daily Report</b><small>Operating Performance Summary</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" data-open-tab="weekly-report"><span>WEEKLY</span><b>Weekly Report</b><small>Production &amp; Sales Summary</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" data-open-tab="kpi"><span>MONTHLY</span><b>KPI Dashboard</b><small>Performance Against Targets</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" data-open-tab="delivery"><span>WEEKLY</span><b>Sales Plan Dashboard</b><small>Plan, Actual &amp; Opportunity Loss</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" data-open-tab="revenue"><span>MONTHLY</span><b>Revenue Dashboard</b><small>Product Sales &amp; Tipping Fee</small><em>&rarr;</em></button>
+    </div>
+  </section>
+</div>
+
+<footer class="site-footer">
+  <div class="site-footer-inner">
+    <div class="footer-brand"><strong>GP1 Connect</strong><span>Green Power 1 Co., Ltd.</span></div>
+    <div class="footer-platform">Internal Operations &amp; Performance Platform</div>
+    <div class="footer-meta"><span>RDF Operations</span><span>&copy; <b id="footerYear">2026</b> GP1</span></div>
+  </div>
+</footer>
 <div class="toast" id="toast"></div>
 
 <script src="html2canvas.min.js"></script>
