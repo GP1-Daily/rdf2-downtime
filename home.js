@@ -6,6 +6,15 @@
     if (element) element.textContent = value;
   }
 
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  }
+
   function num(value, digits = 2) {
     return Number(value || 0).toLocaleString('th-TH', {
       minimumFractionDigits: digits,
@@ -40,13 +49,78 @@
   }
 
   function monthLabel(month) {
-    return new Date(`${month}-01T00:00:00`).toLocaleDateString('en-US', {
+    return new Date(`${month}-01T00:00:00`).toLocaleDateString('th-TH', {
       month: 'long', year: 'numeric',
     });
   }
 
   function successful(result) {
     return result.status === 'fulfilled' ? result.value : null;
+  }
+
+  function renderKPI(data) {
+    const selected = data.selected;
+    const ring = document.getElementById('homeKPIRing');
+    ring.style.setProperty('--kpi-angle', `${selected.passedCount / Math.max(selected.totalCount, 1) * 360}deg`);
+    setText('homeKPIValue', `${selected.passedCount}/${selected.totalCount}`);
+    setText('homeKPICycle', `${thaiDate(selected.startDate)} - ${thaiDate(selected.endDate)}`);
+    setText('homeKPISource', `ข้อมูลระบบ ${selected.source.liveDays} วัน · ประวัติ ${selected.source.historyDays} วัน`);
+
+    const headline = document.getElementById('homeKPIHeadline');
+    headline.className = 'executive-summary-value';
+    if (selected.passedCount === selected.totalCount) {
+      headline.textContent = 'ผ่านเป้าหมายครบ';
+      headline.classList.add('good');
+    } else if (selected.passedCount >= 3) {
+      headline.textContent = `ผ่าน ${selected.passedCount} จาก ${selected.totalCount}`;
+      headline.classList.add('warn');
+    } else {
+      headline.textContent = 'ต้องติดตามเร่งด่วน';
+      headline.classList.add('bad');
+    }
+
+    document.getElementById('homeKPIMetrics').innerHTML = selected.metrics.map((metric) => {
+      const digits = metric.key === 'complaints' ? 0 : 2;
+      const actual = `${num(metric.actual, digits)} ${metric.unit}`;
+      const target = metric.limit
+        ? `เป้า < ${num(metric.target, digits)}`
+        : `เป้า ${num(metric.target, digits)}`;
+      const progress = Math.min(100, Math.max(0, Number(metric.completionPct) || 0));
+      return `<div class="home-kpi-metric ${escapeHtml(metric.key)}">
+        <div class="home-kpi-metric-head">
+          <span>${escapeHtml(metric.label)}</span>
+          <strong>${escapeHtml(actual)} / ${escapeHtml(target)}</strong>
+          <b class="${metric.achieved ? 'pass' : ''}">${metric.achieved ? 'PASS' : 'BELOW'}</b>
+        </div>
+        <div class="home-kpi-track"><i style="width:${progress}%"></i></div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderRevenue(data) {
+    const total = Number(data.company.central) || 0;
+    const sales = Number(data.sales.base) || 0;
+    const tipping = Number(data.tipping.central) || 0;
+    const salesShare = total > 0 ? sales / total * 100 : 0;
+    const tippingShare = total > 0 ? tipping / total * 100 : 0;
+    const donut = document.getElementById('homeRevenueDonut');
+    donut.classList.toggle('empty', total <= 0);
+    donut.style.setProperty('--sales-angle', `${salesShare * 3.6}deg`);
+    setText('homeRevenueValue', `${num(total, 0)} บาท`);
+    setText('homeRevenueSalesValue', `${num(sales, 0)} บาท`);
+    setText('homeRevenueTippingValue', `${num(tipping, 0)} บาท`);
+    setText('homeRevenueSalesShare', `${num(salesShare, 1)}%`);
+    setText('homeRevenueTippingShare', `${num(tippingShare, 1)}%`);
+
+    if (total <= 0) {
+      setText('homeRevenueLead', 'ยังไม่มีข้อมูล');
+      setText('homeRevenueComparison', 'ยังไม่มีรายได้ในเดือนนี้');
+      return;
+    }
+    const salesLeads = sales >= tipping;
+    const difference = Math.abs(sales - tipping);
+    setText('homeRevenueLead', salesLeads ? 'Product Sales' : 'Tipping Fee');
+    setText('homeRevenueComparison', `${salesLeads ? 'ยอดขายสินค้า' : 'Tipping Fee'} สูงกว่า ${num(difference, 0)} บาท`);
   }
 
   async function loadHomeDashboard() {
@@ -61,7 +135,6 @@
     }));
     setText('homeWeekLabel', `${thaiDate(weekStart)} - ${thaiDate(deliveryAddDays(weekStart, 6))}`);
     setText('homeMonthLabel', monthLabel(month));
-    setText('homeRevenuePeriod', monthLabel(month));
 
     try {
       const results = await Promise.allSettled([
@@ -79,48 +152,27 @@
 
       if (report) {
         const running = report.line.segments.some((segment) => segment.ongoing);
-        setText('homeTodayStatus', running ? 'Line Running' : (report.line.totalMinutes > 0 ? 'Line Recorded' : 'No Line Session'));
-        setText('homeLineState', running ? 'Running' : 'Current Day');
-        setText('homeLineValue', minutes(report.line.netRunMinutes));
         const availability = report.line.availabilityPct === null ? '-' : `${num(report.line.availabilityPct, 1)}%`;
-        setText('homeLineMeta', `Availability ${availability} · Downtime ${minutes(report.downtime.totalMinutes)}`);
-        setText('homeGrabValue', `${report.grab.totalGrabs} Grab`);
-        setText('homeGrabMeta', `${num(report.grab.totalWeight)} ตัน · เฉลี่ย ${report.grab.avgWeight === null ? '-' : num(report.grab.avgWeight)} ตัน/Grab`);
-        setText('homeDailyValue', availability);
-        setText('homeDailyMeta', `Line ${minutes(report.line.totalMinutes)} · Net ${minutes(report.line.netRunMinutes)}`);
+        setText('homeLineValue', `${minutes(report.line.netRunMinutes)} · ${availability}`);
+        setText('homeLineMeta', `${running ? 'Line Running' : 'Line Recorded'} · Downtime ${minutes(report.downtime.totalMinutes)} · ${report.grab.totalGrabs} Grab`);
       }
 
       if (weekly) {
         const rdf2 = weekly.production.products.find((row) => row.product === 'RDF2');
-        const fine = weekly.production.products.find((row) => row.product === 'FineFraction');
-        setText('homeProductionValue', `${num(weekly.incoming.totalTons)} ตันเข้า`);
-        setText('homeProductionMeta', `RDF2 ${num(rdf2?.tons)} ตัน · Fine ${num(fine?.tons)} ตัน`);
-        setText('homeWeeklyValue', `${num(weekly.sales.totalTons)} ตันขาย`);
-        setText('homeWeeklyMeta', `${weekly.sales.transactionCount} รายการ · ขยะเข้า ${num(weekly.incoming.totalTons)} ตัน`);
+        setText('homeWeeklyValue', `${num(weekly.incoming.totalTons)} / ${num(weekly.sales.totalTons)} ตัน`);
+        setText('homeWeeklyMeta', `ขยะเข้า / ยอดขาย · ผลิต RDF2 ${num(rdf2?.tons)} ตัน · ${weekly.sales.transactionCount} รายการขาย`);
       }
 
       if (delivery) {
         setText('homeDeliveryValue', `${num(delivery.summary.opportunityLoss, 0)} บาท`);
-        setText('homeDeliveryMeta', `ค่าเสียโอกาส · ขาดแผน ${num(delivery.summary.shortfallTons)} ตัน · ${delivery.summary.customerCount} ลูกค้า`);
+        setText('homeDeliveryMeta', `ขาดแผน ${num(delivery.summary.shortfallTons)} ตัน · ${delivery.summary.customerCount} ลูกค้า`);
       }
-
-      if (revenue) {
-        setText('homeRevenueValue', `${num(revenue.company.central, 0)} บาท`);
-        setText('homeRevenueMeta', revenue.company.central > 0
-          ? `Sales ${num(revenue.company.salesSharePct, 1)}% · Tipping ${num(revenue.company.tippingSharePct, 1)}%`
-          : 'ยังไม่มีรายได้ในเดือนนี้');
-      }
-
-      if (kpi) {
-        const selected = kpi.selected;
-        setText('homeKPIValue', `${selected.passedCount}/${selected.totalCount} ผ่านเป้า`);
-        setText('homeKPIMeta', `${selected.totalCount - selected.passedCount} ตัวชี้วัดต่ำกว่าเป้า`);
-        setText('homeKPIPeriod', `${thaiDate(selected.startDate)} - ${thaiDate(selected.endDate)}`);
-      }
+      if (revenue) renderRevenue(revenue);
+      if (kpi) renderKPI(kpi);
 
       const failed = results.filter((result) => result.status === 'rejected').length;
+      setText('homeDataStatus', failed ? `${5 - failed}/5 Sources Online` : 'All Data Online');
       setText('homeLastSync', new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }));
-      if (failed) setText('homeTodayStatus', `${5 - failed}/5 Data Sources Online`);
       lastLoadedAt = Date.now();
     } finally {
       refreshButton.disabled = false;

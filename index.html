@@ -335,117 +335,118 @@
 
   <!-- ===================== TAB: HOME ===================== -->
   <section id="tab-home" class="tab-panel active">
-    <section class="home-overview-band">
+    <section class="executive-head">
       <div>
-        <div class="home-eyebrow">GP1 OPERATIONS CENTER</div>
-        <h2>Operations Overview</h2>
-        <div class="home-overview-date" id="homeDateLabel">-</div>
+        <div class="executive-eyebrow">GP1 EXECUTIVE TRACKING</div>
+        <h2>Daily Performance Dashboard</h2>
+        <div class="executive-date" id="homeDateLabel">-</div>
       </div>
-      <div class="home-overview-actions">
-        <div class="home-online"><span></span>System Online</div>
+      <div class="executive-actions">
+        <div class="executive-online"><span></span><b id="homeDataStatus">Data Online</b></div>
         <button type="button" id="btnRefreshHome" title="Refresh dashboard">&#8635; Refresh Data</button>
       </div>
     </section>
 
-    <section class="home-status-strip">
-      <div class="home-status-item">
-        <span>Today</span>
-        <strong id="homeTodayStatus">Loading</strong>
+    <section class="executive-status-strip">
+      <div class="executive-status-item">
+        <span>KPI Cycle</span>
+        <strong id="homeKPICycle">-</strong>
       </div>
-      <div class="home-status-item">
-        <span>Current Week</span>
+      <div class="executive-status-item">
+        <span>Tracking Week</span>
         <strong id="homeWeekLabel">-</strong>
       </div>
-      <div class="home-status-item">
+      <div class="executive-status-item">
         <span>Revenue Month</span>
         <strong id="homeMonthLabel">-</strong>
       </div>
-      <div class="home-status-item">
+      <div class="executive-status-item">
         <span>Last Sync</span>
         <strong id="homeLastSync">-</strong>
       </div>
     </section>
 
-    <section class="home-category">
-      <header class="home-category-head">
-        <div><span>01</span><h2>Operations</h2></div>
-        <p>Live plant activity</p>
-      </header>
-      <div class="home-module-grid home-module-grid-three">
-        <button type="button" class="home-module blue" data-open-tab="today">
-          <span class="home-module-head"><b>CR</b><em id="homeLineState">Checking</em></span>
-          <span class="home-module-title">Control Room</span>
-          <strong class="home-module-value" id="homeLineValue">-</strong>
-          <span class="home-module-meta" id="homeLineMeta">-</span>
-          <span class="home-module-open">Open <b>&rarr;</b></span>
-        </button>
-        <button type="button" class="home-module teal" data-open-tab="grab">
-          <span class="home-module-head"><b>GC</b><em>Today</em></span>
-          <span class="home-module-title">Grab Crane</span>
-          <strong class="home-module-value" id="homeGrabValue">-</strong>
-          <span class="home-module-meta" id="homeGrabMeta">-</span>
-          <span class="home-module-open">Open <b>&rarr;</b></span>
-        </button>
-        <button type="button" class="home-module amber" data-open-tab="stock">
-          <span class="home-module-head"><b>PY</b><em>This Week</em></span>
-          <span class="home-module-title">Production &amp; Yield</span>
-          <strong class="home-module-value" id="homeProductionValue">-</strong>
-          <span class="home-module-meta" id="homeProductionMeta">-</span>
-          <span class="home-module-open">Open <b>&rarr;</b></span>
-        </button>
-      </div>
+    <section class="executive-primary-grid">
+      <article class="executive-panel executive-kpi-panel">
+        <header class="executive-panel-head">
+          <div><span>MONTHLY PERFORMANCE</span><h2>Key Performance Indicators</h2></div>
+          <button type="button" data-open-tab="kpi">View KPI &rarr;</button>
+        </header>
+        <div class="executive-kpi-body">
+          <div class="executive-kpi-summary">
+            <div class="home-kpi-ring" id="homeKPIRing">
+              <div><strong id="homeKPIValue">0/5</strong><span>ผ่านเป้า</span></div>
+            </div>
+            <div>
+              <span class="executive-summary-label">Overall Status</span>
+              <strong class="executive-summary-value" id="homeKPIHeadline">Loading</strong>
+              <small id="homeKPISource">-</small>
+            </div>
+          </div>
+          <div class="home-kpi-metrics" id="homeKPIMetrics"></div>
+        </div>
+      </article>
+
+      <article class="executive-panel executive-revenue-panel">
+        <header class="executive-panel-head">
+          <div><span>MONTHLY REVENUE</span><h2>Revenue Structure</h2></div>
+          <button type="button" data-open-tab="revenue">View Revenue &rarr;</button>
+        </header>
+        <div class="executive-revenue-total">
+          <span>รายได้รวมโดยประมาณ</span>
+          <strong id="homeRevenueValue">-</strong>
+        </div>
+        <div class="executive-revenue-body">
+          <div class="home-revenue-donut" id="homeRevenueDonut">
+            <div><span>รายได้หลัก</span><strong id="homeRevenueLead">-</strong></div>
+          </div>
+          <div class="home-revenue-breakdown">
+            <div class="home-revenue-row sales">
+              <span><i></i>ขายสินค้า</span>
+              <strong id="homeRevenueSalesValue">-</strong>
+              <b id="homeRevenueSalesShare">0%</b>
+            </div>
+            <div class="home-revenue-row tipping">
+              <span><i></i>Tipping Fee</span>
+              <strong id="homeRevenueTippingValue">-</strong>
+              <b id="homeRevenueTippingShare">0%</b>
+            </div>
+            <div class="home-revenue-comparison" id="homeRevenueComparison">-</div>
+          </div>
+        </div>
+      </article>
     </section>
 
-    <section class="home-category">
-      <header class="home-category-head">
-        <div><span>02</span><h2>Reports &amp; Analytics</h2></div>
-        <p>Performance reporting</p>
-      </header>
-      <div class="home-module-grid home-module-grid-three">
-        <button type="button" class="home-module green" data-open-tab="report">
-          <span class="home-module-head"><b>DR</b><em>Today</em></span>
-          <span class="home-module-title">Daily Report</span>
-          <strong class="home-module-value" id="homeDailyValue">-</strong>
-          <span class="home-module-meta" id="homeDailyMeta">-</span>
-          <span class="home-module-open">Open <b>&rarr;</b></span>
-        </button>
-        <button type="button" class="home-module violet" data-open-tab="weekly-report">
-          <span class="home-module-head"><b>WR</b><em>This Week</em></span>
-          <span class="home-module-title">Weekly Report</span>
-          <strong class="home-module-value" id="homeWeeklyValue">-</strong>
-          <span class="home-module-meta" id="homeWeeklyMeta">-</span>
-          <span class="home-module-open">Open <b>&rarr;</b></span>
-        </button>
-        <button type="button" class="home-module red" data-open-tab="kpi">
-          <span class="home-module-head"><b>KPI</b><em id="homeKPIPeriod">21-20</em></span>
-          <span class="home-module-title">Monthly KPI</span>
-          <strong class="home-module-value" id="homeKPIValue">-</strong>
-          <span class="home-module-meta" id="homeKPIMeta">-</span>
-          <span class="home-module-open">Open <b>&rarr;</b></span>
-        </button>
-      </div>
+    <section class="executive-tracking-grid">
+      <article class="tracking-item blue">
+        <span>Today Line Performance</span>
+        <strong id="homeLineValue">-</strong>
+        <small id="homeLineMeta">-</small>
+      </article>
+      <article class="tracking-item amber">
+        <span>Weekly Production &amp; Sales</span>
+        <strong id="homeWeeklyValue">-</strong>
+        <small id="homeWeeklyMeta">-</small>
+      </article>
+      <article class="tracking-item red">
+        <span>Weekly Opportunity Loss</span>
+        <strong id="homeDeliveryValue">-</strong>
+        <small id="homeDeliveryMeta">-</small>
+      </article>
     </section>
 
-    <section class="home-category">
-      <header class="home-category-head">
-        <div><span>03</span><h2>Commercial</h2></div>
-        <p>Plan and financial performance</p>
+    <section class="work-area-section">
+      <header class="work-area-head">
+        <div><span>DAILY WORKSPACE</span><h2>Work Areas</h2></div>
+        <p>เลือกส่วนงานสำหรับบันทึกและจัดการข้อมูล</p>
       </header>
-      <div class="home-module-grid home-module-grid-two">
-        <button type="button" class="home-module slate" data-open-tab="delivery">
-          <span class="home-module-head"><b>SP</b><em>This Week</em></span>
-          <span class="home-module-title">Sales Plan</span>
-          <strong class="home-module-value" id="homeDeliveryValue">-</strong>
-          <span class="home-module-meta" id="homeDeliveryMeta">-</span>
-          <span class="home-module-open">Open <b>&rarr;</b></span>
-        </button>
-        <button type="button" class="home-module emerald" data-open-tab="revenue">
-          <span class="home-module-head"><b>RD</b><em id="homeRevenuePeriod">This Month</em></span>
-          <span class="home-module-title">Revenue Dashboard</span>
-          <strong class="home-module-value" id="homeRevenueValue">-</strong>
-          <span class="home-module-meta" id="homeRevenueMeta">-</span>
-          <span class="home-module-open">Open <b>&rarr;</b></span>
-        </button>
+      <div class="work-area-grid">
+        <button type="button" class="work-area-item blue" data-open-tab="today"><b>CR</b><span>Control Room</span><small>Line &amp; Downtime</small><em>&rarr;</em></button>
+        <button type="button" class="work-area-item teal" data-open-tab="grab"><b>GC</b><span>Grab Crane</span><small>Daily CSV Data</small><em>&rarr;</em></button>
+        <button type="button" class="work-area-item amber" data-open-tab="stock"><b>PY</b><span>Production Setup</span><small>Yield Settings</small><em>&rarr;</em></button>
+        <button type="button" class="work-area-item violet" data-open-tab="delivery"><b>SP</b><span>Weekly Sales Plan</span><small>Plan &amp; Actual</small><em>&rarr;</em></button>
+        <button type="button" class="work-area-item green" data-open-tab="revenue"><b>RE</b><span>Sales &amp; Revenue</span><small>Sales · MSW · Price</small><em>&rarr;</em></button>
+        <button type="button" class="work-area-item red" data-open-tab="kpi"><b>KPI</b><span>KPI Management</span><small>Targets &amp; Complaints</small><em>&rarr;</em></button>
       </div>
     </section>
   </section>
