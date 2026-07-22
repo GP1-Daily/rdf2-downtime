@@ -67,7 +67,7 @@
     setText('homeKPISource', `ข้อมูลระบบ ${selected.source.liveDays} วัน · ประวัติ ${selected.source.historyDays} วัน`);
 
     const headline = document.getElementById('homeKPIHeadline');
-    headline.className = 'executive-summary-value';
+    headline.className = 'home-summary-value';
     if (selected.passedCount === selected.totalCount) {
       headline.textContent = 'ผ่านเป้าหมายครบ';
       headline.classList.add('good');
