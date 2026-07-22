@@ -329,7 +329,13 @@
 </header>
 
 <nav class="tabs">
-  <button data-tab="home" class="active">Home</button>
+  <button data-tab="home" class="active nav-home-trigger">
+    <svg class="nav-home-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path>
+      <path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+    </svg>
+    <span>Home</span>
+  </button>
   <button type="button" class="nav-workspace-trigger" id="btnOpenWorkspace" aria-haspopup="dialog" aria-controls="workspaceLauncher" aria-expanded="false" title="เลือกส่วนงานที่ต้องการเข้าใช้"><span class="nav-workspace-icon" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>Work Areas</span></button>
   <div class="nav-context"><span>Current workspace</span><strong id="currentSection">Executive Overview</strong></div>
 </nav>
@@ -347,7 +353,7 @@
           <h2 id="homeHeroTitle">Performance<br>&amp; Revenue</h2>
           <p id="homeDateLabel">-</p>
           <div class="home-motion-actions">
-            <div class="home-live-state"><i></i><div><span>Live Data</span><strong id="homeDataStatus">Data Online</strong></div></div>
+            <div class="home-live-state"><i></i><strong id="homeDataStatus">Data Online</strong></div>
           </div>
         </div>
         <div class="home-motion-readouts" aria-label="Real-time summary">
@@ -359,7 +365,6 @@
           <div class="home-motion-readout kpi">
             <span>KPI On Target</span>
             <strong id="homeHeroKPI">0/5</strong>
-            <small>Monthly performance cycle</small>
           </div>
         </div>
       </div>
@@ -374,7 +379,7 @@
     <section class="home-main-board" data-motion-section>
       <article class="home-board-section home-kpi-section">
         <header class="home-section-heading">
-          <div><span>MONTHLY PERFORMANCE</span><h2>Key Performance Indicators</h2></div>
+          <h2>Key Performance Indicators</h2>
           <button type="button" data-open-tab="kpi">View Details <b>&rarr;</b></button>
         </header>
         <div class="home-kpi-body">
@@ -382,8 +387,6 @@
             <div class="home-kpi-ring" id="homeKPIRing">
               <div><strong id="homeKPIValue">0/5</strong><span>ผ่านเป้า</span></div>
             </div>
-            <span class="home-summary-label">Overall Status</span>
-            <strong class="home-summary-value" id="homeKPIHeadline">Loading</strong>
           </div>
           <div class="home-kpi-metrics" id="homeKPIMetrics"></div>
         </div>
@@ -391,7 +394,7 @@
 
       <article class="home-board-section home-revenue-section">
         <header class="home-section-heading">
-          <div><span>MONTHLY REVENUE</span><h2>Revenue Structure</h2></div>
+          <h2>Revenue Structure</h2>
           <button type="button" data-open-tab="revenue">View Details <b>&rarr;</b></button>
         </header>
         <div class="home-revenue-total">
@@ -413,14 +416,13 @@
               <strong id="homeRevenueTippingValue">-</strong>
               <b id="homeRevenueTippingShare">0%</b>
             </div>
-            <div class="home-revenue-comparison" id="homeRevenueComparison">-</div>
           </div>
         </div>
       </article>
     </section>
 
     <section class="home-snapshot" aria-label="Operations snapshot" data-motion-section>
-      <div class="home-snapshot-title"><span>LIVE TRACKING</span><strong>Operations Snapshot</strong></div>
+      <div class="home-snapshot-title"><strong>Operations Snapshot</strong></div>
       <article>
         <span>Today Line Performance</span>
         <strong id="homeLineValue">-</strong>

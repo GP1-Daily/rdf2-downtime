@@ -328,19 +328,6 @@
     setText('homeKPICycle', `${thaiDate(selected.startDate)} - ${thaiDate(selected.endDate)}`);
     setText('homeKPISource', `ข้อมูลระบบ ${selected.source.liveDays} วัน · ประวัติ ${selected.source.historyDays} วัน`);
 
-    const headline = document.getElementById('homeKPIHeadline');
-    headline.className = 'home-summary-value';
-    if (selected.passedCount === selected.totalCount) {
-      headline.textContent = 'ผ่านเป้าหมายครบ';
-      headline.classList.add('good');
-    } else if (selected.passedCount >= 3) {
-      headline.textContent = `ผ่าน ${selected.passedCount} จาก ${selected.totalCount}`;
-      headline.classList.add('warn');
-    } else {
-      headline.textContent = 'ต้องติดตามเร่งด่วน';
-      headline.classList.add('bad');
-    }
-
     document.getElementById('homeKPIMetrics').innerHTML = selected.metrics.map((metric) => {
       const digits = metric.key === 'complaints' ? 0 : 2;
       const actual = `${num(metric.actual, digits)} ${metric.unit}`;
@@ -379,13 +366,10 @@
 
     if (total <= 0) {
       setText('homeRevenueLead', 'ยังไม่มีข้อมูล');
-      setText('homeRevenueComparison', 'ยังไม่มีรายได้ในเดือนนี้');
       return;
     }
     const salesLeads = sales >= tipping;
-    const difference = Math.abs(sales - tipping);
     setText('homeRevenueLead', salesLeads ? 'Product Sales' : 'Tipping Fee');
-    setText('homeRevenueComparison', `${salesLeads ? 'ยอดขายสินค้า' : 'Tipping Fee'} สูงกว่า ${num(difference, 0)} บาท`);
   }
 
   async function loadHomeDashboard() {
@@ -430,7 +414,7 @@
           || (weeklyTarget > 0 ? actualMSW / weeklyTarget * 100 : 0);
         const diff = Number(mswKpi?.diffTons ?? (actualMSW - weeklyTarget)) || 0;
         setText('homeWeeklyValue', `${num(actualMSW)} / ${num(weeklyTarget, 0)} ตัน`);
-        setText('homeWeeklyMeta', `Actual / Target · ทำได้ ${num(achievement, 1)}% · ${diff >= 0 ? 'เกินเป้า' : 'ขาดอีก'} ${num(Math.abs(diff))} ตัน`);
+        setText('homeWeeklyMeta', `${num(achievement, 1)}% · ${diff >= 0 ? 'เกินเป้า' : 'ขาดอีก'} ${num(Math.abs(diff))} ตัน`);
       }
 
       if (delivery) {
