@@ -243,9 +243,10 @@
     try {
       if (!latestDashboard) await loadDashboard();
       if (document.fonts?.ready) await document.fonts.ready;
+      const capture = await ensureHtml2Canvas();
       area.classList.add('exporting');
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      const canvas = await html2canvas(area, {
+      const canvas = await capture(area, {
         scale: 2,
         backgroundColor: '#f8fafc',
         logging: false,

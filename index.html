@@ -4,13 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GP1 Connect</title>
-<link rel="icon" type="image/png" href="assets/gp1-connect-favicon.png">
-<link rel="apple-touch-icon" href="assets/gp1-connect-favicon.png">
+<link rel="icon" type="image/png" href="assets/gp1-connect-favicon.png?v=20260722-final">
+<link rel="apple-touch-icon" href="assets/gp1-connect-favicon.png?v=20260722-final">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
-<link rel="stylesheet" href="home.css">
-<link rel="stylesheet" href="kpi.css">
+<link rel="stylesheet" href="home.css?v=20260722-final">
+<link rel="stylesheet" href="kpi.css?v=20260722-final">
 <style>
   :root{
     --brand:#0f8a5f; --brand-dark:#086342; --brand-bright:#22b573;
@@ -97,9 +97,11 @@
   .ps-table td.ps-value{text-align:right; font-weight:800; color:var(--dark);}
   .tab-panel{display:none;}
   .tab-panel.active{display:block;}
+  .tab-panel.tab-entering{animation:tabEnter .3s cubic-bezier(.22,.8,.3,1) both;}
   .toast{position:fixed; bottom:20px; right:20px; background:var(--dark); color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; opacity:0; transition:.3s; pointer-events:none; z-index:50;}
   .toast.show{opacity:1;}
   .toast.err{background:var(--red);}
+  @keyframes tabEnter{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
   .stock-paused{display:none!important;}
   .quick-actions{display:flex; flex-wrap:wrap; gap:14px; margin-bottom:16px;}
   .quick-actions button{flex:1 1 250px; min-width:0;}
@@ -318,7 +320,7 @@
 
 <header class="topbar">
   <div class="brand-lockup">
-    <img class="brand-logo" src="assets/gp1-connect-logo.png" width="1923" height="453" alt="GP1 Connect" fetchpriority="high">
+    <img class="brand-logo" src="assets/gp1-connect-logo.png?v=20260722-final" width="1923" height="453" alt="GP1 Connect" fetchpriority="high">
     <h1 class="sr-only">GP1 Connect</h1>
     <div class="brand-subtitle"><span>Operations &amp;</span><strong>Performance Management</strong></div>
   </div>
@@ -343,15 +345,15 @@
 <main>
 
   <!-- ===================== TAB: HOME ===================== -->
-  <section id="tab-home" class="tab-panel active">
+  <section id="tab-home" class="tab-panel active home-is-loading" aria-busy="true">
     <section class="home-motion-hero" aria-labelledby="homeHeroTitle">
       <canvas id="homeMotionCanvas" aria-hidden="true"></canvas>
-      <img class="home-motion-mark" src="assets/gp1-connect-mark.png" width="392" height="445" alt="" aria-hidden="true">
+      <img class="home-motion-mark" src="assets/gp1-connect-mark.png?v=20260722-final" width="392" height="445" alt="" aria-hidden="true">
       <div class="home-motion-content">
         <div class="home-motion-copy">
           <span>GP1 REAL-TIME OPERATIONS</span>
           <h2 id="homeHeroTitle">Performance<br>&amp; Revenue</h2>
-          <p id="homeDateLabel">-</p>
+          <p id="homeDateLabel" data-skeleton="date">-</p>
           <div class="home-motion-actions">
             <div class="home-live-state"><i></i><strong id="homeDataStatus">Data Online</strong></div>
           </div>
@@ -359,20 +361,20 @@
         <div class="home-motion-readouts" aria-label="Real-time summary">
           <div class="home-motion-readout revenue">
             <span>Estimated Revenue</span>
-            <strong id="homeHeroRevenue">-</strong>
-            <small id="homeHeroMix">Sales 0% / Tipping 0%</small>
+            <strong id="homeHeroRevenue" data-skeleton="hero-value">-</strong>
+            <small id="homeHeroMix" data-skeleton="hero-meta">Sales 0% / Tipping 0%</small>
           </div>
           <div class="home-motion-readout kpi">
             <span>KPI On Target</span>
-            <strong id="homeHeroKPI">0/5</strong>
+            <strong id="homeHeroKPI" data-skeleton="hero-kpi">0/5</strong>
           </div>
         </div>
       </div>
       <div class="home-periods">
-        <div><span>KPI Cycle</span><strong id="homeKPICycle">-</strong></div>
-        <div><span>Tracking Week</span><strong id="homeWeekLabel">-</strong></div>
-        <div><span>Revenue Month</span><strong id="homeMonthLabel">-</strong></div>
-        <div><span>Last Sync</span><div class="home-sync-row"><strong id="homeLastSync">-</strong><button type="button" class="home-refresh" id="btnRefreshHome" title="Refresh dashboard" aria-label="Refresh dashboard"><span aria-hidden="true">&#8635;</span></button></div></div>
+        <div><span>KPI Cycle</span><strong id="homeKPICycle" data-skeleton="period">-</strong></div>
+        <div><span>Tracking Week</span><strong id="homeWeekLabel" data-skeleton="period">-</strong></div>
+        <div><span>Revenue Month</span><strong id="homeMonthLabel" data-skeleton="period">-</strong></div>
+        <div><span>Last Sync</span><div class="home-sync-row"><strong id="homeLastSync" data-skeleton="sync">-</strong><button type="button" class="home-refresh" id="btnRefreshHome" title="Refresh dashboard" aria-label="Refresh dashboard"><span aria-hidden="true">&#8635;</span></button></div></div>
       </div>
     </section>
 
@@ -385,10 +387,16 @@
         <div class="home-kpi-body">
           <div class="home-kpi-summary">
             <div class="home-kpi-ring" id="homeKPIRing">
-              <div><strong id="homeKPIValue">0/5</strong><span>ผ่านเป้า</span></div>
+              <div><strong id="homeKPIValue" data-skeleton="ring-value">0/5</strong><span>ผ่านเป้า</span></div>
             </div>
           </div>
-          <div class="home-kpi-metrics" id="homeKPIMetrics"></div>
+          <div class="home-kpi-metrics" id="homeKPIMetrics" aria-live="polite">
+            <div class="home-kpi-skeleton-row" aria-hidden="true"><span></span><i></i></div>
+            <div class="home-kpi-skeleton-row" aria-hidden="true"><span></span><i></i></div>
+            <div class="home-kpi-skeleton-row" aria-hidden="true"><span></span><i></i></div>
+            <div class="home-kpi-skeleton-row" aria-hidden="true"><span></span><i></i></div>
+            <div class="home-kpi-skeleton-row" aria-hidden="true"><span></span><i></i></div>
+          </div>
         </div>
       </article>
 
@@ -399,22 +407,22 @@
         </header>
         <div class="home-revenue-total">
           <span>รายได้รวมโดยประมาณ</span>
-          <strong id="homeRevenueValue">-</strong>
+          <strong id="homeRevenueValue" data-skeleton="revenue-total">-</strong>
         </div>
         <div class="home-revenue-body">
           <div class="home-revenue-donut" id="homeRevenueDonut">
-            <div><span>รายได้หลัก</span><strong id="homeRevenueLead">-</strong></div>
+            <div><span>รายได้หลัก</span><strong id="homeRevenueLead" data-skeleton="donut-label">-</strong></div>
           </div>
           <div class="home-revenue-breakdown">
             <div class="home-revenue-row sales">
               <span><i></i>ขายสินค้า</span>
-              <strong id="homeRevenueSalesValue">-</strong>
-              <b id="homeRevenueSalesShare">0%</b>
+              <strong id="homeRevenueSalesValue" data-skeleton="revenue-row">-</strong>
+              <b id="homeRevenueSalesShare" data-skeleton="share">0%</b>
             </div>
             <div class="home-revenue-row tipping">
               <span><i></i>Tipping Fee</span>
-              <strong id="homeRevenueTippingValue">-</strong>
-              <b id="homeRevenueTippingShare">0%</b>
+              <strong id="homeRevenueTippingValue" data-skeleton="revenue-row">-</strong>
+              <b id="homeRevenueTippingShare" data-skeleton="share">0%</b>
             </div>
           </div>
         </div>
@@ -425,18 +433,18 @@
       <div class="home-snapshot-title"><strong>Operations Snapshot</strong></div>
       <article>
         <span>Today Line Performance</span>
-        <strong id="homeLineValue">-</strong>
-        <small id="homeLineMeta">-</small>
+        <strong id="homeLineValue" data-skeleton="snapshot-value">-</strong>
+        <small id="homeLineMeta" data-skeleton="snapshot-meta">-</small>
       </article>
       <article class="msw">
         <span>Weekly MSW Performance</span>
-        <strong id="homeWeeklyValue">-</strong>
-        <small id="homeWeeklyMeta">-</small>
+        <strong id="homeWeeklyValue" data-skeleton="snapshot-value">-</strong>
+        <small id="homeWeeklyMeta" data-skeleton="snapshot-meta">-</small>
       </article>
       <article class="loss">
         <span>Weekly Opportunity Loss</span>
-        <strong id="homeDeliveryValue">-</strong>
-        <small id="homeDeliveryMeta">-</small>
+        <strong id="homeDeliveryValue" data-skeleton="snapshot-value">-</strong>
+        <small id="homeDeliveryMeta" data-skeleton="snapshot-meta">-</small>
       </article>
     </section>
 
@@ -1248,16 +1256,33 @@
 
 <footer class="site-footer">
   <div class="site-footer-inner">
-    <div class="footer-brand"><img src="assets/gp1-connect-mark.png" width="392" height="445" alt="" aria-hidden="true"><div><strong>GP1 Connect</strong><span>Green Power 1 Co., Ltd.</span></div></div>
+    <div class="footer-brand"><img src="assets/gp1-connect-mark.png?v=20260722-final" width="392" height="445" alt="" aria-hidden="true"><div><strong>GP1 Connect</strong><span>Green Power 1 Co., Ltd.</span></div></div>
     <div class="footer-platform">Internal Operations &amp; Performance Platform</div>
     <div class="footer-meta"><span>RDF Operations</span><span>&copy; <b id="footerYear">2026</b> GP1</span></div>
   </div>
 </footer>
 <div class="toast" id="toast"></div>
 
-<script src="html2canvas.min.js"></script>
 <script>
 const PERIOD_LABEL = { 'เช้า':'morning', 'บ่าย':'afternoon', 'ดึก':'night' };
+let html2CanvasPromise = null;
+
+function ensureHtml2Canvas(){
+  if (window.html2canvas) return Promise.resolve(window.html2canvas);
+  if (html2CanvasPromise) return html2CanvasPromise;
+  html2CanvasPromise = new Promise((resolve, reject)=>{
+    const script = document.createElement('script');
+    script.src = 'html2canvas.min.js?v=20260722-final';
+    script.async = true;
+    script.onload = ()=>resolve(window.html2canvas);
+    script.onerror = ()=>{
+      html2CanvasPromise = null;
+      reject(new Error('ไม่สามารถโหลดระบบส่งออกภาพได้'));
+    };
+    document.head.appendChild(script);
+  });
+  return html2CanvasPromise;
+}
 
 function todayStr(offsetDays=0){
   const d = new Date(); d.setDate(d.getDate()+offsetDays);
@@ -1305,16 +1330,20 @@ const TAB_TITLES = {
 
 function openAppTab(tab, updateHash=true){
   if (!TAB_TITLES[tab] || !document.getElementById('tab-'+tab)) tab = 'home';
-  document.querySelectorAll('.tab-panel').forEach(panel=>panel.classList.remove('active'));
-  document.getElementById('tab-'+tab).classList.add('active');
+  const nextPanel = document.getElementById('tab-'+tab);
+  document.querySelectorAll('.tab-panel').forEach(panel=>panel.classList.remove('active','tab-entering'));
+  nextPanel.classList.add('active');
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    void nextPanel.offsetWidth;
+    nextPanel.classList.add('tab-entering');
+    nextPanel.addEventListener('animationend', ()=>nextPanel.classList.remove('tab-entering'), { once:true });
+  }
   const homeButton = document.querySelector('nav.tabs button[data-tab="home"]');
   homeButton.classList.toggle('active', tab === 'home');
   document.getElementById('currentSection').textContent = tab === 'home' ? 'Executive Overview' : TAB_TITLES[tab];
   if (updateHash) history.replaceState(null, '', '#'+tab);
-  if (tab === 'delivery') loadDeliveryDashboard().catch(e => toast(e.message, true));
-  if (tab === 'weekly-report') loadWeeklyReport().catch(e => toast(e.message, true));
   document.dispatchEvent(new CustomEvent('gp1:tabchange', { detail:{ tab } }));
-  window.scrollTo({top:0, behavior:'smooth'});
+  window.scrollTo({top:0, behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
 }
 
 document.querySelector('nav.tabs button[data-tab="home"]').addEventListener('click', ()=>openAppTab('home'));
@@ -1477,8 +1506,6 @@ onClickGuarded(document.getElementById('btnAddDowntime'), async ()=>{
   }catch(e){ toast(e.message, true); }
 });
 
-loadLineTable(); loadDowntimeTable();
-
 // ---------------- REPORT TAB ----------------
 const reportDateEl = document.getElementById('reportDate');
 reportDateEl.value = todayStr(-1);
@@ -1640,12 +1667,12 @@ function renderPrintSummary(date, data){
 }
 
 document.getElementById('btnLoadReport').addEventListener('click', loadReport);
-loadReport();
 
 onClickGuarded(document.getElementById('btnDownloadImage'), async ()=>{
   const el = document.getElementById('printSummary');
   if(document.fonts?.ready) await document.fonts.ready;
-  const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff' });
+  const capture = await ensureHtml2Canvas();
+  const canvas = await capture(el, { scale: 2, backgroundColor: '#ffffff' });
   const link = document.createElement('a');
   link.download = `RDF2-สรุปประจำวัน-${reportDateEl.value}.png`;
   link.href = canvas.toDataURL('image/png');
@@ -1901,6 +1928,7 @@ async function loadStock(){
 // ---------------- REVENUE TAB ----------------
 const revenueProductLabel = { RDF2:'RDF2', RDF3:'RDF3', FineFraction:'Fine Fraction' };
 let revenueCustomers = [];
+let revenueCustomersPromise = null;
 
 function revenueMoney(value){
   return Number(value || 0).toLocaleString('th-TH', { maximumFractionDigits:0 }) + ' บาท';
@@ -2057,18 +2085,20 @@ onClickGuarded(document.getElementById('btnExportWeeklyReport'), async ()=>{
 });
 
 function initWeeklyReport(){
-  document.getElementById('weeklyReportStart').value = deliveryMondayFor(todayStr());
-  loadWeeklyReport().catch(e => toast(e.message, true));
+  const input = document.getElementById('weeklyReportStart');
+  if (!input.value) input.value = deliveryMondayFor(todayStr());
+  return loadWeeklyReport();
 }
 
 let deliveryLastDashboard = null;
 
 async function exportDeliveryElement(area, fileName){
   if(document.fonts?.ready) await document.fonts.ready;
+  const capture = await ensureHtml2Canvas();
   area.classList.add('exporting');
   try{
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    const canvas = await html2canvas(area, {
+    const canvas = await capture(area, {
       scale:2,
       backgroundColor:'#f8fafc',
       logging:false,
@@ -2220,8 +2250,9 @@ onClickGuarded(document.getElementById('btnExportDeliveryDashboard'), async ()=>
 });
 
 function initDeliveryPlans(){
-  document.getElementById('deliveryWeekStart').value = deliveryMondayFor(todayStr());
-  loadDeliveryDashboard().catch(e => toast(e.message, true));
+  const input = document.getElementById('deliveryWeekStart');
+  if (!input.value) input.value = deliveryMondayFor(todayStr());
+  return loadDeliveryDashboard();
 }
 
 const currentMonth = todayStr().slice(0, 7);
@@ -2241,7 +2272,7 @@ function fillRevenueCustomerSelects(){
   }
 }
 
-async function loadRevenueCustomers(){
+async function fetchRevenueCustomers(){
   const data = await api('/api/revenue/customers');
   revenueCustomers = data.rows;
   fillRevenueCustomerSelects();
@@ -2254,6 +2285,13 @@ async function loadRevenueCustomers(){
       toast('ลบลูกค้าแล้ว');
     }catch(e){ toast(e.message, true); }
   }));
+}
+
+function loadRevenueCustomers(){
+  if (!revenueCustomersPromise){
+    revenueCustomersPromise = fetchRevenueCustomers().finally(()=>{ revenueCustomersPromise = null; });
+  }
+  return revenueCustomersPromise;
 }
 
 onClickGuarded(document.getElementById('btnAddRevenueCustomer'), async ()=>{
@@ -2476,9 +2514,10 @@ onClickGuarded(document.getElementById('btnExportRevenueImage'), async ()=>{
   try{
     await loadRevenueDashboard();
     if(document.fonts?.ready) await document.fonts.ready;
+    const capture = await ensureHtml2Canvas();
     area.classList.add('exporting');
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    const canvas = await html2canvas(area, {
+    const canvas = await capture(area, {
       scale: 2,
       backgroundColor: '#f8fafc',
       logging: false,
@@ -2505,12 +2544,56 @@ async function initRevenue(){
   }catch(e){ toast(e.message, true); }
 }
 
-loadYieldTable(); loadSalesTable();
-initWeeklyReport();
-initDeliveryPlans();
-initRevenue();
+const appTabLoadedAt = new Map();
+const appTabLoading = new Map();
+const APP_TAB_STALE_MS = 60000;
+
+function initializeAppTab(tab, force=false){
+  if (!force && Date.now() - (appTabLoadedAt.get(tab) || 0) < APP_TAB_STALE_MS) return Promise.resolve();
+  if (appTabLoading.has(tab)) return appTabLoading.get(tab);
+  const panel = document.getElementById(`tab-${tab}`);
+  const task = (async ()=>{
+    panel?.setAttribute('aria-busy', 'true');
+    switch(tab){
+      case 'today':
+        await Promise.all([loadLineTable(), loadDowntimeTable()]);
+        break;
+      case 'report':
+        await loadReport();
+        break;
+      case 'weekly-report':
+        await initWeeklyReport();
+        break;
+      case 'stock':
+        await loadRevenueCustomers();
+        await Promise.all([loadYieldTable(), loadSalesTable()]);
+        break;
+      case 'delivery':
+        await loadRevenueCustomers();
+        await initDeliveryPlans();
+        break;
+      case 'revenue':
+        await initRevenue();
+        break;
+      default:
+        break;
+    }
+    appTabLoadedAt.set(tab, Date.now());
+  })().finally(()=>{
+    panel?.removeAttribute('aria-busy');
+    appTabLoading.delete(tab);
+  });
+  appTabLoading.set(tab, task);
+  return task;
+}
+
+document.addEventListener('gp1:tabchange', (event)=>{
+  const tab = event.detail?.tab;
+  if (tab) initializeAppTab(tab).catch(e=>toast(e.message, true));
+});
+initializeAppTab(initialTab && TAB_TITLES[initialTab] ? initialTab : 'home').catch(e=>toast(e.message, true));
 </script>
-<script src="kpi.js"></script>
-<script src="home.js"></script>
+<script src="kpi.js?v=20260722-final"></script>
+<script src="home.js?v=20260722-final"></script>
 </body>
 </html>

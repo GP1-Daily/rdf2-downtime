@@ -1,6 +1,10 @@
 (() => {
   let lastLoadedAt = 0;
   let homeMotion = null;
+  let homeLoadPromise = null;
+  let hasLoadedDashboard = false;
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const valueAnimations = new WeakMap();
   const launcher = document.getElementById('workspaceLauncher');
   const launcherDialog = launcher.querySelector('.workspace-launcher-dialog');
   const workspaceButton = document.getElementById('btnOpenWorkspace');
@@ -9,6 +13,55 @@
   function setText(id, value) {
     const element = document.getElementById(id);
     if (element) element.textContent = value;
+  }
+
+  function markValueUpdated(element) {
+    if (!element.dataset.motionReady) {
+      element.dataset.motionReady = 'true';
+      return;
+    }
+    element.classList.remove('value-updated');
+    void element.offsetWidth;
+    element.classList.add('value-updated');
+    window.setTimeout(() => element.classList.remove('value-updated'), 900);
+  }
+
+  function animateNumericElement(element, endValue, formatter, duration = 720, delay = 0) {
+    if (!element) return;
+    const end = Number(endValue) || 0;
+    const previousTarget = Number(element.dataset.motionValue);
+    const start = Number.isFinite(previousTarget) ? previousTarget : 0;
+    const active = valueAnimations.get(element);
+    if (active?.frame) cancelAnimationFrame(active.frame);
+    if (active?.timer) clearTimeout(active.timer);
+    element.dataset.motionValue = String(end);
+    if (Number.isFinite(previousTarget) && Math.abs(previousTarget - end) > 0.0001) markValueUpdated(element);
+    else if (!element.dataset.motionReady) element.dataset.motionReady = 'true';
+
+    if (reducedMotion.matches || Math.abs(start - end) < 0.0001) {
+      element.textContent = formatter(end);
+      return;
+    }
+
+    const state = { frame: 0, timer: 0 };
+    const run = () => {
+      const startedAt = performance.now();
+      const step = (now) => {
+        const progress = Math.min(1, (now - startedAt) / duration);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        element.textContent = formatter(start + (end - start) * eased);
+        if (progress < 1) state.frame = requestAnimationFrame(step);
+        else valueAnimations.delete(element);
+      };
+      state.frame = requestAnimationFrame(step);
+    };
+    if (delay) state.timer = window.setTimeout(run, delay);
+    else run();
+    valueAnimations.set(element, state);
+  }
+
+  function animateNumber(id, endValue, formatter, duration, delay) {
+    animateNumericElement(document.getElementById(id), endValue, formatter, duration, delay);
   }
 
   function escapeHtml(value) {
@@ -291,6 +344,11 @@
     });
     launcher.querySelectorAll('[data-workspace-panel]').forEach((panel) => {
       panel.hidden = panel.dataset.workspacePanel !== mode;
+      panel.classList.remove('is-entering');
+      if (!panel.hidden && !reducedMotion.matches) {
+        void panel.offsetWidth;
+        panel.classList.add('is-entering');
+      }
     });
   }
 
@@ -300,6 +358,12 @@
     launcher.setAttribute('aria-hidden', 'false');
     workspaceButton.setAttribute('aria-expanded', 'true');
     document.body.classList.add('workspace-launcher-open');
+    const activePanel = launcher.querySelector('[data-workspace-panel]:not([hidden])');
+    if (activePanel && !reducedMotion.matches) {
+      activePanel.classList.remove('is-entering');
+      void activePanel.offsetWidth;
+      activePanel.classList.add('is-entering');
+    }
     requestAnimationFrame(() => launcherDialog.focus());
   }
 
@@ -322,28 +386,38 @@
     const kpiRatio = selected.passedCount / Math.max(selected.totalCount, 1);
     const ring = document.getElementById('homeKPIRing');
     ring.style.setProperty('--kpi-angle', `${kpiRatio * 360}deg`);
-    setText('homeKPIValue', `${selected.passedCount}/${selected.totalCount}`);
-    setText('homeHeroKPI', `${selected.passedCount}/${selected.totalCount}`);
+    animateNumber('homeKPIValue', selected.passedCount, (value) => `${Math.round(value)}/${selected.totalCount}`, 620);
+    animateNumber('homeHeroKPI', selected.passedCount, (value) => `${Math.round(value)}/${selected.totalCount}`, 620, 80);
     homeMotion?.setData({ kpi: kpiRatio });
     setText('homeKPICycle', `${thaiDate(selected.startDate)} - ${thaiDate(selected.endDate)}`);
     setText('homeKPISource', `ข้อมูลระบบ ${selected.source.liveDays} วัน · ประวัติ ${selected.source.historyDays} วัน`);
 
-    document.getElementById('homeKPIMetrics').innerHTML = selected.metrics.map((metric) => {
+    const metricsElement = document.getElementById('homeKPIMetrics');
+    metricsElement.innerHTML = selected.metrics.map((metric, index) => {
       const digits = metric.key === 'complaints' ? 0 : 2;
-      const actual = `${num(metric.actual, digits)} ${metric.unit}`;
       const target = metric.limit
         ? `เป้า < ${num(metric.target, digits)}`
         : `เป้า ${num(metric.target, digits)}`;
       const progress = Math.min(100, Math.max(0, Number(metric.completionPct) || 0));
-      return `<div class="home-kpi-metric ${escapeHtml(metric.key)}">
+      return `<div class="home-kpi-metric ${escapeHtml(metric.key)}" style="--metric-index:${index}">
         <div class="home-kpi-metric-head">
           <span>${escapeHtml(metric.label)}</span>
-          <strong>${escapeHtml(actual)} / ${escapeHtml(target)}</strong>
+          <strong><span data-kpi-actual="${index}">0 ${escapeHtml(metric.unit)}</span> / ${escapeHtml(target)}</strong>
           <b class="${metric.achieved ? 'pass' : ''}">${metric.achieved ? 'PASS' : 'BELOW'}</b>
         </div>
         <div class="home-kpi-track"><i style="width:${progress}%"></i></div>
       </div>`;
     }).join('');
+    selected.metrics.forEach((metric, index) => {
+      const digits = metric.key === 'complaints' ? 0 : 2;
+      animateNumericElement(
+        metricsElement.querySelector(`[data-kpi-actual="${index}"]`),
+        metric.actual,
+        (value) => `${num(value, digits)} ${metric.unit}`,
+        620,
+        index * 70,
+      );
+    });
   }
 
   function renderRevenue(data) {
@@ -355,12 +429,12 @@
     const donut = document.getElementById('homeRevenueDonut');
     donut.classList.toggle('empty', total <= 0);
     donut.style.setProperty('--sales-angle', `${salesShare * 3.6}deg`);
-    setText('homeRevenueValue', `${num(total, 0)} บาท`);
-    setText('homeRevenueSalesValue', `${num(sales, 0)} บาท`);
-    setText('homeRevenueTippingValue', `${num(tipping, 0)} บาท`);
-    setText('homeRevenueSalesShare', `${num(salesShare, 1)}%`);
-    setText('homeRevenueTippingShare', `${num(tippingShare, 1)}%`);
-    setText('homeHeroRevenue', `THB ${num(total, 0)}`);
+    animateNumber('homeRevenueValue', total, (value) => `${num(value, 0)} บาท`);
+    animateNumber('homeRevenueSalesValue', sales, (value) => `${num(value, 0)} บาท`, 720, 70);
+    animateNumber('homeRevenueTippingValue', tipping, (value) => `${num(value, 0)} บาท`, 720, 120);
+    animateNumber('homeRevenueSalesShare', salesShare, (value) => `${num(value, 1)}%`, 620, 100);
+    animateNumber('homeRevenueTippingShare', tippingShare, (value) => `${num(value, 1)}%`, 620, 150);
+    animateNumber('homeHeroRevenue', total, (value) => `THB ${num(value, 0)}`, 820);
     setText('homeHeroMix', `Sales ${num(salesShare, 1)}% / Tipping ${num(tippingShare, 1)}%`);
     homeMotion?.setData({ sales: salesShare / 100, tipping: tippingShare / 100 });
 
@@ -372,7 +446,7 @@
     setText('homeRevenueLead', salesLeads ? 'Product Sales' : 'Tipping Fee');
   }
 
-  async function loadHomeDashboard() {
+  async function fetchHomeDashboard() {
     const refreshButton = document.getElementById('btnRefreshHome');
     refreshButton.disabled = true;
     const today = todayStr();
@@ -402,7 +476,7 @@
       if (report) {
         const running = report.line.segments.some((segment) => segment.ongoing);
         const availability = report.line.availabilityPct === null ? '-' : `${num(report.line.availabilityPct, 1)}%`;
-        setText('homeLineValue', `${minutes(report.line.netRunMinutes)} · ${availability}`);
+        animateNumber('homeLineValue', report.line.netRunMinutes, (value) => `${minutes(value)} · ${availability}`);
         setText('homeLineMeta', `${running ? 'Line Running' : 'Line Recorded'} · Downtime ${minutes(report.downtime.totalMinutes)} · ${report.grab.totalGrabs} Grab`);
       }
 
@@ -413,12 +487,12 @@
         const achievement = Number(mswKpi?.attainmentPct)
           || (weeklyTarget > 0 ? actualMSW / weeklyTarget * 100 : 0);
         const diff = Number(mswKpi?.diffTons ?? (actualMSW - weeklyTarget)) || 0;
-        setText('homeWeeklyValue', `${num(actualMSW)} / ${num(weeklyTarget, 0)} ตัน`);
+        animateNumber('homeWeeklyValue', actualMSW, (value) => `${num(value)} / ${num(weeklyTarget, 0)} ตัน`);
         setText('homeWeeklyMeta', `${num(achievement, 1)}% · ${diff >= 0 ? 'เกินเป้า' : 'ขาดอีก'} ${num(Math.abs(diff))} ตัน`);
       }
 
       if (delivery) {
-        setText('homeDeliveryValue', `${num(delivery.summary.opportunityLoss, 0)} บาท`);
+        animateNumber('homeDeliveryValue', delivery.summary.opportunityLoss, (value) => `${num(value, 0)} บาท`);
         setText('homeDeliveryMeta', `ขาดแผน ${num(delivery.summary.shortfallTons)} ตัน · ${delivery.summary.customerCount} ลูกค้า`);
       }
       if (revenue) renderRevenue(revenue);
@@ -432,6 +506,22 @@
     } finally {
       refreshButton.disabled = false;
     }
+  }
+
+  function loadHomeDashboard() {
+    if (homeLoadPromise) return homeLoadPromise;
+    const home = document.getElementById('tab-home');
+    if (!hasLoadedDashboard) {
+      home.classList.add('home-is-loading');
+      home.setAttribute('aria-busy', 'true');
+    }
+    homeLoadPromise = fetchHomeDashboard().finally(() => {
+      hasLoadedDashboard = true;
+      home.classList.remove('home-is-loading');
+      home.setAttribute('aria-busy', 'false');
+      homeLoadPromise = null;
+    });
+    return homeLoadPromise;
   }
 
   homeMotion = setupHomeMotion();
@@ -475,5 +565,7 @@
     }
   });
   setText('footerYear', new Date().getFullYear());
-  loadHomeDashboard().catch((error) => toast(error.message, true));
+  if (document.getElementById('tab-home').classList.contains('active')) {
+    loadHomeDashboard().catch((error) => toast(error.message, true));
+  }
 })();

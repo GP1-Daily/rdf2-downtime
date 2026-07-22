@@ -13,7 +13,16 @@ const PORT = process.env.PORT || 5600;
 const DIR = __dirname;
 const HTML_PATH = path.join(DIR, 'index.html');
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' };
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+  '.svg': 'image/svg+xml',
+  '.json': 'application/json; charset=utf-8',
+  '.woff2': 'font/woff2',
+};
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -30,6 +39,42 @@ function readBody(req) {
 function sendJson(res, status, obj) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(obj));
+}
+
+function sendStatic(req, res, filePath, query) {
+  fs.stat(filePath, (statError, stat) => {
+    if (statError || !stat.isFile()) { res.writeHead(404); res.end('Not found'); return; }
+    const ext = path.extname(filePath).toLowerCase();
+    const etag = `W/"${stat.size.toString(16)}-${Math.trunc(stat.mtimeMs).toString(16)}"`;
+    const cacheControl = ext === '.html'
+      ? 'no-cache, must-revalidate'
+      : query.v
+        ? 'public, max-age=31536000, immutable'
+        : 'public, max-age=3600, must-revalidate';
+    const headers = {
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      'Content-Length': stat.size,
+      'Cache-Control': cacheControl,
+      'ETag': etag,
+      'Last-Modified': stat.mtime.toUTCString(),
+      'X-Content-Type-Options': 'nosniff',
+    };
+    if (req.headers['if-none-match'] === etag) {
+      res.writeHead(304, headers);
+      res.end();
+      return;
+    }
+    if (req.method === 'HEAD') {
+      res.writeHead(200, headers);
+      res.end();
+      return;
+    }
+    fs.readFile(filePath, (readError, data) => {
+      if (readError) { res.writeHead(404); res.end('Not found'); return; }
+      res.writeHead(200, headers);
+      res.end(data);
+    });
+  });
 }
 
 // ---------- Downtime ----------
@@ -1452,13 +1497,19 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 404, { ok: false, error: 'unknown api route' });
     }
 
-    let filePath = pathname === '/' ? HTML_PATH : path.join(DIR, pathname);
-    fs.readFile(filePath, (err, data) => {
-      if (err) { res.writeHead(404); res.end('Not found'); return; }
-      const ext = path.extname(filePath);
-      res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
-      res.end(data);
-    });
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      res.writeHead(405, { Allow: 'GET, HEAD' });
+      res.end('Method not allowed');
+      return;
+    }
+    const relativePath = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
+    const filePath = path.resolve(DIR, relativePath);
+    if (filePath !== HTML_PATH && !filePath.startsWith(`${DIR}${path.sep}`)) {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
+    sendStatic(req, res, filePath, query);
   } catch (e) {
     console.error(e);
     sendJson(res, 500, { ok: false, error: String(e.message || e) });
