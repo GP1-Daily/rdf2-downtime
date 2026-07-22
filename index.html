@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GP1 Connect</title>
+<link rel="icon" type="image/png" href="assets/gp1-connect-favicon.png">
+<link rel="apple-touch-icon" href="assets/gp1-connect-favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
@@ -11,20 +13,22 @@
 <link rel="stylesheet" href="kpi.css">
 <style>
   :root{
-    --green:#16a34a; --green-bg:#dcfce7;
+    --brand:#0f8a5f; --brand-dark:#086342; --brand-bright:#22b573;
+    --brand-lime:#8fcb36; --brand-soft:#ecfdf5;
+    --green:var(--brand); --green-bg:#dcfce7;
     --red:#dc2626; --red-bg:#fee2e2;
     --amber:#d97706; --amber-bg:#fef3c7;
     --dark:#1e293b; --dark2:#334155;
     --gray:#64748b; --gray-bg:#f1f5f9;
     --border:#e2e8f0;
-    --blue:#2563eb;
+    --blue:var(--brand);
   }
   *{box-sizing:border-box;}
-  body{margin:0; font-family:"Anuphan",Tahoma,"Segoe UI",Arial,sans-serif; line-height:1.45; background:#f3f5f7; color:var(--dark);}
+  body{margin:0; font-family:"Anuphan",Tahoma,"Segoe UI",Arial,sans-serif; line-height:1.45; background:#f1f5f2; color:var(--dark);}
   header.topbar{
     background:#fff; color:#111827; padding:14px 30px;
     display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;
-    border-bottom:1px solid #e5e9ef;
+    border-bottom:1px solid #dce9e2;
   }
   header.topbar h1{margin:0; font-size:20px; font-weight:700; line-height:1.2;}
   header.topbar .sub{font-size:10px; line-height:1.4; color:#64748b; margin-top:2px;}
@@ -33,14 +37,14 @@
     background:transparent; border:none; color:#475569; padding:12px 8px; font-size:13px; font-weight:700; line-height:1.4; white-space:nowrap;
     cursor:pointer; border-bottom:3px solid transparent;
   }
-  nav.tabs button.active{color:#172033; border-bottom-color:var(--blue);}
+  nav.tabs button.active{color:#172033; border-bottom-color:var(--brand);}
   nav.tabs button:hover{color:#172033; background:transparent;}
   main{max-width:1200px; margin:0 auto; padding:24px;}
   select, button, input, textarea{font-family:inherit; font-size:14px; line-height:1.4; border-radius:6px; border:1px solid var(--border); padding:8px 12px;}
   button{cursor:pointer; background:#fff; color:var(--dark); border:1px solid #cbd5e1; transition:.15s; white-space:normal; overflow-wrap:anywhere;}
   button:hover{background:#f8fafc;}
-  button.primary{background:var(--blue); color:#fff; border-color:var(--blue);}
-  button.primary:hover{background:#1d4ed8;}
+  button.primary{background:var(--brand); color:#fff; border-color:var(--brand);}
+  button.primary:hover{background:var(--brand-dark);}
   button.danger{color:var(--red); border-color:var(--red);}
   button.danger:hover{background:var(--red-bg);}
   button.start{background:var(--green); color:#fff; border-color:var(--green); font-weight:700; padding:14px 22px; font-size:15px;}
@@ -81,7 +85,7 @@
   .print-summary .ps-section-title:first-of-type{margin-top:0;}
   .ps-timeline{display:flex; flex-direction:column; gap:4px;}
   .ps-timeline .ps-row{display:flex; gap:10px; font-size:13px; padding:4px 8px; border-radius:6px;}
-  .ps-timeline .ps-row.line-event{background:#eff6ff; color:#1d4ed8; font-weight:700;}
+  .ps-timeline .ps-row.line-event{background:var(--brand-soft); color:var(--brand-dark); font-weight:700;}
   .ps-timeline .ps-row.downtime-event{background:#fef2f2; color:#7f1d1d;}
   .ps-timeline .ps-row .ps-time{min-width:110px; font-weight:700;}
   .ps-timeline .empty-note{padding:8px;}
@@ -128,11 +132,11 @@
   .revenue-structure-block{background:#fff; border:1px solid #dbe2ea; border-radius:6px; padding:18px 22px 20px; margin:0;}
   .revenue-structure-title{text-align:center; font-size:16px; font-weight:800; color:#172033; margin-bottom:16px;}
   .revenue-structure-hero{display:grid; grid-template-columns:minmax(0,1fr) 220px minmax(0,1fr); align-items:center; gap:22px;}
-  .revenue-source{min-width:0; min-height:210px; padding:20px; border:1px solid #dbe2ea; border-top:5px solid #2563eb; border-radius:6px; text-align:center; background:#f8fbff; display:flex; flex-direction:column; justify-content:center;}
-  .revenue-source.tipping{border-top-color:#16a34a; background:#f7fcf8;}
+  .revenue-source{min-width:0; min-height:210px; padding:20px; border:1px solid #dbe2ea; border-top:5px solid var(--brand-dark); border-radius:6px; text-align:center; background:#f3fbf7; display:flex; flex-direction:column; justify-content:center;}
+  .revenue-source.tipping{border-top-color:var(--brand-lime); background:#f8fceb;}
   .revenue-source-name{font-size:12px; font-weight:800; color:#475569;}
-  .revenue-source-share{font-size:38px; line-height:1.1; font-weight:800; color:#2563eb; margin:8px 0 3px;}
-  .revenue-source.tipping .revenue-source-share{color:#16803b;}
+  .revenue-source-share{font-size:38px; line-height:1.1; font-weight:800; color:var(--brand-dark); margin:8px 0 3px;}
+  .revenue-source.tipping .revenue-source-share{color:#5f8f18;}
   .revenue-source-value{font-size:24px; line-height:1.2; font-weight:800; color:#172033; overflow-wrap:anywhere;}
   .revenue-source-range{font-size:9.5px; color:#64748b; margin-top:5px; min-height:14px;}
   .revenue-source-meta{font-size:10.5px; color:#475569; margin-top:12px; padding-top:10px; border-top:1px solid #dbe2ea; line-height:1.45;}
@@ -142,14 +146,14 @@
   .revenue-donut .donut-face-layer{transform:rotate(-90deg);}
   .revenue-donut circle{fill:none; stroke-width:6;}
   .revenue-donut .donut-bg{stroke:#e8edf3;}
-  .revenue-donut .donut-sales{stroke:#2563eb;}
-  .revenue-donut .donut-tipping{stroke:#16a34a;}
+  .revenue-donut .donut-sales{stroke:var(--brand-dark);}
+  .revenue-donut .donut-tipping{stroke:var(--brand-lime);}
   .revenue-donut-label{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1; text-align:center; font-size:10px; color:#64748b;}
   .revenue-donut-label strong{font-size:18px; color:#172033; max-width:105px; line-height:1.25;}
   .revenue-lead{font-size:11px; color:#475569; font-weight:700; margin-top:5px; line-height:1.4;}
   .revenue-ratio{display:flex; height:18px; background:#e8edf3; border-radius:4px; overflow:hidden; margin-top:20px;}
-  .revenue-ratio-sales{height:100%; background:#2563eb;}
-  .revenue-ratio-tipping{height:100%; background:#16a34a;}
+  .revenue-ratio-sales{height:100%; background:var(--brand-dark);}
+  .revenue-ratio-tipping{height:100%; background:var(--brand-lime);}
   .revenue-ratio-labels{display:flex; justify-content:space-between; gap:16px; margin-top:7px; font-size:10px; color:#64748b; font-weight:700;}
   .revenue-chart-block{margin-bottom:14px;}
   .chart-axis-layout{display:grid; grid-template-columns:65px minmax(0,1fr); gap:0;}
@@ -160,19 +164,19 @@
   .chart-grid-lines i{position:absolute; left:0; right:0; border-top:1px solid #e2e8f0;}
   .revenue-chart{position:absolute; inset:0; display:flex; align-items:flex-start; gap:3px; padding:0 7px;}
   .chart-day{height:100%; min-width:18px; flex:1; display:flex; align-items:flex-end; justify-content:center; gap:2px; position:relative; padding-bottom:23px;}
-  .chart-bar{width:8px; min-height:0; border-radius:2px 2px 0 0; background:#2563eb;}
-  .chart-bar.tipping{background:#16a34a;}
+  .chart-bar{width:8px; min-height:0; border-radius:2px 2px 0 0; background:var(--brand-dark);}
+  .chart-bar.tipping{background:var(--brand-lime);}
   .chart-label{position:absolute; bottom:4px; font-size:8px; color:#64748b;}
   .chart-legend{display:flex; gap:16px; justify-content:flex-end; margin-top:10px; font-size:10px; color:#64748b;}
-  .legend-dot{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; background:#2563eb;}
-  .legend-dot.tipping{background:#16a34a;}
+  .legend-dot{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; background:var(--brand-dark);}
+  .legend-dot.tipping{background:var(--brand-lime);}
   .revenue-breakdowns{display:grid; grid-template-columns:.85fr 1.15fr; gap:14px;}
   .revenue-report-table{font-size:10.5px;}
   .revenue-report-table th,.revenue-report-table td{padding:7px 8px;}
   .revenue-report-table th{background:#edf2f7;}
   .revenue-share-cell{min-width:105px;}
   .mini-track{height:5px; background:#e8edf3; border-radius:3px; overflow:hidden; margin-top:4px;}
-  .mini-fill{height:100%; background:#2563eb;}
+  .mini-fill{height:100%; background:var(--brand);}
   .revenue-share-export.exporting{width:1180px; max-width:none;}
   .delivery-toolbar h2{margin-bottom:0;}
   .delivery-toolbar .row{justify-content:flex-end;}
@@ -242,7 +246,7 @@
   .weekly-section-title{font-size:17px; font-weight:800; color:#172033;}
   .weekly-section-summary{font-size:11px; color:#64748b; text-align:right;}
   .weekly-production-grid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr));}
-  .weekly-production-item{min-width:0; min-height:130px; padding:18px; border-right:1px solid #e2e8f0; border-top:4px solid #2563eb; display:flex; flex-direction:column; justify-content:center;}
+  .weekly-production-item{min-width:0; min-height:130px; padding:18px; border-right:1px solid #e2e8f0; border-top:4px solid var(--brand); display:flex; flex-direction:column; justify-content:center;}
   .weekly-production-item:last-child{border-right:0;}
   .weekly-production-item.fine{border-top-color:#16a34a;}
   .weekly-production-item.heavy{border-top-color:#d97706;}
@@ -299,11 +303,9 @@
 
 <header class="topbar">
   <div class="brand-lockup">
-    <div class="brand-mark" aria-hidden="true">GP1</div>
-    <div>
-      <h1>GP1 Connect</h1>
-      <div class="sub">Operations &amp; Performance Management</div>
-    </div>
+    <img class="brand-logo" src="assets/gp1-connect-logo.png" width="1923" height="453" alt="GP1 Connect" fetchpriority="high">
+    <h1 class="sr-only">GP1 Connect</h1>
+    <div class="brand-subtitle"><span>Operations &amp;</span><strong>Performance Management</strong></div>
   </div>
   <div class="topbar-tools">
     <div class="topbar-system"><i></i><span>System Live</span></div>
@@ -322,6 +324,7 @@
   <section id="tab-home" class="tab-panel active">
     <section class="home-motion-hero" aria-labelledby="homeHeroTitle">
       <canvas id="homeMotionCanvas" aria-hidden="true"></canvas>
+      <img class="home-motion-mark" src="assets/gp1-connect-mark.png" width="392" height="445" alt="" aria-hidden="true">
       <div class="home-motion-content">
         <div class="home-motion-copy">
           <span>GP1 REAL-TIME OPERATIONS</span>
@@ -1224,7 +1227,7 @@
 
 <footer class="site-footer">
   <div class="site-footer-inner">
-    <div class="footer-brand"><strong>GP1 Connect</strong><span>Green Power 1 Co., Ltd.</span></div>
+    <div class="footer-brand"><img src="assets/gp1-connect-mark.png" width="392" height="445" alt="" aria-hidden="true"><div><strong>GP1 Connect</strong><span>Green Power 1 Co., Ltd.</span></div></div>
     <div class="footer-platform">Internal Operations &amp; Performance Platform</div>
     <div class="footer-meta"><span>RDF Operations</span><span>&copy; <b id="footerYear">2026</b> GP1</span></div>
   </div>

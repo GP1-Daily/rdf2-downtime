@@ -90,7 +90,7 @@
       const left = width * (width < 700 ? 0.08 : 0.4);
       const right = width * 1.08;
       context.lineWidth = 1;
-      context.strokeStyle = 'rgba(124, 146, 178, 0.12)';
+      context.strokeStyle = 'rgba(91, 167, 132, 0.12)';
 
       for (let index = 0; index <= 10; index += 1) {
         const ratio = index / 10;
@@ -155,7 +155,7 @@
       const startX = width * (width < 700 ? 0.02 : 0.37);
       const scanDistance = width - startX + 24;
       const scanX = startX + ((time * 0.035) % scanDistance);
-      context.fillStyle = 'rgba(96, 165, 250, 0.08)';
+      context.fillStyle = 'rgba(52, 211, 153, 0.08)';
       context.fillRect(scanX, 0, 1, height);
 
       drawSignal({
@@ -164,9 +164,9 @@
         speed: 1,
         variation: 1,
         width: 1.6,
-        color: 'rgba(74, 139, 255, 0.68)',
-        markerColor: '#73a7ff',
-        secondaryMarkerColor: 'rgba(115, 167, 255, 0.58)',
+        color: 'rgba(52, 211, 153, 0.7)',
+        markerColor: '#6ee7b7',
+        secondaryMarkerColor: 'rgba(110, 231, 183, 0.58)',
         markerSpeed: 0.055,
         offset: 0,
       }, time);
@@ -176,9 +176,9 @@
         speed: 0.82,
         variation: 2,
         width: 1.6,
-        color: 'rgba(34, 197, 94, 0.62)',
-        markerColor: '#38d979',
-        secondaryMarkerColor: 'rgba(56, 217, 121, 0.55)',
+        color: 'rgba(163, 230, 53, 0.58)',
+        markerColor: '#bef264',
+        secondaryMarkerColor: 'rgba(190, 242, 100, 0.5)',
         markerSpeed: 0.043,
         offset: width * 0.2,
       }, time);
@@ -188,14 +188,14 @@
         speed: 0.68,
         variation: 3,
         width: 1,
-        color: 'rgba(203, 213, 225, 0.28)',
-        markerColor: 'rgba(226, 232, 240, 0.78)',
-        secondaryMarkerColor: 'rgba(226, 232, 240, 0.4)',
+        color: 'rgba(45, 212, 191, 0.25)',
+        markerColor: 'rgba(94, 234, 212, 0.76)',
+        secondaryMarkerColor: 'rgba(94, 234, 212, 0.38)',
         markerSpeed: 0.034,
         offset: width * 0.44,
       }, time);
 
-      context.strokeStyle = 'rgba(148, 163, 184, 0.16)';
+      context.strokeStyle = 'rgba(110, 231, 183, 0.14)';
       context.lineWidth = 1;
       for (let y = 42; y < height - 34; y += 38) {
         context.beginPath();

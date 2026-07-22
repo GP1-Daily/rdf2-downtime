@@ -29,10 +29,10 @@
 .kpi-overview-date strong{display:block;font-size:14px;margin-top:4px;}
 
 .monthly-kpi-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:#fff;border-bottom:1px solid #dbe2ea;}
-.monthly-kpi-metric{--metric-color:#2563eb;min-width:0;padding:18px 16px;border-right:1px solid #e2e8f0;border-top:4px solid var(--metric-color);}
+.monthly-kpi-metric{--metric-color:var(--brand);min-width:0;padding:18px 16px;border-right:1px solid #e2e8f0;border-top:4px solid var(--metric-color);}
 .monthly-kpi-metric:last-child{border-right:0;}
-.monthly-kpi-metric.rdf2{--metric-color:#2563eb;}
-.monthly-kpi-metric.rdf3{--metric-color:#4f46e5;}
+.monthly-kpi-metric.rdf2{--metric-color:var(--brand);}
+.monthly-kpi-metric.rdf3{--metric-color:#0f766e;}
 .monthly-kpi-metric.fineFraction{--metric-color:#d97706;}
 .monthly-kpi-metric.msw{--metric-color:#0f766e;}
 .monthly-kpi-metric.complaints{--metric-color:#dc2626;}
