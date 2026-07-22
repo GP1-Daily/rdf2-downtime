@@ -3,6 +3,7 @@
   let homeMotion = null;
   const launcher = document.getElementById('workspaceLauncher');
   const launcherDialog = launcher.querySelector('.workspace-launcher-dialog');
+  const workspaceButton = document.getElementById('btnOpenWorkspace');
   let launcherTrigger = null;
 
   function setText(id, value) {
@@ -297,6 +298,7 @@
     launcherTrigger = document.activeElement;
     launcher.hidden = false;
     launcher.setAttribute('aria-hidden', 'false');
+    workspaceButton.setAttribute('aria-expanded', 'true');
     document.body.classList.add('workspace-launcher-open');
     requestAnimationFrame(() => launcherDialog.focus());
   }
@@ -304,6 +306,7 @@
   function closeWorkspaceLauncher() {
     launcher.hidden = true;
     launcher.setAttribute('aria-hidden', 'true');
+    workspaceButton.setAttribute('aria-expanded', 'false');
     document.body.classList.remove('workspace-launcher-open');
     if (launcherTrigger instanceof HTMLElement) launcherTrigger.focus();
   }
@@ -453,7 +456,7 @@
   document.getElementById('btnRefreshHome').addEventListener('click', () => {
     loadHomeDashboard().catch((error) => toast(error.message, true));
   });
-  document.getElementById('btnStartWorking').addEventListener('click', openWorkspaceLauncher);
+  workspaceButton.addEventListener('click', openWorkspaceLauncher);
   document.getElementById('btnCloseWorkspace').addEventListener('click', closeWorkspaceLauncher);
   document.getElementById('workspaceLauncherBackdrop').addEventListener('click', closeWorkspaceLauncher);
   launcher.querySelectorAll('[data-workspace-mode]').forEach((button) => {

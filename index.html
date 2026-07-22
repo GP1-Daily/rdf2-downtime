@@ -32,7 +32,7 @@
   }
   header.topbar h1{margin:0; font-size:20px; font-weight:700; line-height:1.2;}
   header.topbar .sub{font-size:10px; line-height:1.4; color:#64748b; margin-top:2px;}
-  nav.tabs{display:flex; align-items:center; gap:0; min-height:50px; background:#fff; padding:0 30px; border-bottom:1px solid #dfe4ea; overflow-x:auto;}
+  nav.tabs{position:sticky; top:0; z-index:100; display:flex; align-items:center; gap:0; min-height:50px; background:rgba(255,255,255,.96); padding:0 30px; border-bottom:1px solid #dfe4ea; overflow-x:auto; backdrop-filter:blur(12px);}
   nav.tabs button{
     background:transparent; border:none; color:#475569; padding:12px 8px; font-size:13px; font-weight:700; line-height:1.4; white-space:nowrap;
     cursor:pointer; border-bottom:3px solid transparent;
@@ -330,6 +330,7 @@
 
 <nav class="tabs">
   <button data-tab="home" class="active">Home</button>
+  <button type="button" class="nav-workspace-trigger" id="btnOpenWorkspace" aria-haspopup="dialog" aria-controls="workspaceLauncher" aria-expanded="false" title="เลือกส่วนงานที่ต้องการเข้าใช้"><span class="nav-workspace-icon" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>Work Areas</span></button>
   <div class="nav-context"><span>Current workspace</span><strong id="currentSection">Executive Overview</strong></div>
 </nav>
 
@@ -346,8 +347,6 @@
           <h2 id="homeHeroTitle">Performance<br>&amp; Revenue</h2>
           <p id="homeDateLabel">-</p>
           <div class="home-motion-actions">
-            <button type="button" class="home-start-working" id="btnStartWorking"><span>Start Working</span><b aria-hidden="true">&rarr;</b></button>
-            <button type="button" class="home-refresh" id="btnRefreshHome" title="Refresh dashboard" aria-label="Refresh dashboard"><span aria-hidden="true">&#8635;</span></button>
             <div class="home-live-state"><i></i><div><span>Live Data</span><strong id="homeDataStatus">Data Online</strong></div></div>
           </div>
         </div>
@@ -368,7 +367,7 @@
         <div><span>KPI Cycle</span><strong id="homeKPICycle">-</strong></div>
         <div><span>Tracking Week</span><strong id="homeWeekLabel">-</strong></div>
         <div><span>Revenue Month</span><strong id="homeMonthLabel">-</strong></div>
-        <div><span>Last Sync</span><strong id="homeLastSync">-</strong></div>
+        <div><span>Last Sync</span><div class="home-sync-row"><strong id="homeLastSync">-</strong><button type="button" class="home-refresh" id="btnRefreshHome" title="Refresh dashboard" aria-label="Refresh dashboard"><span aria-hidden="true">&#8635;</span></button></div></div>
       </div>
     </section>
 
@@ -1220,12 +1219,12 @@
   <div class="workspace-launcher-backdrop" id="workspaceLauncherBackdrop"></div>
   <section class="workspace-launcher-dialog" role="dialog" aria-modal="true" aria-labelledby="workspaceLauncherTitle" tabindex="-1">
     <header class="workspace-launcher-head">
-      <div><span>GP1 WORKSPACE</span><h2 id="workspaceLauncherTitle">Choose Your Workspace</h2><p>เลือกประเภทงานและส่วนที่ต้องการเข้าใช้งาน</p></div>
+      <div><span>GP1 CONNECT</span><h2 id="workspaceLauncherTitle">Select a Work Area</h2><p>เลือกส่วนงานที่ต้องการบันทึกข้อมูลหรือดูรายงาน</p></div>
       <button type="button" id="btnCloseWorkspace" aria-label="Close workspace selector" title="Close">&times;</button>
     </header>
     <div class="workspace-mode" role="tablist" aria-label="Workspace type">
       <button type="button" role="tab" aria-selected="true" data-workspace-mode="entry">Data Entry</button>
-      <button type="button" role="tab" aria-selected="false" data-workspace-mode="insights">Reports &amp; Insights</button>
+      <button type="button" role="tab" aria-selected="false" data-workspace-mode="insights">Reports &amp; Dashboards</button>
     </div>
     <div class="workspace-launch-panel" data-workspace-panel="entry">
       <button type="button" class="launcher-item" data-open-tab="today"><span>OPERATIONS</span><b>Control Room</b><small>Start-Stop Line &amp; Downtime</small><em>&rarr;</em></button>
