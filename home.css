@@ -91,8 +91,10 @@
 .home-kpi-metric-head strong span{color:inherit;font-size:inherit;font-weight:inherit;}
 .home-kpi-metric-head b{color:#b91c1c;font-size:7px;font-weight:800;white-space:nowrap;}
 .home-kpi-metric-head b.pass{color:#15803d;}
+.home-kpi-metric-head b.untracked{color:#64748b;}
 .home-kpi-track{height:4px;margin-top:5px;overflow:hidden;border-radius:2px;background:#e8ecf1;}
 .home-kpi-track i{display:block;height:100%;background:var(--brand);transform-origin:left;}
+.home-kpi-metric.rdf2LG .home-kpi-track i{background:#64748b;}
 .home-kpi-metric.complaints .home-kpi-track i{background:#16a34a;}
 .home-data-updated .home-kpi-metric{animation:kpiMetricIn .48s cubic-bezier(.22,.8,.3,1) both;animation-delay:calc(var(--metric-index) * 70ms);}
 .home-data-updated .home-kpi-track i{animation:trackReveal .8s cubic-bezier(.22,.8,.3,1) both;animation-delay:calc(var(--metric-index) * 70ms + 100ms);}

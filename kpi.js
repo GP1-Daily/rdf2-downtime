@@ -1,6 +1,7 @@
 (() => {
   const metricLabels = {
     rdf2: 'RDF2 Delivery',
+    rdf2LG: 'RDF2 LG Delivery',
     rdf3: 'RDF3 Delivery',
     fineFraction: 'Fine Fraction Delivery',
     msw: 'MSW to Production',
@@ -51,6 +52,7 @@
 
   function metricTarget(metric) {
     const digits = metric.key === 'complaints' ? 0 : 2;
+    if (!metric.tracked) return 'ยังไม่ได้ตั้งเป้าหมาย';
     return metric.limit
       ? `เป้าหมาย: น้อยกว่า ${number(metric.target, digits)} ${metric.unit}`
       : `เป้าหมาย: ${number(metric.target, digits)} ${metric.unit}`;
@@ -59,13 +61,13 @@
   function renderMetrics(selected) {
     document.getElementById('kpiMetricGrid').innerHTML = selected.metrics.map((metric) => {
       const progress = Math.min(100, Math.max(0, Number(metric.completionPct) || 0));
-      const status = metric.achieved ? 'PASS' : (metric.limit ? 'ABOVE LIMIT' : 'BELOW TARGET');
+      const status = !metric.tracked ? 'NO TARGET' : metric.achieved ? 'PASS' : (metric.limit ? 'ABOVE LIMIT' : 'BELOW TARGET');
       return `<article class="monthly-kpi-metric ${escapeHtml(metric.key)}">
         <div class="monthly-kpi-metric-name">${escapeHtml(metric.label)}</div>
         <div class="monthly-kpi-metric-value">${metricValue(metric)}</div>
         <div class="monthly-kpi-metric-target">${metricTarget(metric)}</div>
         <div class="monthly-kpi-progress"><span style="width:${progress}%"></span></div>
-        <div class="monthly-kpi-metric-status ${metric.achieved ? 'pass' : ''}">${status}</div>
+        <div class="monthly-kpi-metric-status ${metric.achieved ? 'pass' : ''} ${!metric.tracked ? 'untracked' : ''}">${status}</div>
       </article>`;
     }).join('');
   }
@@ -78,7 +80,8 @@
       const cells = history.map((period) => {
         const metric = period.metrics.find((item) => item.key === key);
         const digits = key === 'complaints' ? 0 : 2;
-        return `<td><span class="kpi-history-value"><i class="kpi-history-status ${metric.achieved ? 'pass' : ''}"></i>${number(metric.actual, digits)}</span><span class="kpi-history-target">เป้า ${number(metric.target, digits)}</span></td>`;
+        const target = metric.tracked ? `เป้า ${number(metric.target, digits)}` : 'ยังไม่ตั้งเป้า';
+        return `<td><span class="kpi-history-value"><i class="kpi-history-status ${metric.achieved ? 'pass' : ''} ${!metric.tracked ? 'untracked' : ''}"></i>${number(metric.actual, digits)}</span><span class="kpi-history-target">${target}</span></td>`;
       }).join('');
       return `<tr><td>${escapeHtml(metricLabels[key])}</td>${cells}</tr>`;
     }).join('');
@@ -115,6 +118,7 @@
   function setTargetForm(target, startDate) {
     document.getElementById('kpiTargetDate').value = startDate;
     document.getElementById('kpiTargetRDF2').value = target.rdf2;
+    document.getElementById('kpiTargetRDF2LG').value = target.rdf2LG;
     document.getElementById('kpiTargetRDF3').value = target.rdf3;
     document.getElementById('kpiTargetFine').value = target.fineFraction;
     document.getElementById('kpiTargetMSW').value = target.msw;
@@ -157,10 +161,10 @@
   async function loadTargets() {
     const data = await api('/api/kpi/targets');
     const tbody = document.getElementById('kpiTargetTable');
-    tbody.innerHTML = data.rows.length ? '' : '<tr><td colspan="7" class="empty-note">กำลังใช้ค่าเป้าหมายเริ่มต้นของระบบ</td></tr>';
+    tbody.innerHTML = data.rows.length ? '' : '<tr><td colspan="8" class="empty-note">กำลังใช้ค่าเป้าหมายเริ่มต้นของระบบ</td></tr>';
     data.rows.forEach((row) => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${escapeHtml(row.EffectiveDate)}</td><td>${number(row.RDF2Target)}</td><td>${number(row.RDF3Target)}</td><td>${number(row.FineFractionTarget)}</td><td>${number(row.MSWTarget)}</td><td>&lt; ${number(row.ComplaintLimit, 0)}</td><td><button class="danger">ลบ</button></td>`;
+      tr.innerHTML = `<td>${escapeHtml(row.EffectiveDate)}</td><td>${number(row.RDF2Target)}</td><td>${number(row.RDF2LGTarget)}</td><td>${number(row.RDF3Target)}</td><td>${number(row.FineFractionTarget)}</td><td>${number(row.MSWTarget)}</td><td>&lt; ${number(row.ComplaintLimit, 0)}</td><td><button class="danger">ลบ</button></td>`;
       tr.querySelector('button').addEventListener('click', async () => {
         if (!confirm('ลบชุดเป้าหมายนี้หรือไม่?')) return;
         try {
@@ -224,6 +228,7 @@
     const body = {
       effectiveDate: document.getElementById('kpiTargetDate').value,
       rdf2Target: document.getElementById('kpiTargetRDF2').value,
+      rdf2LGTarget: document.getElementById('kpiTargetRDF2LG').value,
       rdf3Target: document.getElementById('kpiTargetRDF3').value,
       fineFractionTarget: document.getElementById('kpiTargetFine').value,
       mswTarget: document.getElementById('kpiTargetMSW').value,

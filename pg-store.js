@@ -99,7 +99,8 @@ const TABLES = {
     table: 'kpi_daily_history',
     columns: {
       ID: 'id', EntryDate: 'entry_date', RDF2Tons: 'rdf2_tons', RDF3Tons: 'rdf3_tons',
-      FineFractionTons: 'fine_fraction_tons', MSWTons: 'msw_tons', Source: 'source',
+      RDF2LGTons: 'rdf2_lg_tons', FineFractionTons: 'fine_fraction_tons',
+      MSWTons: 'msw_tons', Source: 'source',
       CreatedAt: 'created_at',
     },
   },
@@ -114,7 +115,7 @@ const TABLES = {
     table: 'kpi_target_settings',
     columns: {
       ID: 'id', EffectiveDate: 'effective_date', RDF2Target: 'rdf2_target',
-      RDF3Target: 'rdf3_target', FineFractionTarget: 'fine_fraction_target',
+      RDF2LGTarget: 'rdf2_lg_target', RDF3Target: 'rdf3_target', FineFractionTarget: 'fine_fraction_target',
       MSWTarget: 'msw_target', ComplaintLimit: 'complaint_limit', CreatedAt: 'created_at',
     },
   },
@@ -239,6 +240,7 @@ function ensureSchema() {
         id SERIAL PRIMARY KEY,
         entry_date TEXT NOT NULL,
         rdf2_tons NUMERIC NOT NULL DEFAULT 0,
+        rdf2_lg_tons NUMERIC NOT NULL DEFAULT 0,
         rdf3_tons NUMERIC NOT NULL DEFAULT 0,
         fine_fraction_tons NUMERIC NOT NULL DEFAULT 0,
         msw_tons NUMERIC NOT NULL DEFAULT 0,
@@ -247,6 +249,8 @@ function ensureSchema() {
       );
       CREATE UNIQUE INDEX IF NOT EXISTS kpi_daily_history_date_idx
         ON kpi_daily_history (entry_date);
+      ALTER TABLE kpi_daily_history
+        ADD COLUMN IF NOT EXISTS rdf2_lg_tons NUMERIC NOT NULL DEFAULT 0;
       CREATE TABLE IF NOT EXISTS kpi_complaints (
         id SERIAL PRIMARY KEY,
         entry_date TEXT NOT NULL,
@@ -258,6 +262,7 @@ function ensureSchema() {
         id SERIAL PRIMARY KEY,
         effective_date TEXT NOT NULL,
         rdf2_target NUMERIC NOT NULL DEFAULT 1000,
+        rdf2_lg_target NUMERIC NOT NULL DEFAULT 0,
         rdf3_target NUMERIC NOT NULL DEFAULT 800,
         fine_fraction_target NUMERIC NOT NULL DEFAULT 800,
         msw_target NUMERIC NOT NULL DEFAULT 8000,
@@ -266,6 +271,39 @@ function ensureSchema() {
       );
       CREATE UNIQUE INDEX IF NOT EXISTS kpi_target_settings_date_idx
         ON kpi_target_settings (effective_date);
+      ALTER TABLE kpi_target_settings
+        ADD COLUMN IF NOT EXISTS rdf2_lg_target NUMERIC NOT NULL DEFAULT 0;
+
+      -- All RDF2 shipped to TPI is low grade. Keep this migration idempotent
+      -- so old sales, prices and delivery plans are corrected on deployment.
+      UPDATE sales
+        SET material = 'RDF2LG'
+        WHERE material = 'RDF2'
+          AND (lower(trim(customer)) = 'tpi' OR lower(trim(customer)) LIKE 'tpi %');
+
+      DELETE FROM revenue_prices old_price
+        USING revenue_prices lg_price
+        WHERE old_price.product = 'RDF2'
+          AND (lower(trim(old_price.customer)) = 'tpi' OR lower(trim(old_price.customer)) LIKE 'tpi %')
+          AND lg_price.product = 'RDF2LG'
+          AND lg_price.effective_date = old_price.effective_date
+          AND lower(trim(lg_price.customer)) = lower(trim(old_price.customer));
+      UPDATE revenue_prices
+        SET product = 'RDF2LG'
+        WHERE product = 'RDF2'
+          AND (lower(trim(customer)) = 'tpi' OR lower(trim(customer)) LIKE 'tpi %');
+
+      DELETE FROM weekly_delivery_plans old_plan
+        USING weekly_delivery_plans lg_plan
+        WHERE old_plan.product = 'RDF2'
+          AND (lower(trim(old_plan.customer)) = 'tpi' OR lower(trim(old_plan.customer)) LIKE 'tpi %')
+          AND lg_plan.product = 'RDF2LG'
+          AND lg_plan.week_start = old_plan.week_start
+          AND lower(trim(lg_plan.customer)) = lower(trim(old_plan.customer));
+      UPDATE weekly_delivery_plans
+        SET product = 'RDF2LG'
+        WHERE product = 'RDF2'
+          AND (lower(trim(customer)) = 'tpi' OR lower(trim(customer)) LIKE 'tpi %');
     `);
   }
   return schemaReady;

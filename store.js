@@ -18,10 +18,37 @@ const SHEETS = {
   RevenueTippingSettings: ['ID', 'EffectiveDate', 'RatePerTon', 'ExcludedCentralTons', 'ExcludedMinTons', 'ExcludedMaxTons', 'CreatedAt'],
   RevenueTippingDaily: ['ID', 'EntryDate', 'MSWTons', 'Note', 'CreatedAt'],
   WeeklyDeliveryPlans: ['ID', 'WeekStart', 'Customer', 'Product', 'PlanTons', 'CreatedAt'],
-  KPIDailyHistory: ['ID', 'EntryDate', 'RDF2Tons', 'RDF3Tons', 'FineFractionTons', 'MSWTons', 'Source', 'CreatedAt'],
+  KPIDailyHistory: ['ID', 'EntryDate', 'RDF2Tons', 'RDF3Tons', 'FineFractionTons', 'MSWTons', 'Source', 'CreatedAt', 'RDF2LGTons'],
   KPIComplaints: ['ID', 'EntryDate', 'Customer', 'Detail', 'CreatedAt'],
-  KPITargetSettings: ['ID', 'EffectiveDate', 'RDF2Target', 'RDF3Target', 'FineFractionTarget', 'MSWTarget', 'ComplaintLimit', 'CreatedAt'],
+  KPITargetSettings: ['ID', 'EffectiveDate', 'RDF2Target', 'RDF3Target', 'FineFractionTarget', 'MSWTarget', 'ComplaintLimit', 'CreatedAt', 'RDF2LGTarget'],
 };
+
+function isTPICustomer(value) {
+  return /^t\.?p\.?i(?:\s|$)/i.test(String(value || '').trim());
+}
+
+function migrateRDF2LowGrade(wb) {
+  let changed = false;
+  for (const [sheetName, productColumn, customerColumn] of [
+    ['Sales', 'Material', 'Customer'],
+    ['RevenuePrices', 'Product', 'Customer'],
+    ['WeeklyDeliveryPlans', 'Product', 'Customer'],
+  ]) {
+    const ws = wb.getWorksheet(sheetName);
+    if (!ws) continue;
+    const columns = SHEETS[sheetName];
+    const productIndex = columns.indexOf(productColumn) + 1;
+    const customerIndex = columns.indexOf(customerColumn) + 1;
+    ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber === 1) return;
+      if (row.getCell(productIndex).value === 'RDF2' && isTPICustomer(row.getCell(customerIndex).value)) {
+        row.getCell(productIndex).value = 'RDF2LG';
+        changed = true;
+      }
+    });
+  }
+  return changed;
+}
 
 // Serialize ALL access (reads and writes) to the workbook file through one
 // queue: concurrent requests (e.g. multiple tabs loading at once) must not
@@ -50,12 +77,24 @@ async function loadWorkbook() {
   await ensureWorkbook();
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(XLSX_PATH);
+  let changed = false;
   for (const [name, cols] of Object.entries(SHEETS)) {
     if (!wb.getWorksheet(name)) {
       const ws = wb.addWorksheet(name);
       ws.addRow(cols);
+      changed = true;
+      continue;
     }
+    const header = wb.getWorksheet(name).getRow(1);
+    cols.forEach((column, index) => {
+      if (!header.getCell(index + 1).value) {
+        header.getCell(index + 1).value = column;
+        changed = true;
+      }
+    });
   }
+  changed = migrateRDF2LowGrade(wb) || changed;
+  if (changed) await wb.xlsx.writeFile(XLSX_PATH);
   return wb;
 }
 

@@ -73,10 +73,12 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
 
   await post('/api/revenue/customers', { name: 'ลูกค้า A' });
   await post('/api/revenue/customers', { name: 'ลูกค้า B' });
+  await post('/api/revenue/customers', { name: 'TPI' });
   await post('/api/revenue/prices', { effectiveDate: '2026-07-01', customer: 'ลูกค้า A', product: 'RDF2', pricePerTon: 1000 });
   await post('/api/revenue/prices', { effectiveDate: '2026-07-01', customer: 'ลูกค้า A', product: 'FineFraction', pricePerTon: 500 });
   await post('/api/revenue/prices', { effectiveDate: '2026-07-01', customer: 'ลูกค้า A', product: 'RDF3', pricePerTon: 1500 });
   await post('/api/revenue/prices', { effectiveDate: '2026-07-01', customer: 'ลูกค้า B', product: 'RDF2', pricePerTon: 800 });
+  await post('/api/revenue/prices', { effectiveDate: '2026-07-01', customer: 'TPI', product: 'RDF2', pricePerTon: 190 });
   await post('/api/yield', { effectiveDate: '2026-07-01', rdf2Pct: 40, fineFractionPct: 20, heavyFractionPct: 15, metalPct: 5 });
   await post('/api/yield', { effectiveDate: '2026-07-08', rdf2Pct: 50, fineFractionPct: 10, heavyFractionPct: 20, metalPct: 5 });
   await post('/api/grab/import', {
@@ -90,6 +92,7 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   await post('/api/sales', { saleDate: '2026-07-05', material: 'RDF2', customer: 'ลูกค้า A', tons: 10 });
   await post('/api/sales', { saleDate: '2026-07-06', material: 'FineFraction', customer: 'ลูกค้า A', tons: 2 });
   await post('/api/sales', { saleDate: '2026-07-06', material: 'RDF2', customer: 'ยังไม่ Setup', tons: 1 });
+  await post('/api/sales', { saleDate: '2026-07-06', material: 'RDF2', customer: 'TPI', tons: 20 });
   await post('/api/revenue/rdf3-sales', { saleDate: '2026-07-07', customer: 'ลูกค้า A', tons: 4 });
   await post('/api/revenue/rdf3-sales', { saleDate: '2026-07-07', customer: 'ลูกค้าที่ไม่มี', tons: 1 }, 400);
   await post('/api/revenue/tipping-daily', { entryDate: '2026-07-05', mswTons: 320 });
@@ -99,23 +102,25 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   await post('/api/delivery-plans', { weekStart: '2026-07-06', customer: 'ลูกค้า A', product: 'RDF3', planTons: 5 });
   await post('/api/delivery-plans', { weekStart: '2026-07-06', customer: 'ลูกค้า A', product: 'FineFraction', planTons: 3 });
   await post('/api/delivery-plans', { weekStart: '2026-07-06', customer: 'ลูกค้า B', product: 'RDF2', planTons: 2 });
+  await post('/api/delivery-plans', { weekStart: '2026-07-06', customer: 'TPI', product: 'RDF2', planTons: 25 });
   await post('/api/delivery-plans', { weekStart: '2026-07-07', customer: 'ลูกค้า A', product: 'RDF2', planTons: 1 }, 400);
 
   const response = await fetch(`${baseUrl}/api/revenue/dashboard?month=2026-07`);
   const dashboard = await response.json();
   assert.equal(dashboard.ok, true);
-  assert.equal(dashboard.sales.base, 17000);
-  assert.equal(dashboard.sales.low, 15300);
-  assert.equal(dashboard.sales.high, 18700);
+  assert.equal(dashboard.sales.base, 20800);
+  assert.equal(dashboard.sales.low, 18720);
+  assert.ok(Math.abs(dashboard.sales.high - 22880) < 0.001);
   assert.equal(dashboard.sales.unresolvedCount, 1);
-  assert.equal(dashboard.sales.byProduct.length, 3);
+  assert.equal(dashboard.sales.byProduct.length, 4);
+  assert.equal(dashboard.sales.byProduct.find((row) => row.product === 'RDF2LG').revenue, 3800);
   assert.equal(dashboard.tipping.totalMSW, 400);
   assert.equal(dashboard.tipping.central, 55000);
   assert.equal(dashboard.tipping.low, 50000);
   assert.equal(dashboard.tipping.high, 60000);
-  assert.equal(dashboard.company.central, 72000);
-  assert.equal(dashboard.company.low, 65300);
-  assert.equal(dashboard.company.high, 78700);
+  assert.equal(dashboard.company.central, 75800);
+  assert.equal(dashboard.company.low, 68720);
+  assert.ok(Math.abs(dashboard.company.high - 82880) < 0.001);
   const dailyTipping = dashboard.daily.reduce((sum, row) => sum + row.tippingRevenue, 0);
   assert.ok(Math.abs(dailyTipping - dashboard.tipping.central) < 0.001);
 
@@ -128,7 +133,7 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   assert.equal(planDashboard.ok, true);
   assert.equal(planDashboard.weekEnd, '2026-07-12');
   assert.equal(planDashboard.weekEndExclusive, '2026-07-13');
-  assert.equal(planDashboard.customers.length, 2);
+  assert.equal(planDashboard.customers.length, 3);
   const planProducts = Object.fromEntries(planDashboard.customers[0].products.map((row) => [row.product, row]));
   assert.equal(planProducts.RDF2.actualTons, 0, 'Sunday before the week must not count toward Actual');
   assert.equal(planProducts.RDF2.diffTons, -6);
@@ -139,11 +144,15 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   assert.equal(planProducts.FineFraction.opportunityLoss, 500);
   assert.equal(planDashboard.customers[0].opportunityLoss, 8000);
   assert.equal(planDashboard.customers[1].opportunityLoss, 1600);
+  const tpiPlan = planDashboard.customers.find((customer) => customer.customer === 'TPI').products[0];
+  assert.equal(tpiPlan.product, 'RDF2LG');
+  assert.equal(tpiPlan.actualTons, 20);
+  assert.equal(tpiPlan.opportunityLoss, 950);
   assert.deepEqual(planDashboard.summary, {
-    shortfallTons: 10,
-    opportunityLoss: 9600,
+    shortfallTons: 15,
+    opportunityLoss: 10550,
     missingPriceCount: 0,
-    customerCount: 2,
+    customerCount: 3,
   });
 
   const weeklyResponse = await fetch(`${baseUrl}/api/weekly-report?weekStart=2026-07-06`);
@@ -160,13 +169,19 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
     Water: 12,
   });
   assert.equal(weekly.production.products.some((row) => row.product === 'Metal'), false);
-  assert.equal(weekly.sales.transactionCount, 3);
-  assert.equal(weekly.sales.totalTons, 7);
+  assert.equal(weekly.sales.transactionCount, 4);
+  assert.equal(weekly.sales.totalTons, 27);
   assert.deepEqual(Object.fromEntries(weekly.sales.byProduct.map((row) => [row.product, row.tons])), {
     RDF2: 1,
+    RDF2LG: 20,
     RDF3: 4,
     FineFraction: 2,
   });
   assert.equal(weekly.sales.byCustomer.find((row) => row.customer === 'ลูกค้า A').totalTons, 6);
   assert.equal(weekly.sales.byCustomer.find((row) => row.customer === 'ยังไม่ Setup').totalTons, 1);
+  assert.equal(weekly.sales.byCustomer.find((row) => row.customer === 'TPI').totalTons, 20);
+
+  const salesResponse = await fetch(`${baseUrl}/api/sales`);
+  const salesData = await salesResponse.json();
+  assert.equal(salesData.rows.find((row) => row.Customer === 'TPI').Material, 'RDF2LG');
 });

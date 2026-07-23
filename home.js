@@ -395,15 +395,18 @@
     const metricsElement = document.getElementById('homeKPIMetrics');
     metricsElement.innerHTML = selected.metrics.map((metric, index) => {
       const digits = metric.key === 'complaints' ? 0 : 2;
-      const target = metric.limit
-        ? `เป้า < ${num(metric.target, digits)}`
-        : `เป้า ${num(metric.target, digits)}`;
+      const target = !metric.tracked
+        ? 'ยังไม่ตั้งเป้า'
+        : metric.limit
+          ? `เป้า < ${num(metric.target, digits)}`
+          : `เป้า ${num(metric.target, digits)}`;
       const progress = Math.min(100, Math.max(0, Number(metric.completionPct) || 0));
+      const status = !metric.tracked ? 'NO TARGET' : metric.achieved ? 'PASS' : 'BELOW';
       return `<div class="home-kpi-metric ${escapeHtml(metric.key)}" style="--metric-index:${index}">
         <div class="home-kpi-metric-head">
           <span>${escapeHtml(metric.label)}</span>
           <strong><span data-kpi-actual="${index}">0 ${escapeHtml(metric.unit)}</span> / ${escapeHtml(target)}</strong>
-          <b class="${metric.achieved ? 'pass' : ''}">${metric.achieved ? 'PASS' : 'BELOW'}</b>
+          <b class="${metric.achieved ? 'pass' : ''} ${!metric.tracked ? 'untracked' : ''}">${status}</b>
         </div>
         <div class="home-kpi-track"><i style="width:${progress}%"></i></div>
       </div>`;

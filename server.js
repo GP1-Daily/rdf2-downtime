@@ -498,7 +498,15 @@ async function handleStockBaseline(req, res) {
   return sendJson(res, 404, { ok: false, error: 'not found' });
 }
 
-const SALES_MATERIALS = ['RDF2', 'FineFraction', 'Metal'];
+const SALES_MATERIALS = ['RDF2', 'RDF2LG', 'FineFraction', 'Metal'];
+
+function isTPICustomer(value) {
+  return /^t\.?p\.?i(?:\s|$)/i.test(String(value || '').trim());
+}
+
+function normalizeCustomerProduct(product, customer) {
+  return product === 'RDF2' && isTPICustomer(customer) ? 'RDF2LG' : product;
+}
 
 async function handleSales(req, res, parts) {
   if (req.method === 'GET' && parts.length === 0) {
@@ -512,11 +520,12 @@ async function handleSales(req, res, parts) {
     if (!saleDate || !material || !tons) {
       return sendJson(res, 400, { ok: false, error: 'ต้องระบุ saleDate, material, tons' });
     }
-    if (!SALES_MATERIALS.includes(material)) {
-      return sendJson(res, 400, { ok: false, error: 'material ต้องเป็น RDF2, FineFraction หรือ Metal' });
+    const normalizedMaterial = normalizeCustomerProduct(material, customer);
+    if (!SALES_MATERIALS.includes(normalizedMaterial)) {
+      return sendJson(res, 400, { ok: false, error: 'material ต้องเป็น RDF2, RDF2 LG, FineFraction หรือ Metal' });
     }
     const record = await store.appendRow('Sales', {
-      SaleDate: saleDate, Material: material, Customer: customer || '', Tons: Number(tons), Note: note || '',
+      SaleDate: saleDate, Material: normalizedMaterial, Customer: customer || '', Tons: Number(tons), Note: note || '',
     });
     return sendJson(res, 200, { ok: true, row: record });
   }
@@ -563,7 +572,7 @@ async function handleStock(req, res) {
   const salesTotals = { rdf2: 0, fineFraction: 0, metal: 0 };
   const relevantSales = salesRows.filter((r) => r.SaleDate >= baselineDate);
   for (const r of relevantSales) {
-    const key = r.Material === 'RDF2' ? 'rdf2' : r.Material === 'FineFraction' ? 'fineFraction' : 'metal';
+    const key = ['RDF2', 'RDF2LG'].includes(r.Material) ? 'rdf2' : r.Material === 'FineFraction' ? 'fineFraction' : 'metal';
     salesTotals[key] += Number(r.Tons) || 0;
   }
   totals.rdf2 -= salesTotals.rdf2;
@@ -582,7 +591,8 @@ async function handleStock(req, res) {
 
 // ---------- Company Revenue (isolated from existing stock logic) ----------
 
-const REVENUE_PRODUCTS = ['RDF2', 'RDF3', 'FineFraction'];
+const REVENUE_PRODUCTS = ['RDF2', 'RDF2LG', 'RDF3', 'FineFraction'];
+const DIRECT_SALES_PRODUCTS = ['RDF2', 'RDF2LG', 'FineFraction'];
 const DEFAULT_TIPPING_SETTING = {
   EffectiveDate: '2000-01-01',
   RatePerTon: 250,
@@ -673,7 +683,7 @@ async function handleRevenuePrices(req, res, parts) {
     const body = await readBody(req);
     const effectiveDate = cleanText(body.effectiveDate);
     const customer = cleanText(body.customer);
-    const product = cleanText(body.product);
+    const product = normalizeCustomerProduct(cleanText(body.product), customer);
     const pricePerTon = Number(body.pricePerTon);
     if (!effectiveDate || !customer || !REVENUE_PRODUCTS.includes(product) || !Number.isFinite(pricePerTon) || pricePerTon < 0) {
       return sendJson(res, 400, { ok: false, error: 'กรุณาระบุวันที่ ลูกค้า สินค้า และราคาต่อตันให้ถูกต้อง' });
@@ -805,7 +815,7 @@ async function handleRevenueDashboard(req, res, query) {
   ]);
 
   const sales = stockSales
-    .filter((row) => row.SaleDate >= bounds.start && row.SaleDate <= bounds.end && ['RDF2', 'FineFraction'].includes(row.Material))
+    .filter((row) => row.SaleDate >= bounds.start && row.SaleDate <= bounds.end && DIRECT_SALES_PRODUCTS.includes(row.Material))
     .map((row) => ({
       source: 'stock', sourceId: row.ID, date: row.SaleDate, product: row.Material,
       customer: cleanText(row.Customer), tons: Number(row.Tons) || 0,
@@ -915,6 +925,7 @@ async function handleRevenue(req, res, parts, query) {
 const DEFAULT_KPI_TARGET = {
   EffectiveDate: '2000-01-01',
   RDF2Target: 1000,
+  RDF2LGTarget: 0,
   RDF3Target: 800,
   FineFractionTarget: 800,
   MSWTarget: 8000,
@@ -923,6 +934,7 @@ const DEFAULT_KPI_TARGET = {
 
 const KPI_METRICS = [
   { key: 'rdf2', label: 'RDF2 Delivery', targetKey: 'RDF2Target', unit: 'ตัน' },
+  { key: 'rdf2LG', label: 'RDF2 LG Delivery', targetKey: 'RDF2LGTarget', unit: 'ตัน' },
   { key: 'rdf3', label: 'RDF3 Delivery', targetKey: 'RDF3Target', unit: 'ตัน' },
   { key: 'fineFraction', label: 'Fine Fraction Delivery', targetKey: 'FineFractionTarget', unit: 'ตัน' },
   { key: 'msw', label: 'MSW to Production', targetKey: 'MSWTarget', unit: 'ตัน' },
@@ -956,10 +968,10 @@ function kpiPeriodSummary(period, data) {
     (_, index) => lib.addDays(bounds.start, index),
   );
   const automatic = {
-    rdf2: new Map(), rdf3: new Map(), fineFraction: new Map(), msw: new Map(),
+    rdf2: new Map(), rdf2LG: new Map(), rdf3: new Map(), fineFraction: new Map(), msw: new Map(),
   };
   const automaticDates = {
-    rdf2: new Set(), rdf3: new Set(), fineFraction: new Set(), msw: new Set(),
+    rdf2: new Set(), rdf2LG: new Set(), rdf3: new Set(), fineFraction: new Set(), msw: new Set(),
   };
 
   for (const row of data.stockSales) {
@@ -967,6 +979,11 @@ function kpiPeriodSummary(period, data) {
     if (row.Material === 'RDF2') {
       addToDateMap(automatic.rdf2, row.SaleDate, row.Tons);
       automaticDates.rdf2.add(row.SaleDate);
+      automaticDates.rdf2LG.add(row.SaleDate);
+    } else if (row.Material === 'RDF2LG') {
+      addToDateMap(automatic.rdf2LG, row.SaleDate, row.Tons);
+      automaticDates.rdf2.add(row.SaleDate);
+      automaticDates.rdf2LG.add(row.SaleDate);
     } else if (row.Material === 'FineFraction') {
       addToDateMap(automatic.fineFraction, row.SaleDate, row.Tons);
       automaticDates.fineFraction.add(row.SaleDate);
@@ -984,15 +1001,16 @@ function kpiPeriodSummary(period, data) {
   }
 
   const historyByDate = new Map(data.historyRows.map((row) => [row.EntryDate, row]));
-  const actual = { rdf2: 0, rdf3: 0, fineFraction: 0, msw: 0, complaints: 0 };
+  const actual = { rdf2: 0, rdf2LG: 0, rdf3: 0, fineFraction: 0, msw: 0, complaints: 0 };
   const sourceDates = { live: new Set(), history: new Set() };
   const daily = dates.map((date) => {
     const historical = historyByDate.get(date);
     const values = {};
     const sources = {};
-    for (const metric of ['rdf2', 'rdf3', 'fineFraction', 'msw']) {
+    for (const metric of ['rdf2', 'rdf2LG', 'rdf3', 'fineFraction', 'msw']) {
       const historyKey = {
-        rdf2: 'RDF2Tons', rdf3: 'RDF3Tons', fineFraction: 'FineFractionTons', msw: 'MSWTons',
+        rdf2: 'RDF2Tons', rdf2LG: 'RDF2LGTons', rdf3: 'RDF3Tons',
+        fineFraction: 'FineFractionTons', msw: 'MSWTons',
       }[metric];
       if (automaticDates[metric].has(date)) {
         values[metric] = automatic[metric].get(date) || 0;
@@ -1019,7 +1037,8 @@ function kpiPeriodSummary(period, data) {
   const metrics = KPI_METRICS.map((metric) => {
     const target = Number(targetSetting[metric.targetKey]) || 0;
     const value = actual[metric.key];
-    const achieved = metric.limit ? value < target : value >= target;
+    const tracked = metric.limit || target > 0;
+    const achieved = tracked ? (metric.limit ? value < target : value >= target) : null;
     return {
       key: metric.key,
       label: metric.label,
@@ -1027,6 +1046,7 @@ function kpiPeriodSummary(period, data) {
       actual: value,
       target,
       limit: !!metric.limit,
+      tracked,
       achieved,
       completionPct: metric.limit
         ? (value < target ? 100 : Math.max(0, target / Math.max(value, 1) * 100))
@@ -1040,13 +1060,14 @@ function kpiPeriodSummary(period, data) {
     endDate: bounds.end,
     actual,
     metrics,
-    passedCount: metrics.filter((metric) => metric.achieved).length,
-    totalCount: metrics.length,
+    passedCount: metrics.filter((metric) => metric.achieved === true).length,
+    totalCount: metrics.filter((metric) => metric.tracked).length,
     complaints,
     target: {
       id: targetSetting.ID || null,
       effectiveDate: targetSetting.EffectiveDate,
       rdf2: Number(targetSetting.RDF2Target) || 0,
+      rdf2LG: Number(targetSetting.RDF2LGTarget) || 0,
       rdf3: Number(targetSetting.RDF3Target) || 0,
       fineFraction: Number(targetSetting.FineFractionTarget) || 0,
       msw: Number(targetSetting.MSWTarget) || 0,
@@ -1130,13 +1151,15 @@ async function handleKPITargets(req, res, parts) {
     const data = {
       EffectiveDate: cleanText(body.effectiveDate),
       RDF2Target: Number(body.rdf2Target),
+      RDF2LGTarget: Number(body.rdf2LGTarget),
       RDF3Target: Number(body.rdf3Target),
       FineFractionTarget: Number(body.fineFractionTarget),
       MSWTarget: Number(body.mswTarget),
       ComplaintLimit: Number(body.complaintLimit),
     };
     if (!validIsoDate(data.EffectiveDate)
-      || ![data.RDF2Target, data.RDF3Target, data.FineFractionTarget, data.MSWTarget].every((value) => Number.isFinite(value) && value >= 0)
+      || ![data.RDF2Target, data.RDF2LGTarget, data.RDF3Target, data.FineFractionTarget, data.MSWTarget]
+        .every((value) => Number.isFinite(value) && value >= 0)
       || !Number.isFinite(data.ComplaintLimit) || data.ComplaintLimit <= 0) {
       return sendJson(res, 400, { ok: false, error: 'กรุณากรอกเป้าหมาย KPI ให้ถูกต้อง' });
     }
@@ -1235,7 +1258,7 @@ async function handleWeeklyReport(req, res, query) {
 
   const salesRows = stockSales
     .filter((row) => row.SaleDate >= weekStart && row.SaleDate < weekEndExclusive
-      && ['RDF2', 'FineFraction'].includes(row.Material))
+      && DIRECT_SALES_PRODUCTS.includes(row.Material))
     .map((row) => ({
       date: row.SaleDate,
       product: row.Material,
@@ -1313,7 +1336,7 @@ async function handleWeeklyReport(req, res, query) {
 function deliveryActualRows(stockSales, rdf3Sales, weekStart, weekEndExclusive) {
   const rows = stockSales
     .filter((row) => row.SaleDate >= weekStart && row.SaleDate < weekEndExclusive
-      && ['RDF2', 'FineFraction'].includes(row.Material))
+      && DIRECT_SALES_PRODUCTS.includes(row.Material))
     .map((row) => ({
       customer: cleanText(row.Customer),
       product: row.Material,
@@ -1436,7 +1459,7 @@ async function handleDeliveryPlans(req, res, parts, query) {
     const body = await readBody(req);
     const weekStart = cleanText(body.weekStart);
     const customer = cleanText(body.customer);
-    const product = cleanText(body.product);
+    const product = normalizeCustomerProduct(cleanText(body.product), customer);
     const planTons = Number(body.planTons);
     if (!validIsoDate(weekStart) || mondayForDate(weekStart) !== weekStart) {
       return sendJson(res, 400, { ok: false, error: 'กรุณาเลือกวันจันทร์เริ่มสัปดาห์' });

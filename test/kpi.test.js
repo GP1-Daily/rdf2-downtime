@@ -82,6 +82,9 @@ test('monthly KPI uses live operational data and evaluates the 21-20 period', as
     saleDate: '2026-06-21', material: 'RDF2', customer: 'Customer A', tons: 40,
   });
   await request('/api/sales', 'POST', {
+    saleDate: '2026-06-21', material: 'RDF2', customer: 'TPI', tons: 20,
+  });
+  await request('/api/sales', 'POST', {
     saleDate: '2026-06-22', material: 'FineFraction', customer: 'Customer A', tons: 5,
   });
   await request('/api/revenue/customers', 'POST', { name: 'Customer A' });
@@ -95,6 +98,7 @@ test('monthly KPI uses live operational data and evaluates the 21-20 period', as
   await request('/api/kpi/targets', 'POST', {
     effectiveDate: '2026-06-21',
     rdf2Target: 40,
+    rdf2LGTarget: 20,
     rdf3Target: 60,
     fineFractionTarget: 5,
     mswTarget: 250,
@@ -111,18 +115,29 @@ test('monthly KPI uses live operational data and evaluates the 21-20 period', as
   assert.equal(weekly.kpi.msw.diffTons, 187.5);
   assert.equal(weekly.kpi.msw.attainmentPct, 400);
   assert.equal(weekly.kpi.msw.passed, true);
+  assert.deepEqual(Object.fromEntries(weekly.sales.byProduct.map((row) => [row.product, row.tons])), {
+    RDF2: 40,
+    RDF2LG: 20,
+    RDF3: 60,
+    FineFraction: 0,
+  });
+
+  const sales = await request('/api/sales');
+  assert.equal(sales.rows.find((row) => row.Customer === 'TPI').Material, 'RDF2LG');
 
   const dashboard = await request('/api/kpi/dashboard?period=2026-06');
   assert.equal(dashboard.selected.startDate, '2026-06-21');
   assert.equal(dashboard.selected.endDate, '2026-07-20');
   assert.deepEqual(dashboard.selected.actual, {
     rdf2: 40,
+    rdf2LG: 20,
     rdf3: 60,
     fineFraction: 5,
     msw: 250,
     complaints: 1,
   });
-  assert.equal(dashboard.selected.passedCount, 5, 'meeting a delivery target exactly must pass');
+  assert.equal(dashboard.selected.passedCount, 6, 'meeting a delivery target exactly must pass');
+  assert.equal(dashboard.selected.totalCount, 6);
   assert.equal(dashboard.selected.complaints.length, 1);
   assert.equal(dashboard.history.length, 6);
 
@@ -131,5 +146,5 @@ test('monthly KPI uses live operational data and evaluates the 21-20 period', as
   });
   const withSecondComplaint = await request('/api/kpi/dashboard?period=2026-06');
   assert.equal(withSecondComplaint.selected.actual.complaints, 2);
-  assert.equal(withSecondComplaint.selected.passedCount, 4, 'complaints must stay below the configured limit');
+  assert.equal(withSecondComplaint.selected.passedCount, 5, 'complaints must stay below the configured limit');
 });

@@ -28,10 +28,11 @@
 .kpi-overview-date span{display:block;font-size:10px;color:#64748b;}
 .kpi-overview-date strong{display:block;font-size:14px;margin-top:4px;}
 
-.monthly-kpi-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:#fff;border-bottom:1px solid #dbe2ea;}
+.monthly-kpi-metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));background:#fff;border-bottom:1px solid #dbe2ea;}
 .monthly-kpi-metric{--metric-color:var(--brand);min-width:0;padding:18px 16px;border-right:1px solid #e2e8f0;border-top:4px solid var(--metric-color);}
 .monthly-kpi-metric:last-child{border-right:0;}
 .monthly-kpi-metric.rdf2{--metric-color:var(--brand);}
+.monthly-kpi-metric.rdf2LG{--metric-color:#64748b;}
 .monthly-kpi-metric.rdf3{--metric-color:#0f766e;}
 .monthly-kpi-metric.fineFraction{--metric-color:#d97706;}
 .monthly-kpi-metric.msw{--metric-color:#0f766e;}
@@ -44,6 +45,7 @@
 .monthly-kpi-progress span{display:block;height:100%;background:var(--metric-color);}
 .monthly-kpi-metric-status{font-size:9px;font-weight:800;color:#b91c1c;}
 .monthly-kpi-metric-status.pass{color:#15803d;}
+.monthly-kpi-metric-status.untracked{color:#64748b;}
 
 .monthly-kpi-history,.monthly-kpi-complaints{background:#fff;padding:18px 22px;border-bottom:1px solid #dbe2ea;}
 .monthly-kpi-complaints{border-bottom:0;}
@@ -58,6 +60,7 @@
 .kpi-history-target{font-size:8px;color:#94a3b8;display:block;margin-top:1px;}
 .kpi-history-status{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;background:#dc2626;}
 .kpi-history-status.pass{background:#16a34a;}
+.kpi-history-status.untracked{background:#94a3b8;}
 .kpi-complaint-export-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 18px;}
 .kpi-complaint-export-row{display:grid;grid-template-columns:76px minmax(90px,140px) minmax(0,1fr);gap:8px;font-size:10px;padding:7px 9px;background:#f8fafc;border-left:3px solid #dc2626;}
 .kpi-complaint-export-row strong{overflow-wrap:anywhere;}
