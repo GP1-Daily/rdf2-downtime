@@ -1,10 +1,32 @@
 const params = new URLSearchParams(window.location.hash.slice(1));
-const accessToken = params.get('access_token');
-const refreshToken = params.get('refresh_token');
-const flowType = params.get('type');
+const inviteSessionKey = 'gp1_invite_session';
+let accessToken = params.get('access_token');
+let refreshToken = params.get('refresh_token');
+let flowType = params.get('type');
 const form = document.getElementById('inviteForm');
 const errorBox = document.getElementById('inviteError');
 const button = document.getElementById('inviteButton');
+
+try {
+  if (accessToken && refreshToken) {
+    sessionStorage.setItem(inviteSessionKey, JSON.stringify({
+      accessToken,
+      refreshToken,
+      flowType,
+      savedAt: Date.now(),
+    }));
+  } else {
+    const saved = JSON.parse(sessionStorage.getItem(inviteSessionKey) || 'null');
+    if (saved && saved.accessToken && saved.refreshToken
+      && Date.now() - Number(saved.savedAt) < 60 * 60 * 1000) {
+      accessToken = saved.accessToken;
+      refreshToken = saved.refreshToken;
+      flowType = saved.flowType;
+    } else {
+      sessionStorage.removeItem(inviteSessionKey);
+    }
+  }
+} catch {}
 
 history.replaceState(null, '', '/accept-invite.html');
 
@@ -42,6 +64,7 @@ form.addEventListener('submit', async (event) => {
     });
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error(data.error || 'ไม่สามารถเปิดใช้งานบัญชีได้');
+    try { sessionStorage.removeItem(inviteSessionKey); } catch {}
     window.location.replace('/');
   } catch (error) {
     showError(error.message);
