@@ -15,6 +15,17 @@ class AuthConfigurationError extends Error {
   }
 }
 
+function passwordResetFailure(error) {
+  const status = Number(error && error.status);
+  const message = String(error && error.message || '');
+  const rateLimited = status === 429 || /rate limit/i.test(message);
+  const failure = new Error(rateLimited
+    ? 'ส่งอีเมลตั้งรหัสผ่านถี่เกินขีดจำกัดของ Supabase กรุณารอประมาณ 1 ชั่วโมงหลังอีเมลฉบับล่าสุดแล้วลองใหม่'
+    : 'ไม่สามารถส่งลิงก์ตั้งรหัสผ่านใหม่ได้');
+  failure.statusCode = rateLimited ? 429 : 502;
+  return failure;
+}
+
 function createAuth(store) {
   const production = process.env.NODE_ENV === 'production';
   const hasDatabase = Boolean(process.env.DATABASE_URL);
@@ -271,7 +282,7 @@ function createAuth(store) {
     const { error } = await resetClient.auth.resetPasswordForEmail(String(email).trim().toLowerCase(), {
       redirectTo: redirectTo || process.env.AUTH_REDIRECT_URL,
     });
-    if (error) throw new Error('ไม่สามารถส่งลิงก์ตั้งรหัสผ่านใหม่ได้');
+    if (error) throw passwordResetFailure(error);
     return true;
   }
 
@@ -317,4 +328,4 @@ function createAuth(store) {
   };
 }
 
-module.exports = { createAuth, ROLES, ROLE_LEVEL, AuthConfigurationError };
+module.exports = { createAuth, ROLES, ROLE_LEVEL, AuthConfigurationError, passwordResetFailure };

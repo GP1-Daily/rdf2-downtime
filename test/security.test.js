@@ -11,7 +11,7 @@ process.env.DATABASE_URL = '';
 process.env.NODE_ENV = 'test';
 
 const store = require('../store');
-const { createAuth, ROLE_LEVEL } = require('../auth');
+const { createAuth, ROLE_LEVEL, passwordResetFailure } = require('../auth');
 const { requiredRole, hasRole } = require('../authorization');
 const { runWithRequestContext } = require('../request-context');
 const {
@@ -35,6 +35,12 @@ test('local development auth is explicit and role hierarchy is ordered', async (
   assert.equal(requiredRole('/api/security/users', 'GET'), 'admin');
   assert.equal(hasRole({ role: 'operator' }, 'viewer'), true);
   assert.equal(hasRole({ role: 'operator' }, 'supervisor'), false);
+});
+
+test('password reset rate limits return a clear retry response', () => {
+  const error = passwordResetFailure({ status: 429, message: 'email rate limit exceeded' });
+  assert.equal(error.statusCode, 429);
+  assert.match(error.message, /1 ชั่วโมง/);
 });
 
 test('required authentication fails closed and validates CSRF origin tokens', async () => {
