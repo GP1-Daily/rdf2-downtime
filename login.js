@@ -1,3 +1,10 @@
+const authFlowHash = window.location.hash;
+const authFlowParams = new URLSearchParams(authFlowHash.slice(1));
+
+if (authFlowParams.has('access_token') && authFlowParams.has('refresh_token')) {
+  window.location.replace(`/accept-invite.html${authFlowHash}`);
+}
+
 const form = document.getElementById('loginForm');
 const button = document.getElementById('loginButton');
 const errorBox = document.getElementById('loginError');
