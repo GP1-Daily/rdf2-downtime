@@ -187,9 +187,10 @@ async function loadAudit() {
 
 document.getElementById('inviteForm').addEventListener('submit', async (event) => {
   event.preventDefault();
+  const form = event.currentTarget;
   const message = document.getElementById('userMessage');
   message.hidden = true;
-  const submit = event.currentTarget.querySelector('button[type="submit"]');
+  const submit = form.querySelector('button[type="submit"]');
   submit.disabled = true;
   try {
     await api('/api/security/users', {
@@ -200,7 +201,7 @@ document.getElementById('inviteForm').addEventListener('submit', async (event) =
         role: document.getElementById('inviteRole').value,
       }),
     });
-    event.currentTarget.reset();
+    form.reset();
     message.textContent = 'ส่งคำเชิญแล้ว ผู้ใช้จะได้รับอีเมลสำหรับตั้งรหัสผ่าน';
     message.className = 'inline-message';
     message.hidden = false;
