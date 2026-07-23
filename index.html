@@ -4,13 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GP1 Connect</title>
-<link rel="icon" type="image/png" href="assets/gp1-connect-favicon.png?v=20260723-rdf2lg">
-<link rel="apple-touch-icon" href="assets/gp1-connect-favicon.png?v=20260723-rdf2lg">
+<link rel="icon" type="image/png" href="assets/gp1-connect-favicon.png?v=20260723-yieldsplit">
+<link rel="apple-touch-icon" href="assets/gp1-connect-favicon.png?v=20260723-yieldsplit">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
-<link rel="stylesheet" href="home.css?v=20260723-rdf2lg">
-<link rel="stylesheet" href="kpi.css?v=20260723-rdf2lg">
+<link rel="stylesheet" href="home.css?v=20260723-yieldsplit">
+<link rel="stylesheet" href="kpi.css?v=20260723-yieldsplit">
 <style>
   :root{
     --brand:#0f8a5f; --brand-dark:#086342; --brand-bright:#22b573;
@@ -56,6 +56,7 @@
   .entry-form{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px; align-items:end;}
   .entry-form label{font-size:12px; color:var(--gray); display:block; margin-bottom:4px;}
   .entry-form input, .entry-form select{width:100%;}
+  .yield-table{min-width:760px;}
   table{width:100%; border-collapse:collapse; font-size:13px;}
   th,td{padding:8px 10px; border-bottom:1px solid var(--border); text-align:center; line-height:1.45; overflow-wrap:anywhere;}
   th{background:var(--gray-bg); color:var(--dark2); font-weight:700;}
@@ -258,9 +259,10 @@
   .weekly-section-head{padding:14px 18px; border-bottom:1px solid #dbe2ea; display:flex; align-items:center; justify-content:space-between; gap:18px;}
   .weekly-section-title{font-size:17px; font-weight:800; color:#172033;}
   .weekly-section-summary{font-size:11px; color:#64748b; text-align:right;}
-  .weekly-production-grid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr));}
+  .weekly-production-grid{display:grid; grid-template-columns:repeat(5,minmax(0,1fr));}
   .weekly-production-item{min-width:0; min-height:130px; padding:18px; border-right:1px solid #e2e8f0; border-top:4px solid var(--brand); display:flex; flex-direction:column; justify-content:center;}
   .weekly-production-item:last-child{border-right:0;}
+  .weekly-production-item.rdf2lg{border-top-color:#64748b;}
   .weekly-production-item.fine{border-top-color:#16a34a;}
   .weekly-production-item.heavy{border-top-color:#d97706;}
   .weekly-production-item.water{border-top-color:#0891b2;}
@@ -282,8 +284,9 @@
   @media(max-width:900px){
     .weekly-incoming-strip{grid-template-columns:1fr;}
     .weekly-production-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
-    .weekly-production-item:nth-child(2){border-right:0;}
-    .weekly-production-item:nth-child(-n+2){border-bottom:1px solid #e2e8f0;}
+    .weekly-production-item{border-bottom:1px solid #e2e8f0;}
+    .weekly-production-item:nth-child(even){border-right:0;}
+    .weekly-production-item:last-child{grid-column:1/-1; border-right:0; border-bottom:0;}
   }
   @media(max-width:700px){
     main{padding:14px;}
@@ -308,7 +311,7 @@
     .weekly-msw-metric:first-child{border-top:0;}
     .weekly-report-body{padding:12px;}
     .weekly-production-grid{grid-template-columns:1fr;}
-    .weekly-production-item{min-height:105px; border-right:0; border-bottom:1px solid #e2e8f0;}
+    .weekly-production-item{min-height:105px; grid-column:auto; border-right:0; border-bottom:1px solid #e2e8f0;}
     .weekly-production-item:last-child{border-bottom:0;}
     .weekly-sales-product-totals{justify-content:flex-start;}
     .quick-actions button{flex-basis:100%;}
@@ -320,7 +323,7 @@
 
 <header class="topbar">
   <div class="brand-lockup">
-    <img class="brand-logo" src="assets/gp1-connect-logo.png?v=20260723-rdf2lg" width="1923" height="453" alt="GP1 Connect" fetchpriority="high">
+    <img class="brand-logo" src="assets/gp1-connect-logo.png?v=20260723-yieldsplit" width="1923" height="453" alt="GP1 Connect" fetchpriority="high">
     <h1 class="sr-only">GP1 Connect</h1>
     <div class="brand-subtitle"><span>Operations &amp;</span><strong>Performance Management</strong></div>
   </div>
@@ -348,7 +351,7 @@
   <section id="tab-home" class="tab-panel active home-is-loading" aria-busy="true">
     <section class="home-motion-hero" aria-labelledby="homeHeroTitle">
       <canvas id="homeMotionCanvas" aria-hidden="true"></canvas>
-      <img class="home-motion-mark" src="assets/gp1-connect-mark.png?v=20260723-rdf2lg" width="392" height="445" alt="" aria-hidden="true">
+      <img class="home-motion-mark" src="assets/gp1-connect-mark.png?v=20260723-yieldsplit" width="392" height="445" alt="" aria-hidden="true">
       <div class="home-motion-content">
         <div class="home-motion-copy">
           <span>GP1 REAL-TIME OPERATIONS</span>
@@ -795,8 +798,12 @@
           <input type="date" id="yieldDate">
         </div>
         <div>
-          <label>RDF2 %</label>
-          <input type="number" id="yieldRDF2" min="0" max="100" step="0.1">
+          <label>RDF2 เกรดปกติ %</label>
+          <input type="number" id="yieldRDF2" min="0" max="100" step="0.01">
+        </div>
+        <div>
+          <label>RDF2 LG %</label>
+          <input type="number" id="yieldRDF2LG" min="0" max="100" step="0.01">
         </div>
         <div>
           <label>Fine Fraction %</label>
@@ -816,8 +823,8 @@
       </div>
       <div class="hint">ส่วนที่เหลือจาก 100% จะคำนวณเป็น "น้ำ" ให้อัตโนมัติ ไม่ต้องกรอกเอง</div>
       <div class="scroll-table" style="margin-top:12px;">
-        <table>
-          <thead><tr><th>มีผลตั้งแต่</th><th>RDF2</th><th>Fine Fraction</th><th>Heavy Fraction</th><th>Metal</th><th>น้ำ</th><th>จัดการ</th></tr></thead>
+        <table class="yield-table">
+          <thead><tr><th>มีผลตั้งแต่</th><th>RDF2</th><th>RDF2 LG</th><th>Fine Fraction</th><th>Heavy Fraction</th><th>Metal</th><th>น้ำ</th><th>จัดการ</th></tr></thead>
           <tbody id="yieldTable"></tbody>
         </table>
       </div>
@@ -1259,7 +1266,7 @@
 
 <footer class="site-footer">
   <div class="site-footer-inner">
-    <div class="footer-brand"><img src="assets/gp1-connect-mark.png?v=20260723-rdf2lg" width="392" height="445" alt="" aria-hidden="true"><div><strong>GP1 Connect</strong><span>Green Power 1 Co., Ltd.</span></div></div>
+    <div class="footer-brand"><img src="assets/gp1-connect-mark.png?v=20260723-yieldsplit" width="392" height="445" alt="" aria-hidden="true"><div><strong>GP1 Connect</strong><span>Green Power 1 Co., Ltd.</span></div></div>
     <div class="footer-platform">Internal Operations &amp; Performance Platform</div>
     <div class="footer-meta"><span>RDF Operations</span><span>&copy; <b id="footerYear">2026</b> GP1</span></div>
   </div>
@@ -1275,7 +1282,7 @@ function ensureHtml2Canvas(){
   if (html2CanvasPromise) return html2CanvasPromise;
   html2CanvasPromise = new Promise((resolve, reject)=>{
     const script = document.createElement('script');
-    script.src = 'html2canvas.min.js?v=20260723-rdf2lg';
+    script.src = 'html2canvas.min.js?v=20260723-yieldsplit';
     script.async = true;
     script.onload = ()=>resolve(window.html2canvas);
     script.onerror = ()=>{
@@ -1572,7 +1579,7 @@ async function loadReport(){
   renderPrintSummary(date, data);
 }
 
-const PRODUCT_LABELS = { rdf2: 'RDF2', fineFraction: 'Fine Fraction', heavyFraction: 'Heavy Fraction', metal: 'Metal', water: 'น้ำ (ส่วนที่เหลือ)' };
+const PRODUCT_LABELS = { rdf2: 'RDF2', rdf2LG: 'RDF2 LG', fineFraction: 'Fine Fraction', heavyFraction: 'Heavy Fraction', metal: 'Metal', water: 'น้ำ (ส่วนที่เหลือ)' };
 
 async function loadProduction(date){
   const data = await api(`/api/production?date=${date}`);
@@ -1593,7 +1600,7 @@ async function loadProduction(date){
   }
   const p = data.production;
   tbody.innerHTML = Object.keys(PRODUCT_LABELS).map((key) => `
-    <tr><td class="left">${PRODUCT_LABELS[key]}</td><td>${p.yieldPct[key].toFixed(1)}%</td><td>${p.tons[key].toFixed(2)}</td></tr>
+    <tr><td class="left">${PRODUCT_LABELS[key]}</td><td>${p.yieldPct[key].toFixed(2)}%</td><td>${p.tons[key].toFixed(2)}</td></tr>
   `).join('');
 }
 
@@ -1817,13 +1824,13 @@ async function loadYieldTable(){
   const data = await api('/api/yield');
   const tbody = document.getElementById('yieldTable');
   if (data.rows.length === 0){
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-note">ยังไม่ได้ตั้งค่า Yield</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-note">ยังไม่ได้ตั้งค่า Yield</td></tr>';
     return;
   }
   tbody.innerHTML = data.rows.map(r => {
-    const water = Math.max(0, 100 - Number(r.RDF2Pct) - Number(r.FineFractionPct) - Number(r.HeavyFractionPct) - Number(r.MetalPct));
-    return `<tr><td>${r.EffectiveDate}</td><td>${Number(r.RDF2Pct).toFixed(1)}%</td><td>${Number(r.FineFractionPct).toFixed(1)}%</td>
-      <td>${Number(r.HeavyFractionPct).toFixed(1)}%</td><td>${Number(r.MetalPct).toFixed(1)}%</td><td>${water.toFixed(1)}%</td>
+    const water = Math.max(0, 100 - Number(r.RDF2Pct) - Number(r.RDF2LGPct) - Number(r.FineFractionPct) - Number(r.HeavyFractionPct) - Number(r.MetalPct));
+    return `<tr><td>${r.EffectiveDate}</td><td>${Number(r.RDF2Pct).toFixed(2)}%</td><td>${Number(r.RDF2LGPct).toFixed(2)}%</td><td>${Number(r.FineFractionPct).toFixed(2)}%</td>
+      <td>${Number(r.HeavyFractionPct).toFixed(2)}%</td><td>${Number(r.MetalPct).toFixed(2)}%</td><td>${water.toFixed(2)}%</td>
       <td><button class="danger" data-id="${r.ID}">ลบ</button></td></tr>`;
   }).join('');
   tbody.querySelectorAll('button[data-id]').forEach(btn => {
@@ -1837,15 +1844,16 @@ async function loadYieldTable(){
 onClickGuarded(document.getElementById('btnAddYield'), async ()=>{
   const effectiveDate = document.getElementById('yieldDate').value;
   const rdf2Pct = document.getElementById('yieldRDF2').value;
+  const rdf2LGPct = document.getElementById('yieldRDF2LG').value;
   const fineFractionPct = document.getElementById('yieldFine').value;
   const heavyFractionPct = document.getElementById('yieldHeavy').value;
   const metalPct = document.getElementById('yieldMetal').value;
-  if (!effectiveDate || rdf2Pct === '' || fineFractionPct === '' || heavyFractionPct === '' || metalPct === ''){
-    toast('กรุณากรอกวันที่และเปอร์เซ็นต์ทั้ง 4 ค่า', true); return;
+  if (!effectiveDate || rdf2Pct === '' || rdf2LGPct === '' || fineFractionPct === '' || heavyFractionPct === '' || metalPct === ''){
+    toast('กรุณากรอกวันที่และเปอร์เซ็นต์ Yield ให้ครบ', true); return;
   }
   try{
     await api('/api/yield', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ effectiveDate, rdf2Pct, fineFractionPct, heavyFractionPct, metalPct }) });
+      body: JSON.stringify({ effectiveDate, rdf2Pct, rdf2LGPct, fineFractionPct, heavyFractionPct, metalPct }) });
     toast('บันทึกค่า Yield แล้ว');
     loadYieldTable();
   }catch(e){ toast(e.message, true); }
@@ -1989,10 +1997,10 @@ function deliverySafeFileName(value){
 
 // ---------------- WEEKLY PRODUCTION REPORT TAB ----------------
 const weeklyProductionLabels = {
-  RDF2:'RDF2', FineFraction:'Fine Fraction', HeavyFraction:'Heavy Fraction', Water:'น้ำ',
+  RDF2:'RDF2', RDF2LG:'RDF2 LG', FineFraction:'Fine Fraction', HeavyFraction:'Heavy Fraction', Water:'น้ำ',
 };
 const weeklyProductionClasses = {
-  RDF2:'rdf2', FineFraction:'fine', HeavyFraction:'heavy', Water:'water',
+  RDF2:'rdf2', RDF2LG:'rdf2lg', FineFraction:'fine', HeavyFraction:'heavy', Water:'water',
 };
 
 async function loadWeeklyReport(){
@@ -2598,7 +2606,7 @@ document.addEventListener('gp1:tabchange', (event)=>{
 });
 initializeAppTab(initialTab && TAB_TITLES[initialTab] ? initialTab : 'home').catch(e=>toast(e.message, true));
 </script>
-<script src="kpi.js?v=20260723-rdf2lg"></script>
-<script src="home.js?v=20260723-rdf2lg"></script>
+<script src="kpi.js?v=20260723-yieldsplit"></script>
+<script src="home.js?v=20260723-yieldsplit"></script>
 </body>
 </html>

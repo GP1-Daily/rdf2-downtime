@@ -36,7 +36,8 @@ const TABLES = {
   YieldSettings: {
     table: 'yield_settings',
     columns: {
-      ID: 'id', EffectiveDate: 'effective_date', RDF2Pct: 'rdf2_pct', FineFractionPct: 'fine_fraction_pct',
+      ID: 'id', EffectiveDate: 'effective_date', RDF2Pct: 'rdf2_pct', RDF2LGPct: 'rdf2_lg_pct',
+      FineFractionPct: 'fine_fraction_pct',
       HeavyFractionPct: 'heavy_fraction_pct', MetalPct: 'metal_pct', CreatedAt: 'created_at',
     },
   },
@@ -158,11 +159,24 @@ function ensureSchema() {
         id SERIAL PRIMARY KEY,
         effective_date TEXT NOT NULL,
         rdf2_pct NUMERIC NOT NULL,
+        rdf2_lg_pct NUMERIC,
         fine_fraction_pct NUMERIC NOT NULL,
         heavy_fraction_pct NUMERIC NOT NULL,
         metal_pct NUMERIC NOT NULL,
         created_at TIMESTAMPTZ DEFAULT now()
       );
+      ALTER TABLE yield_settings
+        ADD COLUMN IF NOT EXISTS rdf2_lg_pct NUMERIC;
+      -- Split each legacy RDF2 yield into 70% normal grade and 30% low grade.
+      -- Subtracting the rounded LG value preserves the original RDF2 total.
+      UPDATE yield_settings
+        SET rdf2_lg_pct = round(rdf2_pct * 0.30, 2),
+            rdf2_pct = rdf2_pct - round(rdf2_pct * 0.30, 2)
+        WHERE rdf2_lg_pct IS NULL;
+      ALTER TABLE yield_settings
+        ALTER COLUMN rdf2_lg_pct SET DEFAULT 0;
+      ALTER TABLE yield_settings
+        ALTER COLUMN rdf2_lg_pct SET NOT NULL;
       CREATE TABLE IF NOT EXISTS stock_baseline (
         id SERIAL PRIMARY KEY,
         baseline_date TEXT NOT NULL,

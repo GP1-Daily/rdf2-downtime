@@ -412,18 +412,33 @@ function getApplicableYield(yieldRows, date) {
   return applicable.length ? applicable[applicable.length - 1] : null;
 }
 
+function splitLegacyRDF2Yield(totalPct) {
+  const rdf2LG = Math.round((totalPct * 0.30 + Number.EPSILON) * 100) / 100;
+  const rdf2 = Math.round((totalPct - rdf2LG + Number.EPSILON) * 100) / 100;
+  return { rdf2, rdf2LG };
+}
+
 function computeProduction(incomingWaste, yieldSetting) {
   if (!yieldSetting || incomingWaste <= 0) return null;
   const rdf2Pct = Number(yieldSetting.RDF2Pct) || 0;
+  const rdf2LGPct = Number(yieldSetting.RDF2LGPct) || 0;
   const fineFractionPct = Number(yieldSetting.FineFractionPct) || 0;
   const heavyFractionPct = Number(yieldSetting.HeavyFractionPct) || 0;
   const metalPct = Number(yieldSetting.MetalPct) || 0;
-  const waterPct = Math.max(0, 100 - rdf2Pct - fineFractionPct - heavyFractionPct - metalPct);
+  const waterPct = Math.max(0, 100 - rdf2Pct - rdf2LGPct - fineFractionPct - heavyFractionPct - metalPct);
   return {
     incomingWaste,
-    yieldPct: { rdf2: rdf2Pct, fineFraction: fineFractionPct, heavyFraction: heavyFractionPct, metal: metalPct, water: waterPct },
+    yieldPct: {
+      rdf2: rdf2Pct,
+      rdf2LG: rdf2LGPct,
+      fineFraction: fineFractionPct,
+      heavyFraction: heavyFractionPct,
+      metal: metalPct,
+      water: waterPct,
+    },
     tons: {
       rdf2: incomingWaste * rdf2Pct / 100,
+      rdf2LG: incomingWaste * rdf2LGPct / 100,
       fineFraction: incomingWaste * fineFractionPct / 100,
       heavyFraction: incomingWaste * heavyFractionPct / 100,
       metal: incomingWaste * metalPct / 100,
@@ -452,15 +467,24 @@ async function handleYield(req, res, parts) {
   }
   if (req.method === 'POST' && parts.length === 0) {
     const body = await readBody(req);
-    const { effectiveDate, rdf2Pct, fineFractionPct, heavyFractionPct, metalPct } = body;
+    const { effectiveDate, rdf2Pct, rdf2LGPct, fineFractionPct, heavyFractionPct, metalPct } = body;
     if (!effectiveDate || [rdf2Pct, fineFractionPct, heavyFractionPct, metalPct].some((v) => v === undefined || v === null || v === '')) {
       return sendJson(res, 400, { ok: false, error: 'ต้องระบุ effectiveDate และเปอร์เซ็นต์ทั้ง 4 ค่า' });
     }
-    const sum = Number(rdf2Pct) + Number(fineFractionPct) + Number(heavyFractionPct) + Number(metalPct);
+    const hasExplicitRDF2LG = rdf2LGPct !== undefined && rdf2LGPct !== null && rdf2LGPct !== '';
+    const legacySplit = splitLegacyRDF2Yield(Number(rdf2Pct));
+    const normalizedRDF2Pct = hasExplicitRDF2LG ? Number(rdf2Pct) : legacySplit.rdf2;
+    const normalizedRDF2LGPct = hasExplicitRDF2LG ? Number(rdf2LGPct) : legacySplit.rdf2LG;
+    const values = [normalizedRDF2Pct, normalizedRDF2LGPct, Number(fineFractionPct), Number(heavyFractionPct), Number(metalPct)];
+    if (values.some((value) => !Number.isFinite(value) || value < 0)) {
+      return sendJson(res, 400, { ok: false, error: 'เปอร์เซ็นต์ Yield ต้องเป็นตัวเลขตั้งแต่ 0 ขึ้นไป' });
+    }
+    const sum = values.reduce((total, value) => total + value, 0);
     if (sum > 100) return sendJson(res, 400, { ok: false, error: 'ผลรวมเปอร์เซ็นต์ต้องไม่เกิน 100' });
     const record = await store.appendRow('YieldSettings', {
       EffectiveDate: effectiveDate,
-      RDF2Pct: Number(rdf2Pct),
+      RDF2Pct: normalizedRDF2Pct,
+      RDF2LGPct: normalizedRDF2LGPct,
       FineFractionPct: Number(fineFractionPct),
       HeavyFractionPct: Number(heavyFractionPct),
       MetalPct: Number(metalPct),
@@ -562,7 +586,7 @@ async function handleStock(req, res) {
     const yieldSetting = getApplicableYield(yieldRows, date);
     const prod = computeProduction(weight, yieldSetting);
     if (!prod) continue;
-    totals.rdf2 += prod.tons.rdf2;
+    totals.rdf2 += prod.tons.rdf2 + prod.tons.rdf2LG;
     totals.fineFraction += prod.tons.fineFraction;
     totals.metal += prod.tons.metal;
     dailyProduction.push({ date, incomingWaste: weight, tons: prod.tons });
@@ -1190,6 +1214,7 @@ async function handleKPI(req, res, parts, query) {
 
 const WEEKLY_PRODUCTION_PRODUCTS = [
   { product: 'RDF2', tonsKey: 'rdf2' },
+  { product: 'RDF2LG', tonsKey: 'rdf2LG' },
   { product: 'FineFraction', tonsKey: 'fineFraction' },
   { product: 'HeavyFraction', tonsKey: 'heavyFraction' },
   { product: 'Water', tonsKey: 'water' },

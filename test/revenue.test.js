@@ -79,7 +79,10 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   await post('/api/revenue/prices', { effectiveDate: '2026-07-01', customer: 'ลูกค้า A', product: 'RDF3', pricePerTon: 1500 });
   await post('/api/revenue/prices', { effectiveDate: '2026-07-01', customer: 'ลูกค้า B', product: 'RDF2', pricePerTon: 800 });
   await post('/api/revenue/prices', { effectiveDate: '2026-07-01', customer: 'TPI', product: 'RDF2', pricePerTon: 190 });
-  await post('/api/yield', { effectiveDate: '2026-07-01', rdf2Pct: 40, fineFractionPct: 20, heavyFractionPct: 15, metalPct: 5 });
+  const legacyYield = await post('/api/yield', { effectiveDate: '2026-06-01', rdf2Pct: 33.32, fineFractionPct: 20, heavyFractionPct: 15, metalPct: 5 });
+  assert.equal(legacyYield.row.RDF2Pct, 23.32);
+  assert.equal(legacyYield.row.RDF2LGPct, 10);
+  await post('/api/yield', { effectiveDate: '2026-07-01', rdf2Pct: 28, rdf2LGPct: 12, fineFractionPct: 20, heavyFractionPct: 15, metalPct: 5 });
   await post('/api/yield', { effectiveDate: '2026-07-08', rdf2Pct: 50, fineFractionPct: 10, heavyFractionPct: 20, metalPct: 5 });
   await post('/api/grab/import', {
     reportDate: '2026-07-06', sourceFile: 'test.csv', replace: true,
@@ -163,7 +166,8 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   assert.equal(weekly.production.uncalculatedIncomingTons, 0);
   assert.deepEqual(weekly.production.missingYieldDates, []);
   assert.deepEqual(Object.fromEntries(weekly.production.products.map((row) => [row.product, row.tons])), {
-    RDF2: 32,
+    RDF2: 22.4,
+    RDF2LG: 9.6,
     FineFraction: 10,
     HeavyFraction: 12.5,
     Water: 12,

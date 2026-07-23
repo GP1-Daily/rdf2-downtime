@@ -9,7 +9,7 @@ const SHEETS = {
   Downtime: ['ID', 'EntryDate', 'StartTime', 'EndTime', 'Reason', 'Note', 'CreatedAt'],
   LineTime: ['ID', 'EntryDate', 'EventType', 'Time', 'Note', 'CreatedAt', 'StopType'],
   GrabCrane: ['ID', 'ReportDate', 'DateTime', 'Weight', 'SourceFile', 'CreatedAt'],
-  YieldSettings: ['ID', 'EffectiveDate', 'RDF2Pct', 'FineFractionPct', 'HeavyFractionPct', 'MetalPct', 'CreatedAt'],
+  YieldSettings: ['ID', 'EffectiveDate', 'RDF2Pct', 'FineFractionPct', 'HeavyFractionPct', 'MetalPct', 'CreatedAt', 'RDF2LGPct'],
   StockBaseline: ['ID', 'BaselineDate', 'RDF2Tons', 'FineFractionTons', 'MetalTons', 'CreatedAt'],
   Sales: ['ID', 'SaleDate', 'Material', 'Customer', 'Tons', 'Note', 'CreatedAt'],
   RevenueCustomers: ['ID', 'Name', 'Active', 'CreatedAt'],
@@ -47,6 +47,27 @@ function migrateRDF2LowGrade(wb) {
       }
     });
   }
+  return changed;
+}
+
+function migrateYieldSplit(wb) {
+  const ws = wb.getWorksheet('YieldSettings');
+  if (!ws) return false;
+  const columns = SHEETS.YieldSettings;
+  const rdf2Index = columns.indexOf('RDF2Pct') + 1;
+  const rdf2LGIndex = columns.indexOf('RDF2LGPct') + 1;
+  let changed = false;
+  ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const currentLG = row.getCell(rdf2LGIndex).value;
+    if (currentLG !== null && currentLG !== undefined && currentLG !== '') return;
+    const legacyRDF2 = Number(row.getCell(rdf2Index).value);
+    if (!Number.isFinite(legacyRDF2)) return;
+    const rdf2LG = Math.round((legacyRDF2 * 0.30 + Number.EPSILON) * 100) / 100;
+    row.getCell(rdf2Index).value = Math.round((legacyRDF2 - rdf2LG + Number.EPSILON) * 100) / 100;
+    row.getCell(rdf2LGIndex).value = rdf2LG;
+    changed = true;
+  });
   return changed;
 }
 
@@ -94,6 +115,7 @@ async function loadWorkbook() {
     });
   }
   changed = migrateRDF2LowGrade(wb) || changed;
+  changed = migrateYieldSplit(wb) || changed;
   if (changed) await wb.xlsx.writeFile(XLSX_PATH);
   return wb;
 }
