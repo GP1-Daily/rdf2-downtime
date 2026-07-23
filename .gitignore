@@ -1,3 +1,9 @@
 node_modules/
 RDF2_Downtime.xlsx
 .env
+.env.*
+!.env.example
+*.log
+backups/
+*.backup.json
+*.backup.json.gz

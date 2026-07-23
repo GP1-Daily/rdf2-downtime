@@ -1,5 +1,7 @@
 const path = require('path');
+const fs = require('fs');
 const ExcelJS = require('exceljs');
+const { getRequestContext } = require('./request-context');
 
 const XLSX_PATH = process.env.RDF2_XLSX_PATH
   ? path.resolve(process.env.RDF2_XLSX_PATH)
@@ -21,7 +23,13 @@ const SHEETS = {
   KPIDailyHistory: ['ID', 'EntryDate', 'RDF2Tons', 'RDF3Tons', 'FineFractionTons', 'MSWTons', 'Source', 'CreatedAt', 'RDF2LGTons'],
   KPIComplaints: ['ID', 'EntryDate', 'Customer', 'Detail', 'CreatedAt'],
   KPITargetSettings: ['ID', 'EffectiveDate', 'RDF2Target', 'RDF3Target', 'FineFractionTarget', 'MSWTarget', 'ComplaintLimit', 'CreatedAt', 'RDF2LGTarget'],
+  AppUsers: ['ID', 'AuthUserID', 'Email', 'DisplayName', 'Role', 'Active', 'CreatedAt', 'UpdatedAt'],
+  AuditLog: ['ID', 'Action', 'Entity', 'RecordID', 'ActorUserID', 'ActorEmail', 'BeforeData', 'AfterData', 'RequestID', 'IPAddress', 'UserAgent', 'CreatedAt'],
+  DeletedRecords: ['ID', 'Entity', 'OriginalID', 'Snapshot', 'DeletedBy', 'DeletedByEmail', 'DeletedAt', 'RestoredBy', 'RestoredByEmail', 'RestoredAt'],
 };
+
+const SYSTEM_SHEETS = new Set(['AuditLog', 'DeletedRecords']);
+const JSON_COLUMNS = new Set(['BeforeData', 'AfterData', 'Snapshot']);
 
 function isTPICustomer(value) {
   return /^t\.?p\.?i(?:\s|$)/i.test(String(value || '').trim());
@@ -82,20 +90,30 @@ function serialize(fn) {
 }
 
 let ensured = false;
+let cachedWorkbook = null;
+let cachedMtimeMs = -1;
+
+async function saveWorkbook(wb) {
+  await wb.xlsx.writeFile(XLSX_PATH);
+  cachedWorkbook = wb;
+  cachedMtimeMs = fs.statSync(XLSX_PATH).mtimeMs;
+}
+
 async function ensureWorkbook() {
-  const fs = require('fs');
   if (ensured || fs.existsSync(XLSX_PATH)) { ensured = true; return; }
   const wb = new ExcelJS.Workbook();
   for (const [name, cols] of Object.entries(SHEETS)) {
     const ws = wb.addWorksheet(name);
     ws.addRow(cols);
   }
-  await wb.xlsx.writeFile(XLSX_PATH);
+  await saveWorkbook(wb);
   ensured = true;
 }
 
 async function loadWorkbook() {
   await ensureWorkbook();
+  const mtimeMs = fs.statSync(XLSX_PATH).mtimeMs;
+  if (cachedWorkbook && cachedMtimeMs === mtimeMs) return cachedWorkbook;
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(XLSX_PATH);
   let changed = false;
@@ -116,7 +134,11 @@ async function loadWorkbook() {
   }
   changed = migrateRDF2LowGrade(wb) || changed;
   changed = migrateYieldSplit(wb) || changed;
-  if (changed) await wb.xlsx.writeFile(XLSX_PATH);
+  if (changed) await saveWorkbook(wb);
+  else {
+    cachedWorkbook = wb;
+    cachedMtimeMs = mtimeMs;
+  }
   return wb;
 }
 
@@ -124,9 +146,76 @@ function rowToObj(cols, row) {
   const obj = {};
   cols.forEach((c, i) => {
     const v = row.getCell(i + 1).value;
-    obj[c] = v === null || v === undefined ? '' : v;
+    const clean = v === null || v === undefined ? '' : v;
+    if (JSON_COLUMNS.has(c) && typeof clean === 'string' && clean) {
+      try { obj[c] = JSON.parse(clean); } catch { obj[c] = clean; }
+    } else {
+      obj[c] = clean;
+    }
   });
   return obj;
+}
+
+function nextId(ws) {
+  let maxId = 0;
+  ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (rowNumber === 1) return;
+    maxId = Math.max(maxId, Number(row.getCell(1).value) || 0);
+  });
+  return maxId + 1;
+}
+
+function appendWorkbookRecord(wb, sheetName, data, forcedId) {
+  const ws = wb.getWorksheet(sheetName);
+  const cols = SHEETS[sheetName];
+  const id = forcedId === undefined ? nextId(ws) : Number(forcedId);
+  const record = { ID: id, CreatedAt: new Date().toISOString(), ...data };
+  record.ID = id;
+  ws.addRow(cols.map((column) => {
+    const value = record[column];
+    if (JSON_COLUMNS.has(column) && value && typeof value === 'object') return JSON.stringify(value);
+    return value !== undefined ? value : '';
+  }));
+  return record;
+}
+
+function actorFields() {
+  const context = getRequestContext();
+  const user = context.user || {};
+  return {
+    ActorUserID: user.id || user.authUserId || 'system',
+    ActorEmail: user.email || 'system',
+    RequestID: context.requestId || 'system',
+    IPAddress: context.ip || '',
+    UserAgent: context.userAgent || '',
+  };
+}
+
+function appendAudit(wb, action, entity, recordId, beforeData, afterData) {
+  if (SYSTEM_SHEETS.has(entity)) return;
+  appendWorkbookRecord(wb, 'AuditLog', {
+    Action: action,
+    Entity: entity,
+    RecordID: recordId === undefined || recordId === null ? '' : String(recordId),
+    ...actorFields(),
+    BeforeData: beforeData || null,
+    AfterData: afterData || null,
+  });
+}
+
+function appendDeletedRecord(wb, entity, snapshot) {
+  const actor = actorFields();
+  return appendWorkbookRecord(wb, 'DeletedRecords', {
+    Entity: entity,
+    OriginalID: String(snapshot.ID),
+    Snapshot: snapshot,
+    DeletedBy: actor.ActorUserID,
+    DeletedByEmail: actor.ActorEmail,
+    DeletedAt: new Date().toISOString(),
+    RestoredBy: '',
+    RestoredByEmail: '',
+    RestoredAt: '',
+  });
 }
 
 async function readSheet(sheetName) {
@@ -148,19 +237,9 @@ async function readSheet(sheetName) {
 async function appendRow(sheetName, data) {
   return serialize(async () => {
     const wb = await loadWorkbook();
-    const ws = wb.getWorksheet(sheetName);
-    const cols = SHEETS[sheetName];
-    let maxId = 0;
-    ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-      if (rowNumber === 1) return;
-      const id = Number(row.getCell(1).value) || 0;
-      if (id > maxId) maxId = id;
-    });
-    const id = maxId + 1;
-    const record = { ID: id, CreatedAt: new Date().toISOString(), ...data, };
-    record.ID = id;
-    ws.addRow(cols.map((c) => (record[c] !== undefined ? record[c] : '')));
-    await wb.xlsx.writeFile(XLSX_PATH);
+    const record = appendWorkbookRecord(wb, sheetName, data);
+    appendAudit(wb, 'CREATE', sheetName, record.ID, null, record);
+    await saveWorkbook(wb);
     return record;
   });
 }
@@ -187,6 +266,7 @@ async function appendRows(sheetName, dataArr) {
     });
     const created = new Date().toISOString();
     const records = [];
+    let updatedCount = 0;
     for (const data of dataArr) {
       if (isGrabCrane) {
         const key = `${data.ReportDate}|${data.DateTime}`;
@@ -196,6 +276,7 @@ async function appendRows(sheetName, dataArr) {
           row.getCell(4).value = data.Weight; // Weight
           row.getCell(5).value = data.SourceFile; // SourceFile
           records.push({ ID: row.getCell(1).value, CreatedAt: row.getCell(6).value, ...data });
+          updatedCount += 1;
           continue;
         }
       }
@@ -204,7 +285,13 @@ async function appendRows(sheetName, dataArr) {
       ws.addRow(cols.map((c) => (record[c] !== undefined ? record[c] : '')));
       records.push(record);
     }
-    await wb.xlsx.writeFile(XLSX_PATH);
+    appendAudit(wb, 'BULK_UPSERT', sheetName, '', null, {
+      count: records.length,
+      created: records.length - updatedCount,
+      updated: updatedCount,
+      ids: records.map((record) => record.ID),
+    });
+    await saveWorkbook(wb);
     return records;
   });
 }
@@ -215,17 +302,21 @@ async function updateRow(sheetName, id, patch) {
     const ws = wb.getWorksheet(sheetName);
     const cols = SHEETS[sheetName];
     let found = null;
+    let before = null;
     ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
       if (rowNumber === 1) return;
       if (Number(row.getCell(1).value) === Number(id)) {
+        before = rowToObj(cols, row);
         cols.forEach((c, i) => {
           if (patch[c] !== undefined) row.getCell(i + 1).value = patch[c];
         });
+        if (cols.includes('UpdatedAt')) row.getCell(cols.indexOf('UpdatedAt') + 1).value = new Date().toISOString();
         found = rowToObj(cols, row);
       }
     });
     if (!found) return null;
-    await wb.xlsx.writeFile(XLSX_PATH);
+    appendAudit(wb, 'UPDATE', sheetName, id, before, found);
+    await saveWorkbook(wb);
     return found;
   });
 }
@@ -234,14 +325,21 @@ async function deleteRow(sheetName, id) {
   return serialize(async () => {
     const wb = await loadWorkbook();
     const ws = wb.getWorksheet(sheetName);
+    const cols = SHEETS[sheetName];
     let rowNumberToDelete = null;
+    let snapshot = null;
     ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
       if (rowNumber === 1) return;
-      if (Number(row.getCell(1).value) === Number(id)) rowNumberToDelete = rowNumber;
+      if (Number(row.getCell(1).value) === Number(id)) {
+        rowNumberToDelete = rowNumber;
+        snapshot = rowToObj(cols, row);
+      }
     });
     if (!rowNumberToDelete) return false;
+    appendDeletedRecord(wb, sheetName, snapshot);
     ws.spliceRows(rowNumberToDelete, 1);
-    await wb.xlsx.writeFile(XLSX_PATH);
+    appendAudit(wb, 'DELETE', sheetName, id, snapshot, null);
+    await saveWorkbook(wb);
     return true;
   });
 }
@@ -253,16 +351,97 @@ async function deleteRowsByReportDate(sheetName, dateField, dateValue) {
     const cols = SHEETS[sheetName];
     const idx = cols.indexOf(dateField) + 1;
     const rowsToDelete = [];
+    const snapshots = [];
     ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
       if (rowNumber === 1) return;
-      if (String(row.getCell(idx).value) === String(dateValue)) rowsToDelete.push(rowNumber);
+      if (String(row.getCell(idx).value) === String(dateValue)) {
+        rowsToDelete.push(rowNumber);
+        snapshots.push(rowToObj(cols, row));
+      }
     });
+    snapshots.forEach((snapshot) => appendDeletedRecord(wb, sheetName, snapshot));
     rowsToDelete.sort((a, b) => b - a).forEach((rn) => ws.spliceRows(rn, 1));
-    if (rowsToDelete.length) await wb.xlsx.writeFile(XLSX_PATH);
+    if (rowsToDelete.length) {
+      appendAudit(wb, 'BULK_DELETE', sheetName, '', { [dateField]: dateValue, records: snapshots }, null);
+      await saveWorkbook(wb);
+    }
     return rowsToDelete.length;
   });
 }
 
+async function restoreDeletedRecord(id) {
+  return serialize(async () => {
+    const wb = await loadWorkbook();
+    const trash = wb.getWorksheet('DeletedRecords');
+    const trashCols = SHEETS.DeletedRecords;
+    let trashRow = null;
+    let deleted = null;
+    trash.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber === 1 || Number(row.getCell(1).value) !== Number(id)) return;
+      const candidate = rowToObj(trashCols, row);
+      if (!candidate.RestoredAt) {
+        trashRow = row;
+        deleted = candidate;
+      }
+    });
+    if (!deleted) return null;
+    if (!SHEETS[deleted.Entity] || SYSTEM_SHEETS.has(deleted.Entity)) throw new Error('Unsupported restore entity');
+    const snapshot = typeof deleted.Snapshot === 'string' ? JSON.parse(deleted.Snapshot) : deleted.Snapshot;
+    const target = wb.getWorksheet(deleted.Entity);
+    let duplicate = false;
+    target.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber > 1 && Number(row.getCell(1).value) === Number(snapshot.ID)) duplicate = true;
+    });
+    if (duplicate) throw new Error('Original record ID is already in use');
+    const restored = appendWorkbookRecord(wb, deleted.Entity, snapshot, snapshot.ID);
+    const actor = actorFields();
+    trashRow.getCell(trashCols.indexOf('RestoredBy') + 1).value = actor.ActorUserID;
+    trashRow.getCell(trashCols.indexOf('RestoredByEmail') + 1).value = actor.ActorEmail;
+    trashRow.getCell(trashCols.indexOf('RestoredAt') + 1).value = new Date().toISOString();
+    appendAudit(wb, 'RESTORE', deleted.Entity, snapshot.ID, null, restored);
+    await saveWorkbook(wb);
+    return restored;
+  });
+}
+
+async function exportBackup() {
+  return serialize(async () => {
+    const wb = await loadWorkbook();
+    const sheets = {};
+    for (const [sheetName, cols] of Object.entries(SHEETS)) {
+      const rows = [];
+      wb.getWorksheet(sheetName).eachRow({ includeEmpty: false }, (row, rowNumber) => {
+        if (rowNumber > 1) rows.push(rowToObj(cols, row));
+      });
+      sheets[sheetName] = rows;
+    }
+    return { format: 'gp1-connect-backup', version: 1, generatedAt: new Date().toISOString(), sheets };
+  });
+}
+
+async function restoreBackup(backup, options = {}) {
+  if (!options.confirm) throw new Error('Restore requires explicit confirmation');
+  if (!backup || backup.format !== 'gp1-connect-backup' || !backup.sheets) throw new Error('Invalid GP1 Connect backup');
+  return serialize(async () => {
+    const wb = new ExcelJS.Workbook();
+    for (const [sheetName, cols] of Object.entries(SHEETS)) {
+      const ws = wb.addWorksheet(sheetName);
+      ws.addRow(cols);
+      for (const record of backup.sheets[sheetName] || []) {
+        ws.addRow(cols.map((column) => {
+          const value = record[column];
+          if (JSON_COLUMNS.has(column) && value && typeof value === 'object') return JSON.stringify(value);
+          return value !== undefined ? value : '';
+        }));
+      }
+    }
+    await saveWorkbook(wb);
+    ensured = true;
+    return true;
+  });
+}
+
 module.exports = {
-  XLSX_PATH, SHEETS, readSheet, appendRow, appendRows, updateRow, deleteRow, deleteRowsByReportDate,
+  XLSX_PATH, SHEETS, readSheet, appendRow, appendRows, updateRow, deleteRow,
+  deleteRowsByReportDate, restoreDeletedRecord, exportBackup, restoreBackup,
 };

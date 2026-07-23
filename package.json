@@ -5,14 +5,21 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test --test-concurrency=1 test/*.test.js",
+    "backup": "node scripts/backup.js",
+    "restore": "node scripts/restore-backup.js",
+    "bootstrap-admin": "node scripts/bootstrap-admin.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@supabase/supabase-js": "^2.90.1",
     "exceljs": "^4.4.0",
     "pg": "^8.22.0"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
   }
 }

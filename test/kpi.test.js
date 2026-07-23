@@ -25,7 +25,7 @@ async function freePort() {
 }
 
 async function waitForServer(baseUrl, child, getError) {
-  for (let attempt = 0; attempt < 80; attempt += 1) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
     if (child.exitCode !== null) throw new Error(`server stopped: ${getError()}`);
     try {
       const response = await fetch(`${baseUrl}/api/kpi/dashboard?period=2026-06`);
@@ -45,7 +45,14 @@ test('monthly KPI uses live operational data and evaluates the 21-20 period', as
   let serverError = '';
   const child = spawn(process.execPath, ['server.js'], {
     cwd: ROOT,
-    env: { ...process.env, PORT: String(port), DATABASE_URL: '', RDF2_XLSX_PATH: workbookPath },
+    env: {
+      ...process.env,
+      PORT: String(port),
+      DATABASE_URL: '',
+      RDF2_XLSX_PATH: workbookPath,
+      NODE_ENV: 'test',
+      AUTH_DISABLED: 'true',
+    },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
   child.stderr.on('data', (chunk) => { serverError += chunk.toString(); });
@@ -59,6 +66,13 @@ test('monthly KPI uses live operational data and evaluates the 21-20 period', as
 
   const baseUrl = `http://127.0.0.1:${port}`;
   await waitForServer(baseUrl, child, () => serverError);
+
+  const homeResponse = await fetch(`${baseUrl}/`);
+  assert.equal(homeResponse.status, 200);
+  assert.match(homeResponse.headers.get('content-security-policy') || '', /frame-ancestors 'none'/);
+  assert.equal(homeResponse.headers.get('x-frame-options'), 'DENY');
+  assert.equal((await fetch(`${baseUrl}/server.js`)).status, 404, 'server source must never be public');
+  assert.equal((await fetch(`${baseUrl}/RDF2_Downtime.xlsx`)).status, 404, 'data workbook must never be public');
 
   async function request(apiPath, method = 'GET', body) {
     const response = await fetch(`${baseUrl}${apiPath}`, {

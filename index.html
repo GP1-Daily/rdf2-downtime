@@ -11,6 +11,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
 <link rel="stylesheet" href="home.css?v=20260723-yieldsplit">
 <link rel="stylesheet" href="kpi.css?v=20260723-yieldsplit">
+<link rel="stylesheet" href="security-ui.css?v=20260723-security">
+<link rel="stylesheet" href="operations.css?v=20260723-entry-report">
 <style>
   :root{
     --brand:#0f8a5f; --brand-dark:#086342; --brand-bright:#22b573;
@@ -330,6 +332,11 @@
   <div class="topbar-tools">
     <div class="topbar-system"><i></i><span>System Live</span></div>
     <div class="topbar-time"><small>Bangkok</small><strong id="clock"></strong></div>
+    <div class="topbar-user" id="topbarUser" hidden>
+      <div><strong id="topbarUserName">-</strong><span id="topbarUserRole">-</span></div>
+      <a id="securityAdminLink" href="/security.html" hidden>Security</a>
+      <button type="button" id="appLogoutButton">ออกจากระบบ</button>
+    </div>
   </div>
 </header>
 
@@ -457,41 +464,64 @@
   <!-- ===================== TAB: TODAY ===================== -->
   <section id="tab-today" class="tab-panel">
 
-    <section class="panel">
-      <h2>
-        เลือกวันที่บันทึก
-        <span class="row"><input type="date" id="entryDate"></span>
-      </h2>
+    <header class="ops-page-head entry-page-head">
+      <img src="assets/gp1-connect-mark.png?v=20260723-yieldsplit" width="392" height="445" alt="" aria-hidden="true">
+      <div class="ops-page-title">
+        <span>CONTROL ROOM</span>
+        <h2>Line Operations</h2>
+        <p>RDF2 PRODUCTION</p>
+      </div>
+      <label class="ops-date-field">
+        <span>วันที่บันทึก</span>
+        <input type="date" id="entryDate">
+      </label>
+    </header>
 
-      <h2 style="margin-top:4px;">Start Line / Stop Line</h2>
+    <section class="panel ops-panel entry-line-panel">
+      <header class="ops-section-head">
+        <div><span>LINE CONTROL</span><h2>Start Line / Stop Line</h2></div>
+        <small>SHIFT EVENT LOG</small>
+      </header>
       <div id="openSessionWarning" class="warn-banner" style="display:none;"></div>
       <div class="quick-actions">
-        <button class="start" id="btnQuickStart">▶ บันทึก Start Line (เวลาปัจจุบัน)</button>
-        <button class="stop" id="btnQuickBreak">⏸ หยุดพัก (เวลาปัจจุบัน)</button>
-        <button class="stop" id="btnQuickStop">■ เลิกกะ/ปิดไลน์ (เวลาปัจจุบัน)</button>
+        <button class="start ops-quick-action" id="btnQuickStart">
+          <span class="ops-action-icon" aria-hidden="true">▶</span>
+          <span><strong>Start Line</strong><small>บันทึกเวลาปัจจุบัน</small></span>
+        </button>
+        <button class="stop ops-quick-action" id="btnQuickBreak">
+          <span class="ops-action-icon" aria-hidden="true">Ⅱ</span>
+          <span><strong>หยุดพัก</strong><small>บันทึกเวลาปัจจุบัน</small></span>
+        </button>
+        <button class="stop ops-quick-action" id="btnQuickStop">
+          <span class="ops-action-icon" aria-hidden="true">■</span>
+          <span><strong>เลิกกะ / ปิดไลน์</strong><small>บันทึกเวลาปัจจุบัน</small></span>
+        </button>
       </div>
-      <div class="entry-form">
-        <div>
-          <label>ประเภท</label>
-          <select id="lineType"><option value="Start">Start Line</option><option value="Stop">Stop Line</option></select>
-        </div>
-        <div id="stopTypeField" style="display:none;">
-          <label>ชนิดการหยุด</label>
-          <select id="lineStopType"><option value="break">หยุดพัก</option><option value="end">เลิกกะ/ปิดไลน์</option></select>
-        </div>
-        <div>
-          <label>เวลา</label>
-          <input type="time" id="lineTime">
-        </div>
-        <div>
-          <label>หมายเหตุ</label>
-          <input type="text" id="lineNote" placeholder="(ถ้ามี)">
-        </div>
-        <div>
-          <button class="primary" id="btnAddLine">+ บันทึก</button>
+      <div class="ops-manual-entry">
+        <div class="ops-subhead"><span>MANUAL ENTRY</span><strong>ระบุเวลาเอง</strong></div>
+        <div class="entry-form">
+          <div>
+            <label>ประเภท</label>
+            <select id="lineType"><option value="Start">Start Line</option><option value="Stop">Stop Line</option></select>
+          </div>
+          <div id="stopTypeField" style="display:none;">
+            <label>ชนิดการหยุด</label>
+            <select id="lineStopType"><option value="break">หยุดพัก</option><option value="end">เลิกกะ/ปิดไลน์</option></select>
+          </div>
+          <div>
+            <label>เวลา</label>
+            <input type="time" id="lineTime">
+          </div>
+          <div>
+            <label>หมายเหตุ</label>
+            <input type="text" id="lineNote" placeholder="(ถ้ามี)">
+          </div>
+          <div class="ops-submit-cell">
+            <button class="primary" id="btnAddLine"><span aria-hidden="true">+</span> บันทึก</button>
+          </div>
         </div>
       </div>
-      <div class="scroll-table">
+      <div class="scroll-table ops-table-wrap">
         <table id="lineTable">
           <thead><tr><th>เวลา</th><th>ประเภท</th><th class="left">หมายเหตุ</th><th>จัดการ</th></tr></thead>
           <tbody></tbody>
@@ -499,9 +529,12 @@
       </div>
     </section>
 
-    <section class="panel">
-      <h2>รายการหยุดเครื่อง (Downtime)</h2>
-      <div class="entry-form">
+    <section class="panel ops-panel downtime-panel">
+      <header class="ops-section-head">
+        <div><span>DOWNTIME</span><h2>รายการหยุดเครื่อง</h2></div>
+        <small>INCIDENT LOG</small>
+      </header>
+      <div class="entry-form downtime-entry-form">
         <div>
           <label>เวลาเริ่มหยุด</label>
           <input type="time" id="dtStart">
@@ -519,18 +552,19 @@
           <input type="text" id="dtNote" placeholder="(ถ้ามี)">
         </div>
         <div>
-          <button class="primary" id="btnAddDowntime">+ เพิ่มรายการ</button>
+          <button class="primary" id="btnAddDowntime"><span aria-hidden="true">+</span> เพิ่มรายการ</button>
         </div>
       </div>
-      <div class="hint">ถ้าเวลาเดินเครื่องต่อ น้อยกว่า เวลาเริ่มหยุด ระบบจะเข้าใจว่าคาบเกี่ยวข้ามเที่ยงคืนไปวันถัดไปให้อัตโนมัติ</div>
-      <div class="scroll-table" style="margin-top:12px;">
+      <div class="ops-hint">ช่วงเวลาที่ข้ามเที่ยงคืนจะถูกแยกวันที่ให้อัตโนมัติ</div>
+      <div class="scroll-table ops-table-wrap downtime-table-wrap">
         <table id="downtimeTable">
           <thead><tr><th>เริ่มหยุด</th><th>เดินเครื่องต่อ</th><th>ระยะเวลา</th><th class="left">สาเหตุ</th><th class="left">หมายเหตุ</th><th>จัดการ</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
-      <div class="row" style="margin-top:12px; font-size:13px; color:var(--gray);">
-        รวมเวลาหยุดวันนี้: <b id="todayTotalDowntime" style="color:var(--dark);">-</b>&nbsp; (<span id="todayCount">0</span> รายการ)
+      <div class="ops-total-strip">
+        <div><span>DOWNTIME TODAY</span><strong id="todayTotalDowntime">-</strong></div>
+        <div><span>EVENTS</span><strong id="todayCount">0</strong><small>รายการ</small></div>
       </div>
     </section>
 
@@ -539,48 +573,62 @@
   <!-- ===================== TAB: REPORT ===================== -->
   <section id="tab-report" class="tab-panel">
 
-    <section class="panel">
-      <h2>
-        รายงานประจำวัน
-        <span class="row">
+    <header class="ops-page-head report-page-head">
+      <img src="assets/gp1-connect-mark.png?v=20260723-yieldsplit" width="392" height="445" alt="" aria-hidden="true">
+      <div class="ops-page-title">
+        <span>DAILY PERFORMANCE</span>
+        <h2>Daily Report</h2>
+        <p>OPERATIONS SUMMARY</p>
+      </div>
+      <div class="ops-report-filter">
+        <label><span>วันที่รายงาน</span>
           <input type="date" id="reportDate">
-          <button id="btnLoadReport" class="primary">แสดงผล</button>
-        </span>
-      </h2>
-      <div class="hint">ค่าเริ่มต้นจะแสดง "เมื่อวาน" เพราะข้อมูลกรอกวันนี้จะถูกนำไปทำรายงานในวันถัดไป</div>
-    </section>
+        </label>
+        <button id="btnLoadReport" class="primary">แสดงผล</button>
+      </div>
+    </header>
 
-    <div class="cards-grid">
+    <section class="report-metric-board" aria-label="Daily performance summary">
       <div class="kpi-card blue">
+        <span class="report-metric-code">LINE TIME</span>
         <div class="name">เวลาเดินไลน์ (Start-Stop Line)</div>
         <div class="value" id="rLineTime">-</div>
       </div>
       <div class="kpi-card red">
+        <span class="report-metric-code">DOWNTIME</span>
         <div class="name">รวมเวลาหยุดเครื่องทั้งหมด</div>
         <div class="value" id="rDowntime">-</div>
         <div class="target" id="rDowntimeRawHint"></div>
       </div>
       <div class="kpi-card green">
+        <span class="report-metric-code">NET RUNTIME</span>
         <div class="name">เวลาเดินเครื่องจริง (สุทธิ)</div>
         <div class="value" id="rNetRun">-</div>
       </div>
       <div class="kpi-card">
+        <span class="report-metric-code">AVAILABILITY</span>
         <div class="name">Availability</div>
         <div class="value" id="rAvail">-</div>
       </div>
-    </div>
-
-    <section class="panel">
-      <h2>สรุปแยกตามช่วงเวลา (เช้า 00:00-12:00 / บ่าย 12:00-17:00 / ดึก 17:00-24:00)</h2>
-      <table class="period-table">
-        <thead><tr><th class="left">ช่วง</th><th>เวลาเดินไลน์</th><th>เวลาหยุดเครื่อง</th><th>จำนวน Grab</th><th>น้ำหนักเฉลี่ย/แกรบ (ตัน)</th></tr></thead>
-        <tbody id="periodTable"></tbody>
-      </table>
     </section>
 
-    <section class="panel">
-      <h2>รายการหยุดเครื่อง</h2>
-      <div class="scroll-table">
+    <section class="panel ops-panel report-section">
+      <header class="ops-section-head">
+        <div><span>SHIFT PERFORMANCE</span><h2>สรุปตามช่วงเวลา</h2><p>เช้า 00:00-12:00 · บ่าย 12:00-17:00 · ดึก 17:00-24:00</p></div>
+      </header>
+      <div class="scroll-table ops-table-wrap report-table-wrap">
+        <table class="period-table">
+          <thead><tr><th class="left">ช่วง</th><th>เวลาเดินไลน์</th><th>เวลาหยุดเครื่อง</th><th>จำนวน Grab</th><th>น้ำหนักเฉลี่ย/แกรบ (ตัน)</th></tr></thead>
+          <tbody id="periodTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel ops-panel report-section">
+      <header class="ops-section-head">
+        <div><span>DOWNTIME DETAIL</span><h2>รายการหยุดเครื่อง</h2></div>
+      </header>
+      <div class="scroll-table ops-table-wrap">
         <table>
           <thead><tr><th>ช่วง</th><th>เวลา</th><th>ระยะเวลา</th><th class="left">สาเหตุ</th><th class="left">หมายเหตุ</th></tr></thead>
           <tbody id="reportDowntimeTable"></tbody>
@@ -588,47 +636,54 @@
       </div>
     </section>
 
-    <section class="panel">
-      <h2>Grab Crane</h2>
-      <div class="cards-grid">
-        <div class="kpi-card">
+    <section class="panel ops-panel report-section grab-report-section">
+      <header class="ops-section-head">
+        <div><span>MATERIAL INTAKE</span><h2>Grab Crane</h2></div>
+      </header>
+      <div class="report-stat-grid">
+        <div class="report-stat">
           <div class="name">จำนวน Grab ทั้งหมด</div>
           <div class="value" id="rGrabCount">-</div>
         </div>
-        <div class="kpi-card">
+        <div class="report-stat">
           <div class="name">น้ำหนักเฉลี่ยต่อแกรบ</div>
           <div class="value" id="rGrabAvg">-</div>
         </div>
-        <div class="kpi-card">
+        <div class="report-stat">
           <div class="name">น้ำหนักรวม</div>
           <div class="value" id="rGrabTotal">-</div>
         </div>
       </div>
     </section>
 
-    <section class="panel">
-      <h2>ผลผลิต (คำนวณจากขยะขาเข้า × Yield %)</h2>
+    <section class="panel ops-panel report-section production-report-section">
+      <header class="ops-section-head">
+        <div><span>PRODUCTION OUTPUT</span><h2>ผลผลิตตาม Yield</h2></div>
+        <div class="report-inline-total"><span>ขยะขาเข้า</span><strong id="prodIncoming">-</strong></div>
+      </header>
       <div id="productionNoYield" class="empty-note" style="display:none;">ยังไม่ได้ตั้งค่า Yield % — ไปตั้งค่าที่แท็บ "ผลผลิต" ก่อน</div>
       <div id="productionContent">
-        <div class="row" style="margin-bottom:12px; font-size:13px; color:var(--gray);">
-          ขยะขาเข้า (จาก Grab Crane): <b id="prodIncoming" style="color:var(--dark);">-</b>
+        <div class="scroll-table ops-table-wrap production-table-wrap">
+          <table class="ps-table">
+            <thead><tr><th class="left">ผลผลิต</th><th>% Yield</th><th>น้ำหนัก (ตัน)</th></tr></thead>
+            <tbody id="prodTable"></tbody>
+          </table>
         </div>
-        <table class="ps-table" style="max-width:520px;">
-          <thead><tr><th class="left">ผลผลิต</th><th>% Yield</th><th>น้ำหนัก (ตัน)</th></tr></thead>
-          <tbody id="prodTable"></tbody>
-        </table>
       </div>
     </section>
 
-    <section class="panel">
-      <h2>
-        สรุปประจำวัน (สำหรับดาวน์โหลดเป็นรูปภาพ)
-        <button class="primary" id="btnDownloadImage">📷 ดาวน์โหลดเป็นรูปภาพ</button>
-      </h2>
+    <section class="panel ops-panel report-section export-report-section">
+      <header class="ops-section-head">
+        <div><span>SHAREABLE REPORT</span><h2>สรุปประจำวัน</h2></div>
+        <button class="primary report-export-button" id="btnDownloadImage"><span aria-hidden="true">↓</span> ดาวน์โหลด PNG</button>
+      </header>
       <div id="printSummary" class="print-summary">
         <div class="ps-header">
-          <div class="ps-title">RDF2 Downtime Logger</div>
-          <div class="ps-date" id="psDate">-</div>
+          <div class="ps-brand">
+            <img src="assets/gp1-connect-logo.png?v=20260723-yieldsplit" width="1923" height="453" alt="GP1 Connect">
+            <div><span>DAILY OPERATIONS REPORT</span><div class="ps-title">RDF2 Production Summary</div></div>
+          </div>
+          <div class="ps-date-block"><span>REPORT DATE</span><div class="ps-date" id="psDate">-</div></div>
         </div>
         <div class="ps-section-title">Start Line / Stop Line</div>
         <div id="psTimeline" class="ps-timeline"></div>
@@ -1247,12 +1302,13 @@
       <button type="button" role="tab" aria-selected="false" data-workspace-mode="insights">Reports &amp; Dashboards</button>
     </div>
     <div class="workspace-launch-panel" data-workspace-panel="entry">
-      <button type="button" class="launcher-item" data-open-tab="today"><span>OPERATIONS</span><b>Control Room</b><small>Start-Stop Line &amp; Downtime</small><em>&rarr;</em></button>
-      <button type="button" class="launcher-item" data-open-tab="grab"><span>OPERATIONS</span><b>Grab Crane</b><small>Import Daily CSV Data</small><em>&rarr;</em></button>
-      <button type="button" class="launcher-item" data-open-tab="stock"><span>PRODUCTION</span><b>Production Setup</b><small>Yield Settings</small><em>&rarr;</em></button>
-      <button type="button" class="launcher-item" data-open-tab="delivery"><span>PLANNING</span><b>Weekly Sales Plan</b><small>Plan &amp; Actual Setup</small><em>&rarr;</em></button>
-      <button type="button" class="launcher-item" data-open-tab="revenue"><span>COMMERCIAL</span><b>Sales &amp; Revenue</b><small>Sales, MSW &amp; Price Setup</small><em>&rarr;</em></button>
-      <button type="button" class="launcher-item" data-open-tab="kpi"><span>MANAGEMENT</span><b>KPI Management</b><small>Targets &amp; Complaints</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" data-open-tab="today" data-min-role="operator"><span>OPERATIONS</span><b>Control Room</b><small>Start-Stop Line &amp; Downtime</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" data-open-tab="grab" data-min-role="operator"><span>OPERATIONS</span><b>Grab Crane</b><small>Import Daily CSV Data</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" data-open-tab="stock" data-min-role="supervisor"><span>PRODUCTION</span><b>Production Setup</b><small>Yield Settings</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" data-open-tab="delivery" data-min-role="supervisor"><span>PLANNING</span><b>Weekly Sales Plan</b><small>Plan &amp; Actual Setup</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" data-open-tab="revenue" data-min-role="operator"><span>COMMERCIAL</span><b>Sales &amp; Revenue</b><small>Sales, MSW &amp; Price Setup</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" data-open-tab="kpi" data-min-role="operator"><span>MANAGEMENT</span><b>KPI Management</b><small>Targets &amp; Complaints</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" id="securityLauncherItem" data-min-role="admin"><span>ADMINISTRATION</span><b>Security &amp; Access</b><small>Users, Audit, Recovery &amp; Backup</small><em>&rarr;</em></button>
     </div>
     <div class="workspace-launch-panel" data-workspace-panel="insights" hidden>
       <button type="button" class="launcher-item" data-open-tab="report"><span>DAILY</span><b>Daily Report</b><small>Operating Performance Summary</small><em>&rarr;</em></button>
@@ -1314,8 +1370,22 @@ function toast(msg, isErr){
   t.className = 'toast show' + (isErr ? ' err' : '');
   setTimeout(()=>{ t.className='toast'; }, 2500);
 }
+function htmlEsc(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  })[ch]);
+}
 async function api(path, opts){
+  opts = { credentials:'same-origin', ...(opts||{}) };
+  if (opts.method && !['GET','HEAD'].includes(opts.method)){
+    const match = document.cookie.match(/(?:^|; )gp1_csrf=([^;]*)/);
+    opts.headers = { ...(opts.headers||{}), 'X-CSRF-Token':match ? decodeURIComponent(match[1]) : '' };
+  }
   const res = await fetch(path, opts);
+  if (res.status === 401){
+    location.replace('/login.html');
+    throw new Error('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่');
+  }
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || 'เกิดข้อผิดพลาด');
   return data;
@@ -1389,9 +1459,9 @@ async function loadLineTable(){
     for (const r of data.rows){
       const tr = document.createElement('tr');
       const typeLabel = r.EventType === 'Start' ? 'Start Line' : stopTypeLabel(r.StopType);
-      tr.innerHTML = `<td>${r.Time}</td><td>${typeLabel}</td>
-        <td class="left">${r.Note||''}</td>
-        <td><button class="danger" data-id="${r.ID}">ลบ</button></td>`;
+      tr.innerHTML = `<td>${htmlEsc(r.Time)}</td><td>${htmlEsc(typeLabel)}</td>
+        <td class="left">${htmlEsc(r.Note||'')}</td>
+        <td><button class="danger" data-id="${htmlEsc(r.ID)}">ลบ</button></td>`;
       tr.querySelector('button').addEventListener('click', async ()=>{
         await api(`/api/line/${r.ID}`, { method:'DELETE' });
         loadLineTable();
@@ -1440,9 +1510,9 @@ async function loadDowntimeTable(){
     if (dur < 0) dur += 1440;
     totalMin += dur;
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${r.StartTime}</td><td>${r.EndTime}</td><td>${fmtMin(dur)}</td>
-      <td class="left">${r.Reason||''}</td><td class="left">${r.Note||''}</td>
-      <td><button class="danger" data-id="${r.ID}">ลบ</button></td>`;
+    tr.innerHTML = `<td>${htmlEsc(r.StartTime)}</td><td>${htmlEsc(r.EndTime)}</td><td>${fmtMin(dur)}</td>
+      <td class="left">${htmlEsc(r.Reason||'')}</td><td class="left">${htmlEsc(r.Note||'')}</td>
+      <td><button class="danger" data-id="${htmlEsc(r.ID)}">ลบ</button></td>`;
     tr.querySelector('button').addEventListener('click', async ()=>{
       await api(`/api/downtime/${r.ID}`, { method:'DELETE' });
       loadDowntimeTable();
@@ -1564,10 +1634,10 @@ async function loadReport(){
       ? `<span class="badge outside" title="ไลน์ยังไม่ Start หรือ Stop ไปแล้ว - ไม่นับใน Availability">นอกช่วงเดินไลน์ ${fmtMin(s.outsideLineMinutes)}</span>`
       : '';
     tr.innerHTML = `<td>${periodBadge(s.period)}</td>
-      <td>${s.startTime}-${s.endTime}${carry}</td>
+      <td>${htmlEsc(s.startTime)}-${htmlEsc(s.endTime)}${carry}</td>
       <td>${fmtMin(s.minutes)}${outside}</td>
-      <td class="left">${s.reason||''}</td>
-      <td class="left">${s.note||''}</td>`;
+      <td class="left">${htmlEsc(s.reason||'')}</td>
+      <td class="left">${htmlEsc(s.note||'')}</td>`;
     dtbody.appendChild(tr);
   }
 
@@ -1648,7 +1718,7 @@ function renderPrintSummary(date, data){
   const tlEl = document.getElementById('psTimeline');
   tlEl.innerHTML = timeline.length === 0
     ? '<div class="empty-note">ไม่มีข้อมูล</div>'
-    : timeline.map(e => `<div class="ps-row ${e.cls}"><span class="ps-time">${e.time}</span><span>${e.label}</span></div>`).join('');
+    : timeline.map(e => `<div class="ps-row ${e.cls}"><span class="ps-time">${htmlEsc(e.time)}</span><span>${htmlEsc(e.label)}</span></div>`).join('');
 
   // Group downtime by reason
   const byReason = new Map();
@@ -1662,7 +1732,7 @@ function renderPrintSummary(date, data){
   reasonBody.innerHTML = byReason.size === 0
     ? '<tr><td colspan="3" class="empty-note">ไม่มีรายการหยุดเครื่อง</td></tr>'
     : [...byReason.entries()].map(([reason, v]) =>
-        `<tr><td class="left">${reason}</td><td>${v.count}</td><td>${fmtMin(v.minutes)}</td></tr>`).join('');
+        `<tr><td class="left">${htmlEsc(reason)}</td><td>${v.count}</td><td>${fmtMin(v.minutes)}</td></tr>`).join('');
 
   const totalsBody = document.getElementById('psTotalsTable');
   totalsBody.innerHTML = [
@@ -1751,7 +1821,7 @@ document.getElementById('csvFile').addEventListener('change', async (e)=>{
   mapTs.innerHTML = ''; mapWt.innerHTML = '';
   mapDate.innerHTML = '<option value="">(ไม่มี / รวมอยู่ในคอลัมน์เวลาแล้ว)</option>';
   csvHeaders.forEach((h, i)=>{
-    const opt = `<option value="${i}">${h || '(คอลัมน์ ' + (i+1) + ')'}</option>`;
+    const opt = `<option value="${i}">${htmlEsc(h || '(คอลัมน์ ' + (i+1) + ')')}</option>`;
     mapTs.insertAdjacentHTML('beforeend', opt);
     mapDate.insertAdjacentHTML('beforeend', opt);
     mapWt.insertAdjacentHTML('beforeend', opt);
@@ -1766,8 +1836,8 @@ document.getElementById('csvFile').addEventListener('change', async (e)=>{
 function renderPreview(){
   const thead = document.querySelector('#previewTable thead');
   const tbody = document.querySelector('#previewTable tbody');
-  thead.innerHTML = '<tr>' + csvHeaders.map(h=>`<th>${h}</th>`).join('') + '</tr>';
-  tbody.innerHTML = csvRows.slice(0,5).map(r => '<tr>' + r.map(c=>`<td>${c}</td>`).join('') + '</tr>').join('');
+  thead.innerHTML = '<tr>' + csvHeaders.map(h=>`<th>${htmlEsc(h)}</th>`).join('') + '</tr>';
+  tbody.innerHTML = csvRows.slice(0,5).map(r => '<tr>' + r.map(c=>`<td>${htmlEsc(c)}</td>`).join('') + '</tr>').join('');
 }
 ['mapTimestamp','mapDate','mapWeight'].forEach(id=>{
   document.getElementById(id).addEventListener('change', renderPreview);
@@ -1804,7 +1874,7 @@ document.getElementById('btnCheckGrab').addEventListener('click', async ()=>{
   el.innerHTML = `<div class="hint">จำนวน ${total} แกรบ / น้ำหนักเฉลี่ย ${avg.toFixed(2)} ตัน</div>
     <div class="scroll-table" style="margin-top:8px;"><table>
     <thead><tr><th>เวลา</th><th>น้ำหนัก (ตัน)</th></tr></thead>
-    <tbody>${data.rows.map(r=>`<tr><td>${r.DateTime}</td><td>${r.Weight}</td></tr>`).join('')}</tbody>
+    <tbody>${data.rows.map(r=>`<tr><td>${htmlEsc(r.DateTime)}</td><td>${htmlEsc(r.Weight)}</td></tr>`).join('')}</tbody>
     </table></div>`;
 });
 document.getElementById('btnDeleteGrab').addEventListener('click', async ()=>{
@@ -1829,9 +1899,9 @@ async function loadYieldTable(){
   }
   tbody.innerHTML = data.rows.map(r => {
     const water = Math.max(0, 100 - Number(r.RDF2Pct) - Number(r.RDF2LGPct) - Number(r.FineFractionPct) - Number(r.HeavyFractionPct) - Number(r.MetalPct));
-    return `<tr><td>${r.EffectiveDate}</td><td>${Number(r.RDF2Pct).toFixed(2)}%</td><td>${Number(r.RDF2LGPct).toFixed(2)}%</td><td>${Number(r.FineFractionPct).toFixed(2)}%</td>
+    return `<tr><td>${htmlEsc(r.EffectiveDate)}</td><td>${Number(r.RDF2Pct).toFixed(2)}%</td><td>${Number(r.RDF2LGPct).toFixed(2)}%</td><td>${Number(r.FineFractionPct).toFixed(2)}%</td>
       <td>${Number(r.HeavyFractionPct).toFixed(2)}%</td><td>${Number(r.MetalPct).toFixed(2)}%</td><td>${water.toFixed(2)}%</td>
-      <td><button class="danger" data-id="${r.ID}">ลบ</button></td></tr>`;
+      <td><button class="danger" data-id="${htmlEsc(r.ID)}">ลบ</button></td></tr>`;
   }).join('');
   tbody.querySelectorAll('button[data-id]').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -1892,9 +1962,9 @@ async function loadSalesTable(){
     return;
   }
   const materialLabel = { RDF2: 'RDF2', RDF2LG: 'RDF2 LG', FineFraction: 'Fine Fraction', Metal: 'Metal' };
-  tbody.innerHTML = data.rows.map(r => `<tr><td>${r.SaleDate}</td><td>${materialLabel[r.Material] || r.Material}</td>
-    <td class="left">${r.Customer||''}</td><td>${Number(r.Tons).toFixed(2)}</td><td class="left">${r.Note||''}</td>
-    <td><button class="danger" data-id="${r.ID}">ลบ</button></td></tr>`).join('');
+  tbody.innerHTML = data.rows.map(r => `<tr><td>${htmlEsc(r.SaleDate)}</td><td>${htmlEsc(materialLabel[r.Material] || r.Material)}</td>
+    <td class="left">${htmlEsc(r.Customer||'')}</td><td>${Number(r.Tons).toFixed(2)}</td><td class="left">${htmlEsc(r.Note||'')}</td>
+    <td><button class="danger" data-id="${htmlEsc(r.ID)}">ลบ</button></td></tr>`).join('');
   tbody.querySelectorAll('button[data-id]').forEach(btn => {
     btn.addEventListener('click', async () => {
       try{
@@ -2606,6 +2676,7 @@ document.addEventListener('gp1:tabchange', (event)=>{
 });
 initializeAppTab(initialTab && TAB_TITLES[initialTab] ? initialTab : 'home').catch(e=>toast(e.message, true));
 </script>
+<script src="security-ui.js?v=20260723-security"></script>
 <script src="kpi.js?v=20260723-yieldsplit"></script>
 <script src="home.js?v=20260723-yieldsplit"></script>
 </body>

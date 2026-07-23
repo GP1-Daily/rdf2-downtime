@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>เข้าสู่ระบบ | GP1 Connect</title>
+  <link rel="icon" type="image/png" href="assets/gp1-connect-favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="login.css?v=20260723-security">
+</head>
+<body>
+  <main class="auth-shell">
+    <section class="auth-brand" aria-label="GP1 Connect">
+      <img src="assets/gp1-connect-logo.png" alt="GP1 Connect" width="1923" height="453">
+      <div>
+        <span>INTERNAL OPERATIONS PLATFORM</span>
+        <h1>ข้อมูลการดำเนินงาน<br>ในที่เดียว</h1>
+        <p>Green Power 1 Co., Ltd.</p>
+      </div>
+    </section>
+    <section class="auth-panel" aria-labelledby="loginTitle">
+      <div class="auth-panel-inner">
+        <div class="auth-heading">
+          <span>SECURE ACCESS</span>
+          <h2 id="loginTitle">เข้าสู่ระบบ</h2>
+        </div>
+        <form id="loginForm">
+          <label for="email">อีเมล</label>
+          <input id="email" name="email" type="email" autocomplete="username" inputmode="email" required autofocus>
+          <label for="password">รหัสผ่าน</label>
+          <div class="password-field">
+            <input id="password" name="password" type="password" autocomplete="current-password" required>
+            <button type="button" id="togglePassword" aria-label="แสดงรหัสผ่าน">แสดง</button>
+          </div>
+          <p class="auth-error" id="loginError" role="alert" hidden></p>
+          <button class="auth-submit" id="loginButton" type="submit">เข้าสู่ GP1 Connect</button>
+        </form>
+        <p class="auth-help">บัญชีสำหรับพนักงานที่ได้รับสิทธิ์จากผู้ดูแลระบบ</p>
+      </div>
+    </section>
+  </main>
+  <script src="login.js?v=20260723-security"></script>
+</body>
+</html>

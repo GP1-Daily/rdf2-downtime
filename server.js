@@ -1,17 +1,37 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const url = require('url');
 
 // Uses Postgres (e.g. free Supabase) when DATABASE_URL is set - needed for
 // cloud deploys with no persistent local disk. Falls back to the local
 // Excel file otherwise. Both modules expose the same function signatures.
 const store = process.env.DATABASE_URL ? require('./pg-store') : require('./store');
 const lib = require('./lib');
+const { createAuth } = require('./auth');
+const { requiredRole, hasRole } = require('./authorization');
+const { runWithRequestContext } = require('./request-context');
+const {
+  createRateLimiter, getClientIp, createRequestId, applySecurityHeaders,
+} = require('./security');
 
-const PORT = process.env.PORT || 5600;
+const PORT = Number(process.env.PORT) || 5600;
+const HOST = process.env.HOST || (process.env.DATABASE_URL ? '0.0.0.0' : '127.0.0.1');
 const DIR = __dirname;
 const HTML_PATH = path.join(DIR, 'index.html');
+const auth = createAuth(store);
+const rateLimiter = createRateLimiter();
+const BODY_LIMIT_BYTES = Math.min(
+  20 * 1024 * 1024,
+  Math.max(64 * 1024, Number(process.env.API_BODY_LIMIT_BYTES) || 5 * 1024 * 1024),
+);
+const PUBLIC_FILES = new Set([
+  'index.html', 'login.html', 'accept-invite.html', 'security.html',
+  'home.css', 'home.js', 'kpi.css', 'kpi.js', 'html2canvas.min.js',
+  'operations.css',
+  'login.css', 'login.js', 'invite.js', 'security.css', 'security-admin.js',
+  'security-ui.css', 'security-ui.js',
+  'assets/gp1-connect-logo.png', 'assets/gp1-connect-mark.png', 'assets/gp1-connect-favicon.png',
+]);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -27,18 +47,50 @@ const MIME = {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let data = '';
-    req.on('data', (chunk) => { data += chunk; if (data.length > 20e6) req.destroy(); });
+    let bytes = 0;
+    let rejected = false;
+    req.on('data', (chunk) => {
+      if (rejected) return;
+      bytes += chunk.length;
+      if (bytes > BODY_LIMIT_BYTES) {
+        rejected = true;
+        const error = new Error('Request body is too large');
+        error.statusCode = 413;
+        reject(error);
+        return;
+      }
+      data += chunk;
+    });
     req.on('end', () => {
+      if (rejected) return;
       if (!data) return resolve({});
-      try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+      try { resolve(JSON.parse(data)); } catch {
+        const error = new Error('Invalid JSON body');
+        error.statusCode = 400;
+        reject(error);
+      }
     });
     req.on('error', reject);
   });
 }
 
 function sendJson(res, status, obj) {
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+  if (res.writableEnded) return;
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store, max-age=0',
+    'Pragma': 'no-cache',
+  });
   res.end(JSON.stringify(obj));
+}
+
+function validClockTime(value) {
+  const match = /^(\d{2}):(\d{2})$/.exec(String(value || ''));
+  return Boolean(match && Number(match[1]) < 24 && Number(match[2]) < 60);
+}
+
+function textWithin(value, maxLength) {
+  return String(value || '').length <= maxLength;
 }
 
 function sendStatic(req, res, filePath, query) {
@@ -53,13 +105,12 @@ function sendStatic(req, res, filePath, query) {
         : 'public, max-age=3600, must-revalidate';
     const headers = {
       'Content-Type': MIME[ext] || 'application/octet-stream',
-      'Content-Length': stat.size,
       'Cache-Control': cacheControl,
       'ETag': etag,
       'Last-Modified': stat.mtime.toUTCString(),
-      'X-Content-Type-Options': 'nosniff',
     };
-    if (req.headers['if-none-match'] === etag) {
+    if (ext !== '.html') headers['Content-Length'] = stat.size;
+    if (ext !== '.html' && req.headers['if-none-match'] === etag) {
       res.writeHead(304, headers);
       res.end();
       return;
@@ -71,6 +122,14 @@ function sendStatic(req, res, filePath, query) {
     }
     fs.readFile(filePath, (readError, data) => {
       if (readError) { res.writeHead(404); res.end('Not found'); return; }
+      if (ext === '.html') {
+        const nonce = res.__cspNonce;
+        data = Buffer.from(data.toString('utf8')
+          .replace(/<style(?![^>]*\bnonce=)/g, `<style nonce="${nonce}"`)
+          .replace(/<script(?![^>]*\bsrc=)(?![^>]*\bnonce=)/g, `<script nonce="${nonce}"`));
+        headers['Content-Length'] = data.length;
+        delete headers.ETag;
+      }
       res.writeHead(200, headers);
       res.end(data);
     });
@@ -89,8 +148,11 @@ async function handleDowntime(req, res, parts, query) {
   }
   if (req.method === 'POST' && parts.length === 0) {
     const body = await readBody(req);
-    if (!body.entryDate || !body.startTime || !body.endTime) {
+    if (!validIsoDate(body.entryDate) || !validClockTime(body.startTime) || !validClockTime(body.endTime)) {
       return sendJson(res, 400, { ok: false, error: 'ต้องระบุ entryDate, startTime, endTime' });
+    }
+    if (!textWithin(body.reason, 200) || !textWithin(body.note, 1000)) {
+      return sendJson(res, 400, { ok: false, error: 'รายละเอียดรายการยาวเกินกำหนด' });
     }
     const record = await store.appendRow('Downtime', {
       EntryDate: body.entryDate,
@@ -103,6 +165,12 @@ async function handleDowntime(req, res, parts, query) {
   }
   if (req.method === 'PUT' && parts.length === 1) {
     const body = await readBody(req);
+    if ((body.entryDate !== undefined && !validIsoDate(body.entryDate))
+      || (body.startTime !== undefined && !validClockTime(body.startTime))
+      || (body.endTime !== undefined && !validClockTime(body.endTime))
+      || !textWithin(body.reason, 200) || !textWithin(body.note, 1000)) {
+      return sendJson(res, 400, { ok: false, error: 'ข้อมูลรายการหยุดเครื่องไม่ถูกต้อง' });
+    }
     const patch = {};
     if (body.entryDate !== undefined) patch.EntryDate = body.entryDate;
     if (body.startTime !== undefined) patch.StartTime = body.startTime;
@@ -132,11 +200,17 @@ async function handleLine(req, res, parts, query) {
   }
   if (req.method === 'POST' && parts.length === 0) {
     const body = await readBody(req);
-    if (!body.entryDate || !body.eventType || !body.time) {
+    if (!validIsoDate(body.entryDate) || !body.eventType || !validClockTime(body.time)) {
       return sendJson(res, 400, { ok: false, error: 'ต้องระบุ entryDate, eventType, time' });
     }
     if (body.eventType !== 'Start' && body.eventType !== 'Stop') {
       return sendJson(res, 400, { ok: false, error: 'eventType ต้องเป็น Start หรือ Stop' });
+    }
+    if (body.eventType === 'Stop' && body.stopType && !['break', 'end'].includes(body.stopType)) {
+      return sendJson(res, 400, { ok: false, error: 'ประเภท Stop Line ไม่ถูกต้อง' });
+    }
+    if (!textWithin(body.note, 1000)) {
+      return sendJson(res, 400, { ok: false, error: 'หมายเหตุยาวเกินกำหนด' });
     }
     const record = await store.appendRow('LineTime', {
       EntryDate: body.entryDate,
@@ -149,6 +223,13 @@ async function handleLine(req, res, parts, query) {
   }
   if (req.method === 'PUT' && parts.length === 1) {
     const body = await readBody(req);
+    if ((body.entryDate !== undefined && !validIsoDate(body.entryDate))
+      || (body.time !== undefined && !validClockTime(body.time))
+      || (body.eventType !== undefined && !['Start', 'Stop'].includes(body.eventType))
+      || (body.stopType !== undefined && body.stopType && !['break', 'end'].includes(body.stopType))
+      || !textWithin(body.note, 1000)) {
+      return sendJson(res, 400, { ok: false, error: 'ข้อมูล Start-Stop Line ไม่ถูกต้อง' });
+    }
     const patch = {};
     if (body.entryDate !== undefined) patch.EntryDate = body.entryDate;
     if (body.eventType !== undefined) patch.EventType = body.eventType;
@@ -200,20 +281,25 @@ function computeLineSessions(rows) {
 async function handleGrabImport(req, res) {
   const body = await readBody(req);
   const { reportDate, rows, sourceFile, replace } = body;
-  if (!reportDate || !Array.isArray(rows)) {
+  if (!validIsoDate(reportDate) || !Array.isArray(rows)) {
     return sendJson(res, 400, { ok: false, error: 'ต้องระบุ reportDate และ rows' });
   }
-  if (replace) {
-    await store.deleteRowsByReportDate('GrabCrane', 'ReportDate', reportDate);
+  if (rows.length > 10000 || !textWithin(sourceFile, 255)) {
+    return sendJson(res, 400, { ok: false, error: 'ไฟล์มีข้อมูลมากเกินกำหนดหรือชื่อไฟล์ไม่ถูกต้อง' });
   }
-  const data = rows
-    .filter((r) => r.dateTime && r.weight !== undefined && r.weight !== null && r.weight !== '')
-    .map((r) => ({
+  const candidates = rows.filter((r) => r.dateTime && r.weight !== undefined && r.weight !== null && r.weight !== '');
+  const invalid = candidates.some((row) => (
+    !textWithin(row.dateTime, 100) || !Number.isFinite(Number(row.weight)) || Number(row.weight) < 0
+  ));
+  if (invalid) return sendJson(res, 400, { ok: false, error: 'พบวันที่ เวลา หรือน้ำหนักที่ไม่ถูกต้องในไฟล์ CSV' });
+  const data = candidates.map((r) => ({
       ReportDate: reportDate,
-      DateTime: r.dateTime,
+      DateTime: String(r.dateTime),
       Weight: Number(r.weight),
-      SourceFile: sourceFile || '',
+      SourceFile: String(sourceFile || ''),
     }));
+  if (!data.length) return sendJson(res, 400, { ok: false, error: 'ไม่พบข้อมูล Grab ที่นำเข้าได้' });
+  if (replace) await store.deleteRowsByReportDate('GrabCrane', 'ReportDate', reportDate);
   await store.appendRows('GrabCrane', data);
   return sendJson(res, 200, { ok: true, imported: data.length });
 }
@@ -1512,37 +1598,321 @@ async function handleDeliveryPlans(req, res, parts, query) {
   return sendJson(res, 404, { ok: false, error: 'unknown delivery plan route' });
 }
 
-const server = http.createServer(async (req, res) => {
+function rateLimitRequest(req, res, key, limit, windowMs) {
+  const result = rateLimiter.check(key, limit, windowMs);
+  res.setHeader('X-RateLimit-Limit', String(limit));
+  res.setHeader('X-RateLimit-Remaining', String(result.remaining));
+  res.setHeader('X-RateLimit-Reset', String(Math.ceil(result.resetAt / 1000)));
+  if (result.allowed) return true;
+  res.setHeader('Retry-After', String(result.retryAfter));
+  sendJson(res, 429, { ok: false, error: 'มีคำขอมากเกินไป กรุณารอสักครู่แล้วลองใหม่' });
+  return false;
+}
+
+function requestHasBody(req) {
+  return Number(req.headers['content-length'] || 0) > 0 || Boolean(req.headers['transfer-encoding']);
+}
+
+function validateJsonContentType(req, res) {
+  if (!['POST', 'PUT', 'PATCH'].includes(req.method) || !requestHasBody(req)) return true;
+  if (String(req.headers['content-type'] || '').toLowerCase().startsWith('application/json')) return true;
+  sendJson(res, 415, { ok: false, error: 'รองรับข้อมูลแบบ application/json เท่านั้น' });
+  return false;
+}
+
+function publicUser(user) {
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    role: user.role,
+  };
+}
+
+async function appendSecurityAudit(req, action, user, detail) {
+  const context = {
+    requestId: req.gp1RequestId,
+    ip: getClientIp(req),
+    userAgent: String(req.headers['user-agent'] || '').slice(0, 500),
+    user: user || { id: 'anonymous', email: String(detail?.email || 'anonymous') },
+  };
   try {
-    const parsed = url.parse(req.url, true);
-    const pathname = decodeURIComponent(parsed.pathname);
-    const query = parsed.query;
+    await runWithRequestContext(context, () => store.appendRow('AuditLog', {
+      Action: action,
+      Entity: 'Authentication',
+      RecordID: user?.id || '',
+      ActorUserID: user?.id || 'anonymous',
+      ActorEmail: user?.email || String(detail?.email || ''),
+      BeforeData: null,
+      AfterData: detail || null,
+      RequestID: context.requestId,
+      IPAddress: context.ip,
+      UserAgent: context.userAgent,
+    }));
+  } catch (error) {
+    console.error(JSON.stringify({ level: 'error', requestId: req.gp1RequestId, event: 'audit-write-failed', message: error.message }));
+  }
+}
+
+async function handleAuthApi(req, res, parts) {
+  const route = parts[0] || 'session';
+  const ip = getClientIp(req);
+  if (route === 'login' && req.method === 'POST') {
+    if (!rateLimitRequest(req, res, `login:${ip}`, 10, 15 * 60 * 1000)) return;
+    if (!auth.sameOrigin(req)) return sendJson(res, 403, { ok: false, error: 'คำขอ Login ไม่ถูกต้อง' });
+    if (!validateJsonContentType(req, res)) return;
+    const body = await readBody(req);
+    const normalizedEmail = String(body.email || '').trim().toLowerCase();
+    if (normalizedEmail.length > 320 || String(body.password || '').length > 1024) {
+      return sendJson(res, 400, { ok: false, error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' });
+    }
+    if (!rateLimitRequest(req, res, `login-account:${normalizedEmail}`, 10, 15 * 60 * 1000)) return;
+    const user = await auth.login(req, res, body.email, body.password);
+    if (!user) {
+      await appendSecurityAudit(req, 'LOGIN_FAILED', null, { email: String(body.email || '').trim().toLowerCase() });
+      return sendJson(res, 401, { ok: false, error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง หรือบัญชียังไม่ได้รับสิทธิ์' });
+    }
+    await appendSecurityAudit(req, 'LOGIN', user, { role: user.role });
+    return sendJson(res, 200, { ok: true, user: publicUser(user), authEnabled: auth.enabled });
+  }
+  if (route === 'session' && req.method === 'GET') {
+    if (!rateLimitRequest(req, res, `session:${ip}`, 120, 60 * 1000)) return;
+    const user = await auth.authenticate(req, res);
+    if (!user) return sendJson(res, 401, { ok: false, error: 'กรุณาเข้าสู่ระบบ' });
+    return sendJson(res, 200, { ok: true, user: publicUser(user), authEnabled: auth.enabled });
+  }
+  if (route === 'accept-invite' && req.method === 'POST') {
+    if (!rateLimitRequest(req, res, `invite-accept:${ip}`, 10, 15 * 60 * 1000)) return;
+    if (!auth.sameOrigin(req)) return sendJson(res, 403, { ok: false, error: 'คำขอไม่ถูกต้อง' });
+    if (!validateJsonContentType(req, res)) return;
+    const body = await readBody(req);
+    const passwordLength = String(body.password || '').length;
+    if (passwordLength < 10 || passwordLength > 1024) {
+      return sendJson(res, 400, { ok: false, error: 'รหัสผ่านต้องมี 10-1,024 ตัวอักษร' });
+    }
+    const user = await auth.acceptInvite(req, res, body);
+    if (!user) return sendJson(res, 400, { ok: false, error: 'ลิงก์หมดอายุหรือไม่ถูกต้อง กรุณาขอลิงก์ใหม่จากผู้ดูแลระบบ' });
+    await appendSecurityAudit(req, 'INVITE_ACCEPTED', user, { role: user.role });
+    return sendJson(res, 200, { ok: true, user: publicUser(user) });
+  }
+  if (route === 'logout' && req.method === 'POST') {
+    const user = await auth.authenticate(req, res);
+    if (auth.enabled && (!user || !auth.verifyCsrf(req))) {
+      return sendJson(res, 403, { ok: false, error: 'คำขอออกจากระบบไม่ถูกต้อง' });
+    }
+    await auth.logout(req, res);
+    await appendSecurityAudit(req, 'LOGOUT', user, null);
+    return sendJson(res, 200, { ok: true });
+  }
+  return sendJson(res, 404, { ok: false, error: 'unknown auth route' });
+}
+
+function normalizeUserRow(row) {
+  return {
+    id: String(row.ID),
+    email: row.Email,
+    displayName: row.DisplayName || row.Email,
+    role: row.Role,
+    active: !['false', '0', ''].includes(String(row.Active).toLowerCase()),
+    createdAt: row.CreatedAt,
+    updatedAt: row.UpdatedAt,
+  };
+}
+
+async function handleSecurityApi(req, res, parts, query) {
+  const section = parts[0];
+  if (section === 'users' && req.method === 'GET' && parts.length === 1) {
+    const rows = (await store.readSheet('AppUsers')).map(normalizeUserRow);
+    return sendJson(res, 200, { ok: true, rows });
+  }
+  if (section === 'users' && req.method === 'POST' && parts.length === 1) {
+    const body = await readBody(req);
+    const email = String(body.email || '').trim().toLowerCase();
+    const role = String(body.role || 'viewer');
+    const displayName = String(body.displayName || '').trim();
+    if (email.length > 320 || displayName.length > 120 || !/^\S+@\S+\.\S+$/.test(email) || !auth.roles.includes(role)) {
+      return sendJson(res, 400, { ok: false, error: 'กรุณาระบุอีเมลและสิทธิ์ผู้ใช้ให้ถูกต้อง' });
+    }
+    const row = await auth.inviteUser({
+      email,
+      displayName,
+      role,
+      redirectTo: process.env.AUTH_REDIRECT_URL || `${String(req.headers['x-forwarded-proto'] || (req.socket.encrypted ? 'https' : 'http')).split(',')[0]}://${String(req.headers['x-forwarded-host'] || req.headers.host).split(',')[0]}/accept-invite.html`,
+    });
+    return sendJson(res, 200, { ok: true, row: normalizeUserRow(row) });
+  }
+  if (section === 'users' && req.method === 'PUT' && parts.length === 2) {
+    const rows = await store.readSheet('AppUsers');
+    const target = rows.find((row) => String(row.ID) === String(parts[1]));
+    if (!target) return sendJson(res, 404, { ok: false, error: 'ไม่พบบัญชีผู้ใช้' });
+    const body = await readBody(req);
+    const role = body.role === undefined ? target.Role : String(body.role);
+    const active = body.active === undefined
+      ? normalizeUserRow(target).active
+      : body.active === true || body.active === 'true';
+    if (!auth.roles.includes(role)) return sendJson(res, 400, { ok: false, error: 'สิทธิ์ผู้ใช้ไม่ถูกต้อง' });
+    if (String(target.ID) === String(req.gp1User.id) && (!active || role !== 'admin')) {
+      return sendJson(res, 400, { ok: false, error: 'ไม่สามารถลดสิทธิ์หรือปิดบัญชีของตนเองได้' });
+    }
+    const activeAdmins = rows.filter((row) => normalizeUserRow(row).active && row.Role === 'admin');
+    if (target.Role === 'admin' && activeAdmins.length === 1 && (!active || role !== 'admin')) {
+      return sendJson(res, 400, { ok: false, error: 'ระบบต้องมีผู้ดูแลที่ใช้งานได้อย่างน้อย 1 คน' });
+    }
+    const updated = await store.updateRow('AppUsers', target.ID, {
+      DisplayName: body.displayName === undefined ? target.DisplayName : String(body.displayName).trim().slice(0, 120),
+      Role: role,
+      Active: active,
+    });
+    return sendJson(res, 200, { ok: true, row: normalizeUserRow(updated) });
+  }
+  if (section === 'users' && req.method === 'POST' && parts.length === 3 && parts[2] === 'reset-password') {
+    const rows = await store.readSheet('AppUsers');
+    const target = rows.find((row) => String(row.ID) === String(parts[1]));
+    if (!target) return sendJson(res, 404, { ok: false, error: 'ไม่พบบัญชีผู้ใช้' });
+    const protocol = String(req.headers['x-forwarded-proto'] || (req.socket.encrypted ? 'https' : 'http')).split(',')[0].trim();
+    const host = String(req.headers['x-forwarded-host'] || req.headers.host).split(',')[0].trim();
+    const resetUrl = process.env.AUTH_REDIRECT_URL || `${protocol}://${host}/accept-invite.html`;
+    await auth.sendPasswordReset(target.Email, resetUrl);
+    await appendSecurityAudit(req, 'PASSWORD_RESET_SENT', req.gp1User, {
+      targetUserId: String(target.ID), targetEmail: target.Email,
+    });
+    return sendJson(res, 200, { ok: true });
+  }
+  if (section === 'audit' && req.method === 'GET') {
+    const limit = Math.min(500, Math.max(1, Number(query.limit || 150)));
+    if (typeof store.readRecentAudit === 'function') {
+      const rows = await store.readRecentAudit({ limit, entity: query.entity, action: query.action });
+      return sendJson(res, 200, { ok: true, rows });
+    }
+    let rows = await store.readSheet('AuditLog');
+    if (query.entity) rows = rows.filter((row) => row.Entity === query.entity);
+    if (query.action) rows = rows.filter((row) => row.Action === query.action);
+    rows.sort((a, b) => String(b.CreatedAt).localeCompare(String(a.CreatedAt)));
+    return sendJson(res, 200, { ok: true, rows: rows.slice(0, limit) });
+  }
+  if (section === 'trash' && req.method === 'GET' && parts.length === 1) {
+    const limit = Math.min(500, Math.max(1, Number(query.limit || 150)));
+    const sourceRows = typeof store.readActiveDeleted === 'function'
+      ? await store.readActiveDeleted(limit)
+      : await store.readSheet('DeletedRecords');
+    const rows = sourceRows
+      .filter((row) => !row.RestoredAt)
+      .sort((a, b) => String(b.DeletedAt).localeCompare(String(a.DeletedAt)))
+      .slice(0, limit);
+    return sendJson(res, 200, { ok: true, rows });
+  }
+  if (section === 'trash' && req.method === 'POST' && parts.length === 3 && parts[2] === 'restore') {
+    let row;
+    try {
+      row = await store.restoreDeletedRecord(parts[1]);
+    } catch (error) {
+      if (error.code === '23505' || /already in use|duplicate/i.test(String(error.message))) {
+        return sendJson(res, 409, {
+          ok: false,
+          error: 'กู้คืนไม่ได้ เนื่องจากมีข้อมูลรหัสเดียวกันอยู่ในระบบแล้ว',
+        });
+      }
+      throw error;
+    }
+    if (!row) return sendJson(res, 404, { ok: false, error: 'ไม่พบรายการที่กู้คืนได้' });
+    return sendJson(res, 200, { ok: true, row });
+  }
+  if (section === 'backup' && req.method === 'GET') {
+    await appendSecurityAudit(req, 'BACKUP_EXPORT', req.gp1User, null);
+    const backup = await store.exportBackup();
+    const stamp = backup.generatedAt.replace(/[:.]/g, '-');
+    const payload = JSON.stringify(backup, null, 2);
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Disposition': `attachment; filename="gp1-connect-backup-${stamp}.json"`,
+      'Content-Length': Buffer.byteLength(payload),
+      'Cache-Control': 'no-store, max-age=0',
+    });
+    res.end(payload);
+    return;
+  }
+  if (section === 'status' && req.method === 'GET') {
+    return sendJson(res, 200, {
+      ok: true,
+      authEnabled: auth.enabled,
+      authConfigured: auth.configured,
+      database: process.env.DATABASE_URL ? 'postgres' : 'excel',
+      separateMigrationRole: Boolean(process.env.MIGRATION_DATABASE_URL),
+      verifiedDatabaseTls: process.env.DATABASE_URL ? process.env.DATABASE_SSL !== 'false' : null,
+      scheduledBackupConfigured: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.BACKUP_BUCKET),
+    });
+  }
+  return sendJson(res, 404, { ok: false, error: 'unknown security route' });
+}
+
+async function dispatchBusinessApi(req, res, pathname, query) {
+  const segs = pathname.split('/').filter(Boolean);
+  const resource = segs[1];
+  const rest = segs.slice(2);
+  if (resource === 'security') return handleSecurityApi(req, res, rest, query);
+  if (resource === 'downtime') return handleDowntime(req, res, rest, query);
+  if (resource === 'line') return handleLine(req, res, rest, query);
+  if (resource === 'report') return handleReport(req, res, query);
+  if (resource === 'grab') {
+    if (rest[0] === 'import' && req.method === 'POST') return handleGrabImport(req, res);
+    if (rest.length === 0 && req.method === 'GET') return handleGrabGet(req, res, query);
+    if (rest.length === 0 && req.method === 'DELETE') return handleGrabDelete(req, res, query);
+  }
+  if (resource === 'production') return handleProduction(req, res, query);
+  if (resource === 'weekly-report' && req.method === 'GET') return handleWeeklyReport(req, res, query);
+  if (resource === 'yield') return handleYield(req, res, rest);
+  if (resource === 'sales') return handleSales(req, res, rest);
+  if (resource === 'delivery-plans') return handleDeliveryPlans(req, res, rest, query);
+  if (resource === 'stock') {
+    if (rest[0] === 'baseline') return handleStockBaseline(req, res);
+    if (rest.length === 0 && req.method === 'GET') return handleStock(req, res);
+  }
+  if (resource === 'revenue') return handleRevenue(req, res, rest, query);
+  if (resource === 'kpi') return handleKPI(req, res, rest, query);
+  return sendJson(res, 404, { ok: false, error: 'unknown api route' });
+}
+
+const server = http.createServer(async (req, res) => {
+  req.gp1RequestId = createRequestId(req);
+  res.setHeader('X-Request-ID', req.gp1RequestId);
+  res.__cspNonce = applySecurityHeaders(res);
+  try {
+    const parsed = new URL(req.url, 'http://localhost');
+    let pathname;
+    try { pathname = decodeURIComponent(parsed.pathname); } catch {
+      const error = new Error('URL ไม่ถูกต้อง');
+      error.statusCode = 400;
+      throw error;
+    }
+    const query = Object.fromEntries(parsed.searchParams.entries());
+
+    if (pathname.startsWith('/api/auth/')) {
+      const authParts = pathname.split('/').filter(Boolean).slice(2);
+      return await handleAuthApi(req, res, authParts);
+    }
 
     if (pathname.startsWith('/api/')) {
-      const segs = pathname.split('/').filter(Boolean); // ['api','downtime', '3']
-      const resource = segs[1];
-      const rest = segs.slice(2);
-
-      if (resource === 'downtime') return await handleDowntime(req, res, rest, query);
-      if (resource === 'line') return await handleLine(req, res, rest, query);
-      if (resource === 'report') return await handleReport(req, res, query);
-      if (resource === 'grab') {
-        if (rest[0] === 'import' && req.method === 'POST') return await handleGrabImport(req, res);
-        if (rest.length === 0 && req.method === 'GET') return await handleGrabGet(req, res, query);
-        if (rest.length === 0 && req.method === 'DELETE') return await handleGrabDelete(req, res, query);
+      const user = await auth.authenticate(req, res);
+      if (!user) return sendJson(res, 401, { ok: false, error: 'กรุณาเข้าสู่ระบบ' });
+      req.gp1User = user;
+      const limit = req.method === 'GET' ? 600 : 120;
+      const windowMs = 60 * 1000;
+      if (!rateLimitRequest(req, res, `api:${user.id}:${req.method}`, limit, windowMs)) return;
+      const role = requiredRole(pathname, req.method);
+      if (!hasRole(user, role)) {
+        return sendJson(res, 403, { ok: false, error: 'บัญชีนี้ไม่มีสิทธิ์ดำเนินการส่วนนี้' });
       }
-      if (resource === 'production') return await handleProduction(req, res, query);
-      if (resource === 'weekly-report' && req.method === 'GET') return await handleWeeklyReport(req, res, query);
-      if (resource === 'yield') return await handleYield(req, res, rest);
-      if (resource === 'sales') return await handleSales(req, res, rest);
-      if (resource === 'delivery-plans') return await handleDeliveryPlans(req, res, rest, query);
-      if (resource === 'stock') {
-        if (rest[0] === 'baseline') return await handleStockBaseline(req, res);
-        if (rest.length === 0 && req.method === 'GET') return await handleStock(req, res);
+      if (!validateJsonContentType(req, res)) return;
+      if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !auth.verifyCsrf(req)) {
+        return sendJson(res, 403, { ok: false, error: 'Session หมดอายุหรือคำขอไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่' });
       }
-      if (resource === 'revenue') return await handleRevenue(req, res, rest, query);
-      if (resource === 'kpi') return await handleKPI(req, res, rest, query);
-      return sendJson(res, 404, { ok: false, error: 'unknown api route' });
+      const context = {
+        requestId: req.gp1RequestId,
+        ip: getClientIp(req),
+        userAgent: String(req.headers['user-agent'] || '').slice(0, 500),
+        user,
+      };
+      return await runWithRequestContext(context, () => dispatchBusinessApi(req, res, pathname, query));
     }
 
     if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -1550,7 +1920,27 @@ const server = http.createServer(async (req, res) => {
       res.end('Method not allowed');
       return;
     }
+    const htmlRequest = pathname === '/' || pathname.endsWith('.html');
+    if (htmlRequest && pathname !== '/login.html' && pathname !== '/accept-invite.html') {
+      const user = await auth.authenticate(req, res);
+      if (!user) {
+        res.writeHead(302, { Location: '/login.html' });
+        res.end();
+        return;
+      }
+      if (pathname === '/security.html' && user.role !== 'admin') {
+        res.writeHead(302, { Location: '/' });
+        res.end();
+        return;
+      }
+    }
     const relativePath = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
+    const publicPath = relativePath.replace(/\\/g, '/');
+    if (!PUBLIC_FILES.has(publicPath)) {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
     const filePath = path.resolve(DIR, relativePath);
     if (filePath !== HTML_PATH && !filePath.startsWith(`${DIR}${path.sep}`)) {
       res.writeHead(404);
@@ -1559,13 +1949,38 @@ const server = http.createServer(async (req, res) => {
     }
     sendStatic(req, res, filePath, query);
   } catch (e) {
-    console.error(e);
-    sendJson(res, 500, { ok: false, error: String(e.message || e) });
+    const status = Number(e.statusCode) >= 400 && Number(e.statusCode) < 600 ? Number(e.statusCode) : 500;
+    console.error(JSON.stringify({
+      level: 'error',
+      requestId: req.gp1RequestId,
+      method: req.method,
+      path: String(req.url || '').split('?')[0],
+      status,
+      message: e.message,
+      stack: process.env.NODE_ENV === 'production' ? undefined : e.stack,
+    }));
+    if (res.headersSent || res.writableEnded) {
+      if (!res.writableEnded) res.end();
+      return;
+    }
+    const error = status < 500 || status === 503
+      ? String(e.message || 'คำขอไม่ถูกต้อง')
+      : `ระบบขัดข้องชั่วคราว กรุณาลองใหม่ (รหัสอ้างอิง ${req.gp1RequestId})`;
+    sendJson(res, status, { ok: false, error, requestId: req.gp1RequestId });
   }
 });
 
+server.requestTimeout = Number(process.env.HTTP_REQUEST_TIMEOUT_MS) || 30000;
+server.headersTimeout = Number(process.env.HTTP_HEADERS_TIMEOUT_MS) || 15000;
+server.keepAliveTimeout = Number(process.env.HTTP_KEEP_ALIVE_TIMEOUT_MS) || 5000;
+server.maxHeadersCount = 100;
+server.maxRequestsPerSocket = 100;
+server.on('clientError', (error, socket) => {
+  if (socket.writable) socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n');
+});
+
 function startServer(port) {
-  server.listen(port, () => {
+  server.listen(port, HOST, () => {
     const link = `http://localhost:${port}/`;
     console.log(`RDF2 Downtime Logger running at ${link}`);
     if (store.XLSX_PATH) {
@@ -1575,7 +1990,9 @@ function startServer(port) {
       console.log('ใช้ฐานข้อมูล Postgres ผ่าน DATABASE_URL');
     }
     const { exec } = require('child_process');
-    if (process.platform === 'win32') exec(`start "" "${link}"`);
+    if (process.platform === 'win32' && !process.env.PORT && process.env.AUTO_OPEN_BROWSER !== 'false') {
+      exec(`start "" "${link}"`);
+    }
   });
 }
 
@@ -1600,3 +2017,28 @@ server.on('error', (err) => {
 server.__port = PORT;
 server.__attemptsLeft = 10;
 startServer(PORT);
+
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`Shutting down GP1 Connect (${signal})`);
+  const forceTimer = setTimeout(() => {
+    if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
+    process.exit(1);
+  }, 10000);
+  forceTimer.unref();
+  server.close(async () => {
+    try {
+      if (typeof store.close === 'function') await store.close();
+      clearTimeout(forceTimer);
+      process.exit(0);
+    } catch (error) {
+      console.error(error);
+      process.exit(1);
+    }
+  });
+}
+
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));

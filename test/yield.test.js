@@ -56,7 +56,14 @@ test('legacy RDF2 yield is split into normal and low grade exactly once', async 
   let serverError = '';
   const child = spawn(process.execPath, ['server.js'], {
     cwd: ROOT,
-    env: { ...process.env, PORT: String(port), DATABASE_URL: '', RDF2_XLSX_PATH: workbookPath },
+    env: {
+      ...process.env,
+      PORT: String(port),
+      DATABASE_URL: '',
+      RDF2_XLSX_PATH: workbookPath,
+      NODE_ENV: 'test',
+      AUTH_DISABLED: 'true',
+    },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
   child.stderr.on('data', (chunk) => { serverError += chunk.toString(); });

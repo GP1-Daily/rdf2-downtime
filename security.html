@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Security &amp; Access | GP1 Connect</title>
+  <link rel="icon" type="image/png" href="assets/gp1-connect-favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="security.css?v=20260723-security">
+</head>
+<body>
+  <header class="admin-header">
+    <a class="admin-brand" href="/"><img src="assets/gp1-connect-logo.png" alt="GP1 Connect" width="1923" height="453"></a>
+    <div class="admin-account"><div><strong id="accountName">-</strong><span id="accountRole">Admin</span></div><button id="logoutButton" type="button">ออกจากระบบ</button></div>
+  </header>
+  <main>
+    <nav class="admin-nav" aria-label="Security navigation">
+      <a href="/">Home</a><span>/</span><strong>Security &amp; Access</strong>
+    </nav>
+    <section class="page-title">
+      <div><span>ADMINISTRATION</span><h1>Security &amp; Access</h1></div>
+      <button class="backup-button" id="backupButton" type="button">ดาวน์โหลด Backup</button>
+    </section>
+
+    <section class="status-strip" id="securityStatus" aria-label="Security status">
+      <div><span>Authentication</span><strong>กำลังตรวจสอบ</strong></div>
+      <div><span>Database</span><strong>กำลังตรวจสอบ</strong></div>
+      <div><span>Database TLS</span><strong>กำลังตรวจสอบ</strong></div>
+      <div><span>Scheduled Backup</span><strong>กำลังตรวจสอบ</strong></div>
+    </section>
+
+    <section class="admin-section" aria-labelledby="usersTitle">
+      <header><div><span>ACCESS CONTROL</span><h2 id="usersTitle">ผู้ใช้งานและสิทธิ์</h2></div></header>
+      <form class="invite-form" id="inviteForm">
+        <label>ชื่อผู้ใช้<input id="inviteName" autocomplete="off" required></label>
+        <label>อีเมล<input id="inviteEmail" type="email" autocomplete="off" required></label>
+        <label>สิทธิ์<select id="inviteRole"><option value="viewer">Viewer</option><option value="operator">Operator</option><option value="supervisor">Supervisor</option><option value="admin">Admin</option></select></label>
+        <button type="submit">ส่งคำเชิญ</button>
+      </form>
+      <p class="inline-message" id="userMessage" role="status" hidden></p>
+      <div class="table-wrap"><table><thead><tr><th>ผู้ใช้</th><th>สิทธิ์</th><th>สถานะ</th><th>อัปเดต</th><th></th></tr></thead><tbody id="usersBody"><tr><td colspan="5">กำลังโหลด...</td></tr></tbody></table></div>
+    </section>
+
+    <section class="admin-section" aria-labelledby="trashTitle">
+      <header><div><span>RECOVERY</span><h2 id="trashTitle">รายการที่ลบ</h2></div><button class="quiet-button" id="refreshTrash" type="button">รีเฟรช</button></header>
+      <div class="table-wrap"><table><thead><tr><th>ประเภทข้อมูล</th><th>รหัสเดิม</th><th>ผู้ลบ</th><th>เวลาที่ลบ</th><th></th></tr></thead><tbody id="trashBody"><tr><td colspan="5">กำลังโหลด...</td></tr></tbody></table></div>
+    </section>
+
+    <section class="admin-section" aria-labelledby="auditTitle">
+      <header><div><span>TRACEABILITY</span><h2 id="auditTitle">Audit Log</h2></div><button class="quiet-button" id="refreshAudit" type="button">รีเฟรช</button></header>
+      <div class="table-wrap"><table><thead><tr><th>เวลา</th><th>กิจกรรม</th><th>ข้อมูล</th><th>ผู้ดำเนินการ</th><th>Request ID</th></tr></thead><tbody id="auditBody"><tr><td colspan="5">กำลังโหลด...</td></tr></tbody></table></div>
+    </section>
+  </main>
+  <div class="admin-toast" id="toast" role="status"></div>
+  <script src="security-admin.js?v=20260723-security"></script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ตั้งรหัสผ่าน | GP1 Connect</title>
+  <link rel="icon" type="image/png" href="assets/gp1-connect-favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="login.css?v=20260723-security">
+</head>
+<body>
+  <main class="auth-shell">
+    <section class="auth-brand" aria-label="GP1 Connect">
+      <img src="assets/gp1-connect-logo.png" alt="GP1 Connect" width="1923" height="453">
+      <div><span>ACCOUNT ACTIVATION</span><h1>เริ่มใช้งาน<br>GP1 Connect</h1><p>Green Power 1 Co., Ltd.</p></div>
+    </section>
+    <section class="auth-panel" aria-labelledby="inviteTitle">
+      <div class="auth-panel-inner">
+        <div class="auth-heading"><span>FIRST SIGN IN</span><h2 id="inviteTitle">ตั้งรหัสผ่าน</h2></div>
+        <form id="inviteForm">
+          <label for="newPassword">รหัสผ่านใหม่</label>
+          <input id="newPassword" name="newPassword" type="password" minlength="10" autocomplete="new-password" required autofocus>
+          <small class="field-note">อย่างน้อย 10 ตัวอักษร</small>
+          <label for="confirmPassword">ยืนยันรหัสผ่าน</label>
+          <input id="confirmPassword" name="confirmPassword" type="password" minlength="10" autocomplete="new-password" required>
+          <p class="auth-error" id="inviteError" role="alert" hidden></p>
+          <button class="auth-submit" id="inviteButton" type="submit">ยืนยันและเข้าสู่ระบบ</button>
+        </form>
+      </div>
+    </section>
+  </main>
+  <script src="invite.js?v=20260723-security"></script>
+</body>
+</html>

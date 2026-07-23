@@ -25,7 +25,7 @@ async function getFreePort() {
 }
 
 async function waitForServer(baseUrl, child, getError) {
-  for (let attempt = 0; attempt < 80; attempt += 1) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
     if (child.exitCode !== null) throw new Error(`server stopped: ${getError()}`);
     try {
       const response = await fetch(`${baseUrl}/api/revenue/dashboard?month=2026-07`);
@@ -45,7 +45,14 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   let serverError = '';
   const child = spawn(process.execPath, ['server.js'], {
     cwd: ROOT,
-    env: { ...process.env, PORT: String(port), DATABASE_URL: '', RDF2_XLSX_PATH: workbookPath },
+    env: {
+      ...process.env,
+      PORT: String(port),
+      DATABASE_URL: '',
+      RDF2_XLSX_PATH: workbookPath,
+      NODE_ENV: 'test',
+      AUTH_DISABLED: 'true',
+    },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
   child.stderr.on('data', (chunk) => { serverError += chunk.toString(); });
