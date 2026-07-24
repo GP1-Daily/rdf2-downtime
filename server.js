@@ -1954,12 +1954,16 @@ async function handleAuthApi(req, res, parts) {
 }
 
 function normalizeUserRow(row) {
+  const active = !['false', '0', ''].includes(String(row.Active).toLowerCase());
+  const authLinked = Boolean(String(row.AuthUserID || '').trim());
   return {
     id: String(row.ID),
     email: row.Email,
     displayName: row.DisplayName || row.Email,
     role: row.Role,
-    active: !['false', '0', ''].includes(String(row.Active).toLowerCase()),
+    active,
+    authLinked,
+    deleted: !active && !authLinked,
     createdAt: row.CreatedAt,
     updatedAt: row.UpdatedAt,
   };
@@ -1968,7 +1972,9 @@ function normalizeUserRow(row) {
 async function handleSecurityApi(req, res, parts, query) {
   const section = parts[0];
   if (section === 'users' && req.method === 'GET' && parts.length === 1) {
-    const rows = (await store.readSheet('AppUsers')).map(normalizeUserRow);
+    const rows = (await store.readSheet('AppUsers'))
+      .map(normalizeUserRow)
+      .filter((row) => !row.deleted);
     return sendJson(res, 200, { ok: true, rows });
   }
   if (section === 'users' && req.method === 'POST' && parts.length === 1) {
@@ -2021,6 +2027,57 @@ async function handleSecurityApi(req, res, parts, query) {
     await auth.sendPasswordReset(target.Email, resetUrl);
     await appendSecurityAudit(req, 'PASSWORD_RESET_SENT', req.gp1User, {
       targetUserId: String(target.ID), targetEmail: target.Email,
+    });
+    return sendJson(res, 200, { ok: true });
+  }
+  if (section === 'users' && req.method === 'POST' && parts.length === 3 && parts[2] === 'password') {
+    const rows = await store.readSheet('AppUsers');
+    const target = rows.find((row) => String(row.ID) === String(parts[1]));
+    if (!target || normalizeUserRow(target).deleted) {
+      return sendJson(res, 404, { ok: false, error: 'ไม่พบบัญชีผู้ใช้' });
+    }
+    if (!rateLimitRequest(req, res, `admin-password:${req.gp1User.id}:${target.ID}`, 10, 15 * 60 * 1000)) return;
+    const body = await readBody(req);
+    const password = String(body.password || '');
+    if (password.length < 10 || password.length > 1024) {
+      return sendJson(res, 400, { ok: false, error: 'รหัสผ่านต้องมี 10-1,024 ตัวอักษร' });
+    }
+    if (!String(target.AuthUserID || '').trim()) {
+      return sendJson(res, 409, { ok: false, error: 'บัญชีนี้ยังไม่ได้เชื่อมกับ Supabase Auth' });
+    }
+    await auth.setUserPassword(target.AuthUserID, password);
+    await appendSecurityAudit(req, 'USER_PASSWORD_SET', req.gp1User, {
+      targetUserId: String(target.ID), targetEmail: target.Email,
+    });
+    return sendJson(res, 200, { ok: true });
+  }
+  if (section === 'users' && req.method === 'DELETE' && parts.length === 2) {
+    const rows = await store.readSheet('AppUsers');
+    const target = rows.find((row) => String(row.ID) === String(parts[1]));
+    if (!target || normalizeUserRow(target).deleted) {
+      return sendJson(res, 404, { ok: false, error: 'ไม่พบบัญชีผู้ใช้' });
+    }
+    if (!rateLimitRequest(req, res, `admin-delete:${req.gp1User.id}`, 10, 15 * 60 * 1000)) return;
+    if (String(target.ID) === String(req.gp1User.id)) {
+      return sendJson(res, 400, { ok: false, error: 'ไม่สามารถลบบัญชีที่กำลังใช้งานอยู่ได้' });
+    }
+    const targetUser = normalizeUserRow(target);
+    const activeAdmins = rows.map(normalizeUserRow)
+      .filter((row) => !row.deleted && row.active && row.role === 'admin');
+    if (targetUser.role === 'admin' && targetUser.active && activeAdmins.length === 1) {
+      return sendJson(res, 400, { ok: false, error: 'ระบบต้องมีผู้ดูแลที่ใช้งานได้อย่างน้อย 1 คน' });
+    }
+    const originalActive = targetUser.active;
+    await store.updateRow('AppUsers', target.ID, { Active: false });
+    try {
+      await auth.deleteUserAccount(target.AuthUserID);
+    } catch (error) {
+      await store.updateRow('AppUsers', target.ID, { Active: originalActive }).catch(() => {});
+      throw error;
+    }
+    await store.updateRow('AppUsers', target.ID, { AuthUserID: null, Active: false });
+    await appendSecurityAudit(req, 'USER_ACCOUNT_DELETED', req.gp1User, {
+      targetUserId: String(target.ID), targetEmail: target.Email, targetRole: target.Role,
     });
     return sendJson(res, 200, { ok: true });
   }

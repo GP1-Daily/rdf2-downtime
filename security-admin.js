@@ -1,4 +1,54 @@
 let currentUser = null;
+let passwordTarget = null;
+let deleteTarget = null;
+
+function closeDialog(id) {
+  const dialog = document.getElementById(id);
+  if (dialog.open) dialog.close();
+  if (id === 'passwordDialog') {
+    document.getElementById('adminPasswordForm').reset();
+    document.getElementById('adminNewPassword').type = 'password';
+    document.getElementById('adminConfirmPassword').type = 'password';
+    passwordTarget = null;
+  }
+  if (id === 'deleteDialog') {
+    document.getElementById('deleteAccountForm').reset();
+    deleteTarget = null;
+  }
+}
+
+function openPasswordDialog(user) {
+  passwordTarget = user;
+  const form = document.getElementById('adminPasswordForm');
+  form.reset();
+  document.getElementById('adminNewPassword').type = 'password';
+  document.getElementById('adminConfirmPassword').type = 'password';
+  document.getElementById('passwordUserName').textContent = user.displayName;
+  document.getElementById('passwordUserEmail').textContent = user.email;
+  document.getElementById('passwordDialogError').hidden = true;
+  const dialog = document.getElementById('passwordDialog');
+  dialog.showModal();
+  setTimeout(() => document.getElementById('adminNewPassword').focus(), 0);
+}
+
+function openDeleteDialog(user) {
+  deleteTarget = user;
+  const form = document.getElementById('deleteAccountForm');
+  form.reset();
+  document.getElementById('deleteUserName').textContent = user.displayName;
+  document.getElementById('deleteUserEmail').textContent = user.email;
+  document.getElementById('deleteDialogError').hidden = true;
+  document.getElementById('confirmDeleteButton').disabled = true;
+  const dialog = document.getElementById('deleteDialog');
+  dialog.showModal();
+  setTimeout(() => document.getElementById('deleteConfirmation').focus(), 0);
+}
+
+function showDialogError(id, message) {
+  const element = document.getElementById(id);
+  element.textContent = message;
+  element.hidden = false;
+}
 
 function csrfToken() {
   const match = document.cookie.match(/(?:^|; )gp1_csrf=([^;]*)/);
@@ -116,6 +166,13 @@ async function loadUsers() {
         await loadUsers();
       } catch (error) { toast(error.message, true); } finally { save.disabled = false; }
     });
+    const passwordButton = document.createElement('button');
+    passwordButton.type = 'button';
+    passwordButton.className = 'password-user';
+    passwordButton.textContent = 'กำหนดรหัส';
+    passwordButton.disabled = !user.authLinked;
+    if (!user.authLinked) passwordButton.title = 'บัญชีนี้ยังไม่ได้เชื่อมกับ Supabase Auth';
+    passwordButton.addEventListener('click', () => openPasswordDialog(user));
     const reset = document.createElement('button');
     reset.type = 'button';
     reset.className = 'reset-user';
@@ -129,7 +186,15 @@ async function loadUsers() {
         toast('ส่งลิงก์ตั้งรหัสผ่านใหม่แล้ว');
       } catch (error) { toast(error.message, true); } finally { reset.disabled = false; }
     });
-    action.append(save, reset);
+    reset.textContent = 'ส่งลิงก์';
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'delete-user';
+    deleteButton.textContent = 'ลบบัญชี';
+    deleteButton.disabled = String(user.id) === String(currentUser.id);
+    if (deleteButton.disabled) deleteButton.title = 'ไม่สามารถลบบัญชีที่กำลังใช้งานอยู่ได้';
+    deleteButton.addEventListener('click', () => openDeleteDialog(user));
+    action.append(save, passwordButton, reset, deleteButton);
     row.append(identity, roleCell, activeCell, updated, action);
     body.append(row);
   }
@@ -220,6 +285,76 @@ document.getElementById('logoutButton').addEventListener('click', async () => {
 document.getElementById('backupButton').addEventListener('click', () => { window.location.href = '/api/security/backup'; });
 document.getElementById('refreshTrash').addEventListener('click', () => loadTrash().catch((error) => toast(error.message, true)));
 document.getElementById('refreshAudit').addEventListener('click', () => loadAudit().catch((error) => toast(error.message, true)));
+
+document.querySelectorAll('[data-close-dialog]').forEach((button) => {
+  button.addEventListener('click', () => closeDialog(button.dataset.closeDialog));
+});
+
+for (const id of ['passwordDialog', 'deleteDialog']) {
+  document.getElementById(id).addEventListener('cancel', (event) => {
+    event.preventDefault();
+    closeDialog(id);
+  });
+}
+
+document.getElementById('showAdminPassword').addEventListener('change', (event) => {
+  const type = event.currentTarget.checked ? 'text' : 'password';
+  document.getElementById('adminNewPassword').type = type;
+  document.getElementById('adminConfirmPassword').type = type;
+});
+
+document.getElementById('adminPasswordForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const errorBox = document.getElementById('passwordDialogError');
+  errorBox.hidden = true;
+  const password = document.getElementById('adminNewPassword').value;
+  const confirmation = document.getElementById('adminConfirmPassword').value;
+  if (!passwordTarget) return showDialogError('passwordDialogError', 'ไม่พบบัญชีผู้ใช้');
+  if (password.length < 10) return showDialogError('passwordDialogError', 'รหัสผ่านต้องมีอย่างน้อย 10 ตัวอักษร');
+  if (password !== confirmation) return showDialogError('passwordDialogError', 'รหัสผ่านทั้งสองช่องไม่ตรงกัน');
+  const submit = document.getElementById('savePasswordButton');
+  submit.disabled = true;
+  try {
+    const targetEmail = passwordTarget.email;
+    await api(`/api/security/users/${passwordTarget.id}/password`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    closeDialog('passwordDialog');
+    toast(`กำหนดรหัสผ่านให้ ${targetEmail} แล้ว`);
+    await loadAudit();
+  } catch (error) {
+    showDialogError('passwordDialogError', error.message);
+  } finally { submit.disabled = false; }
+});
+
+document.getElementById('deleteConfirmation').addEventListener('input', (event) => {
+  const matches = deleteTarget
+    && event.currentTarget.value.trim().toLowerCase() === String(deleteTarget.email).trim().toLowerCase();
+  document.getElementById('confirmDeleteButton').disabled = !matches;
+});
+
+document.getElementById('deleteAccountForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const confirmation = document.getElementById('deleteConfirmation').value.trim().toLowerCase();
+  if (!deleteTarget) return showDialogError('deleteDialogError', 'ไม่พบบัญชีผู้ใช้');
+  if (confirmation !== String(deleteTarget.email).trim().toLowerCase()) {
+    return showDialogError('deleteDialogError', 'อีเมลยืนยันไม่ตรงกับบัญชีที่ต้องการลบ');
+  }
+  const submit = document.getElementById('confirmDeleteButton');
+  submit.disabled = true;
+  try {
+    const deletedEmail = deleteTarget.email;
+    await api(`/api/security/users/${deleteTarget.id}`, { method: 'DELETE' });
+    closeDialog('deleteDialog');
+    deleteTarget = null;
+    toast(`ลบบัญชี ${deletedEmail} แล้ว`);
+    await Promise.all([loadUsers(), loadAudit()]);
+  } catch (error) {
+    showDialogError('deleteDialogError', error.message);
+    submit.disabled = false;
+  }
+});
 
 (async () => {
   try {

@@ -43,6 +43,52 @@ test('password reset rate limits return a clear retry response', () => {
   assert.match(error.message, /1 ชั่วโมง/);
 });
 
+test('admin password assignment confirms the email and account deletion uses Supabase Auth', async () => {
+  const previous = {
+    AUTH_DISABLED: process.env.AUTH_DISABLED,
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  };
+  const calls = [];
+  try {
+    process.env.AUTH_DISABLED = 'false';
+    process.env.SUPABASE_URL = 'https://example.supabase.co';
+    process.env.SUPABASE_ANON_KEY = 'test-anon-key';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key';
+    const fakeClient = {
+      auth: {
+        admin: {
+          async updateUserById(id, patch) {
+            calls.push({ action: 'password', id, patch });
+            return { data: { user: { id } }, error: null };
+          },
+          async deleteUser(id) {
+            calls.push({ action: 'delete', id });
+            return { data: { user: { id } }, error: null };
+          },
+        },
+      },
+    };
+    const auth = createAuth(store, { createClient: () => fakeClient });
+    assert.equal(await auth.setUserPassword('auth-user-1', 'temporary-password'), true);
+    assert.equal(await auth.deleteUserAccount('auth-user-1'), true);
+    assert.deepEqual(calls, [
+      {
+        action: 'password', id: 'auth-user-1',
+        patch: { password: 'temporary-password', email_confirm: true },
+      },
+      { action: 'delete', id: 'auth-user-1' },
+    ]);
+    assert.equal(await auth.setUserPassword('auth-user-1', 'short'), false);
+  } finally {
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});
+
 test('required authentication fails closed and validates CSRF origin tokens', async () => {
   const previous = {
     AUTH_DISABLED: process.env.AUTH_DISABLED,

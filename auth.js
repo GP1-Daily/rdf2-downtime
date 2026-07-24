@@ -26,7 +26,8 @@ function passwordResetFailure(error) {
   return failure;
 }
 
-function createAuth(store) {
+function createAuth(store, dependencies = {}) {
+  const clientFactory = dependencies.createClient || createClient;
   const production = process.env.NODE_ENV === 'production';
   const hasDatabase = Boolean(process.env.DATABASE_URL);
   const localDisabled = process.env.AUTH_DISABLED === 'true' && !production && !hasDatabase;
@@ -41,9 +42,9 @@ function createAuth(store) {
   const clientOptions = {
     auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
   };
-  const supabase = configured && enabled ? createClient(supabaseUrl, anonKey, clientOptions) : null;
+  const supabase = configured && enabled ? clientFactory(supabaseUrl, anonKey, clientOptions) : null;
   const adminClient = configured && enabled && serviceRoleKey
-    ? createClient(supabaseUrl, serviceRoleKey, clientOptions)
+    ? clientFactory(supabaseUrl, serviceRoleKey, clientOptions)
     : null;
   const validationCache = new Map();
 
@@ -124,7 +125,10 @@ function createAuth(store) {
   async function findProfile(authUserId, email) {
     const profiles = await store.readSheet('AppUsers');
     const normalizedEmail = String(email || '').trim().toLowerCase();
-    return profiles.find((profile) => String(profile.AuthUserID || '') === String(authUserId || ''))
+    const normalizedAuthUserId = String(authUserId || '').trim();
+    return (normalizedAuthUserId
+      ? profiles.find((profile) => String(profile.AuthUserID || '') === normalizedAuthUserId)
+      : null)
       || profiles.find((profile) => String(profile.Email || '').trim().toLowerCase() === normalizedEmail)
       || null;
   }
@@ -178,7 +182,7 @@ function createAuth(store) {
     const cookies = parseCookies(req);
     let identity = cookies[ACCESS_COOKIE] ? await validateAccessToken(cookies[ACCESS_COOKIE]) : null;
     if (!identity && cookies[REFRESH_COOKIE]) {
-      const refreshClient = createClient(supabaseUrl, anonKey, clientOptions);
+      const refreshClient = clientFactory(supabaseUrl, anonKey, clientOptions);
       const { data, error } = await refreshClient.auth.refreshSession({ refresh_token: cookies[REFRESH_COOKIE] });
       if (!error && data.session && data.user) {
         setSessionCookies(req, res, data.session);
@@ -195,7 +199,7 @@ function createAuth(store) {
     if (!enabled) return authenticate(req, res);
     const normalizedEmail = String(email || '').trim().toLowerCase();
     if (!normalizedEmail || !password) return null;
-    const loginClient = createClient(supabaseUrl, anonKey, clientOptions);
+    const loginClient = clientFactory(supabaseUrl, anonKey, clientOptions);
     const { data, error } = await loginClient.auth.signInWithPassword({ email: normalizedEmail, password });
     if (error || !data.session || !data.user) return null;
     const user = await resolveAppUser(data.user);
@@ -213,7 +217,7 @@ function createAuth(store) {
       if (enabled && configured) {
         const cookies = parseCookies(req);
         if (cookies[ACCESS_COOKIE] && cookies[REFRESH_COOKIE]) {
-          const logoutClient = createClient(supabaseUrl, anonKey, clientOptions);
+          const logoutClient = clientFactory(supabaseUrl, anonKey, clientOptions);
           const session = await logoutClient.auth.setSession({
             access_token: cookies[ACCESS_COOKIE],
             refresh_token: cookies[REFRESH_COOKIE],
@@ -233,7 +237,10 @@ function createAuth(store) {
     const normalizedEmail = String(email || '').trim().toLowerCase();
     if (!normalizedEmail || !ROLES.includes(role)) throw new Error('Invalid user details');
     const existing = await findProfile('', normalizedEmail);
-    if (existing) {
+    const reusableProfile = existing
+      && !profileIsActive(existing)
+      && !String(existing.AuthUserID || '').trim();
+    if (existing && !reusableProfile) {
       const error = new Error('อีเมลนี้มีอยู่ในระบบแล้ว');
       error.statusCode = 409;
       throw error;
@@ -244,14 +251,17 @@ function createAuth(store) {
     const { data, error } = await adminClient.auth.admin.inviteUserByEmail(normalizedEmail, options);
     if (error || !data.user) throw new Error('ไม่สามารถส่งคำเชิญได้ กรุณาตรวจสอบอีเมลและการตั้งค่า Supabase');
     try {
-      return await store.appendRow('AppUsers', {
+      const profile = {
         AuthUserID: data.user.id,
         Email: normalizedEmail,
         DisplayName: String(displayName || '').trim() || normalizedEmail,
         Role: role,
         Active: true,
         UpdatedAt: new Date().toISOString(),
-      });
+      };
+      return reusableProfile
+        ? await store.updateRow('AppUsers', reusableProfile.ID, profile)
+        : await store.appendRow('AppUsers', profile);
     } catch (storeError) {
       await adminClient.auth.admin.deleteUser(data.user.id).catch(() => {});
       throw storeError;
@@ -261,7 +271,7 @@ function createAuth(store) {
   async function acceptInvite(req, res, { accessToken, refreshToken, password }) {
     assertConfigured();
     if (!accessToken || !refreshToken || String(password || '').length < 10) return null;
-    const inviteClient = createClient(supabaseUrl, anonKey, clientOptions);
+    const inviteClient = clientFactory(supabaseUrl, anonKey, clientOptions);
     const sessionResult = await inviteClient.auth.setSession({
       access_token: String(accessToken),
       refresh_token: String(refreshToken),
@@ -278,11 +288,43 @@ function createAuth(store) {
 
   async function sendPasswordReset(email, redirectTo) {
     assertConfigured();
-    const resetClient = createClient(supabaseUrl, anonKey, clientOptions);
+    const resetClient = clientFactory(supabaseUrl, anonKey, clientOptions);
     const { error } = await resetClient.auth.resetPasswordForEmail(String(email).trim().toLowerCase(), {
       redirectTo: redirectTo || process.env.AUTH_REDIRECT_URL,
     });
     if (error) throw passwordResetFailure(error);
+    return true;
+  }
+
+  async function setUserPassword(authUserId, password) {
+    assertConfigured();
+    if (!adminClient) throw new AuthConfigurationError('ยังไม่ได้ตั้งค่า SUPABASE_SERVICE_ROLE_KEY สำหรับจัดการผู้ใช้');
+    const userId = String(authUserId || '').trim();
+    const newPassword = String(password || '');
+    if (!userId || newPassword.length < 10 || newPassword.length > 1024) return false;
+    const { data, error } = await adminClient.auth.admin.updateUserById(userId, {
+      password: newPassword,
+      email_confirm: true,
+    });
+    if (error || !data.user) {
+      const failure = new Error('ไม่สามารถกำหนดรหัสผ่านให้บัญชีนี้ได้');
+      failure.statusCode = 502;
+      throw failure;
+    }
+    return true;
+  }
+
+  async function deleteUserAccount(authUserId) {
+    assertConfigured();
+    if (!adminClient) throw new AuthConfigurationError('ยังไม่ได้ตั้งค่า SUPABASE_SERVICE_ROLE_KEY สำหรับจัดการผู้ใช้');
+    const userId = String(authUserId || '').trim();
+    if (!userId) return false;
+    const { error } = await adminClient.auth.admin.deleteUser(userId);
+    if (error && !/not found/i.test(String(error.message || ''))) {
+      const failure = new Error('ไม่สามารถลบบัญชีออกจากระบบยืนยันตัวตนได้');
+      failure.statusCode = 502;
+      throw failure;
+    }
     return true;
   }
 
@@ -321,6 +363,8 @@ function createAuth(store) {
     inviteUser,
     acceptInvite,
     sendPasswordReset,
+    setUserPassword,
+    deleteUserAccount,
     verifyCsrf,
     sameOrigin,
     clearSessionCookies,

@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="security.css?v=20260723-security">
+  <link rel="stylesheet" href="security.css?v=20260724-account-management">
 </head>
 <body>
   <header class="admin-header">
@@ -53,7 +53,51 @@
       <div class="table-wrap"><table><thead><tr><th>เวลา</th><th>กิจกรรม</th><th>ข้อมูล</th><th>ผู้ดำเนินการ</th><th>Request ID</th></tr></thead><tbody id="auditBody"><tr><td colspan="5">กำลังโหลด...</td></tr></tbody></table></div>
     </section>
   </main>
+
+  <dialog class="admin-dialog" id="passwordDialog" aria-labelledby="passwordDialogTitle">
+    <form id="adminPasswordForm">
+      <header class="dialog-header">
+        <div><span>ACCOUNT PASSWORD</span><h2 id="passwordDialogTitle">กำหนดรหัสผ่าน</h2></div>
+        <button class="dialog-close" type="button" data-close-dialog="passwordDialog" aria-label="ปิด">ปิด</button>
+      </header>
+      <div class="dialog-body">
+        <p class="dialog-account"><strong id="passwordUserName">-</strong><span id="passwordUserEmail">-</span></p>
+        <label for="adminNewPassword">รหัสผ่านใหม่</label>
+        <input id="adminNewPassword" type="password" minlength="10" maxlength="1024" autocomplete="new-password" required>
+        <small>อย่างน้อย 10 ตัวอักษร</small>
+        <label for="adminConfirmPassword">ยืนยันรหัสผ่าน</label>
+        <input id="adminConfirmPassword" type="password" minlength="10" maxlength="1024" autocomplete="new-password" required>
+        <label class="show-password"><input id="showAdminPassword" type="checkbox"> แสดงรหัสผ่าน</label>
+        <p class="dialog-error" id="passwordDialogError" role="alert" hidden></p>
+      </div>
+      <footer class="dialog-actions">
+        <button class="quiet-button" type="button" data-close-dialog="passwordDialog">ยกเลิก</button>
+        <button class="primary-action" id="savePasswordButton" type="submit">บันทึกรหัสผ่าน</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="admin-dialog danger-dialog" id="deleteDialog" aria-labelledby="deleteDialogTitle">
+    <form id="deleteAccountForm">
+      <header class="dialog-header">
+        <div><span>DELETE ACCOUNT</span><h2 id="deleteDialogTitle">ลบบัญชีผู้ใช้</h2></div>
+        <button class="dialog-close" type="button" data-close-dialog="deleteDialog" aria-label="ปิด">ปิด</button>
+      </header>
+      <div class="dialog-body">
+        <p class="dialog-account"><strong id="deleteUserName">-</strong><span id="deleteUserEmail">-</span></p>
+        <p class="delete-warning">บัญชีนี้จะเข้าสู่ระบบไม่ได้ทันที หากต้องการใช้งานอีกครั้งต้องสร้างคำเชิญใหม่</p>
+        <label for="deleteConfirmation">พิมพ์อีเมลของผู้ใช้เพื่อยืนยัน</label>
+        <input id="deleteConfirmation" type="email" autocomplete="off" required>
+        <p class="dialog-error" id="deleteDialogError" role="alert" hidden></p>
+      </div>
+      <footer class="dialog-actions">
+        <button class="quiet-button" type="button" data-close-dialog="deleteDialog">ยกเลิก</button>
+        <button class="danger-action" id="confirmDeleteButton" type="submit" disabled>ลบบัญชี</button>
+      </footer>
+    </form>
+  </dialog>
+
   <div class="admin-toast" id="toast" role="status"></div>
-  <script src="security-admin.js?v=20260723-invite-form"></script>
+  <script src="security-admin.js?v=20260724-account-management"></script>
 </body>
 </html>
