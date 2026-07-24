@@ -15,7 +15,7 @@ const { createAuth, ROLE_LEVEL, passwordResetFailure } = require('../auth');
 const { requiredRole, hasRole } = require('../authorization');
 const { runWithRequestContext } = require('../request-context');
 const {
-  createRateLimiter, getClientIp, secureDatabaseUrl, contentSecurityPolicy,
+  createRateLimiter, getClientIp, secureDatabaseUrl, contentSecurityPolicy, constantTimeTokenEqual,
 } = require('../security');
 
 test.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
@@ -138,4 +138,12 @@ test('rate limiting and CSP enforce bounded requests and nonce scripts', () => {
   );
   assert.doesNotMatch(databaseUrl, /sslmode|no-verify/);
   assert.match(databaseUrl, /application_name=test/);
+});
+
+test('device tokens require a long configured secret and compare safely', () => {
+  const token = '0'.repeat(64);
+  assert.equal(constantTimeTokenEqual(token, token), true);
+  assert.equal(constantTimeTokenEqual(`${token}x`, token), false);
+  assert.equal(constantTimeTokenEqual('', token), false);
+  assert.equal(constantTimeTokenEqual('short', 'short'), false);
 });

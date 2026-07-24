@@ -53,7 +53,8 @@ const TABLES = {
     table: 'grab_crane',
     columns: {
       ID: 'id', ReportDate: 'report_date', DateTime: 'date_time', Weight: 'weight',
-      SourceFile: 'source_file', CreatedAt: 'created_at',
+      SourceFile: 'source_file', CreatedAt: 'created_at', SourceSystem: 'source_system',
+      SourceID: 'source_id', Amp: 'amp', SourceStatus: 'source_status', SyncedAt: 'synced_at',
     },
   },
   YieldSettings: {
@@ -200,10 +201,23 @@ function ensureSchema() {
         date_time TEXT NOT NULL,
         weight NUMERIC NOT NULL,
         source_file TEXT DEFAULT '',
+        source_system TEXT,
+        source_id BIGINT,
+        amp NUMERIC,
+        source_status INTEGER,
+        synced_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ DEFAULT now()
       );
+      ALTER TABLE grab_crane ADD COLUMN IF NOT EXISTS source_system TEXT;
+      ALTER TABLE grab_crane ADD COLUMN IF NOT EXISTS source_id BIGINT;
+      ALTER TABLE grab_crane ADD COLUMN IF NOT EXISTS amp NUMERIC;
+      ALTER TABLE grab_crane ADD COLUMN IF NOT EXISTS source_status INTEGER;
+      ALTER TABLE grab_crane ADD COLUMN IF NOT EXISTS synced_at TIMESTAMPTZ;
       CREATE UNIQUE INDEX IF NOT EXISTS grab_crane_report_datetime_idx
         ON grab_crane (report_date, date_time);
+      CREATE UNIQUE INDEX IF NOT EXISTS grab_crane_source_idx
+        ON grab_crane (source_system, source_id)
+        WHERE source_system IS NOT NULL AND source_id IS NOT NULL;
       CREATE TABLE IF NOT EXISTS yield_settings (
         id SERIAL PRIMARY KEY,
         effective_date TEXT NOT NULL,
@@ -638,6 +652,102 @@ async function deleteRowsByReportDate(sheetName, dateField, dateValue) {
   }
 }
 
+async function syncGrabRows(sourceSystem, rows, options = {}) {
+  await ensureSchema();
+  const source = String(sourceSystem);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    let created = 0;
+    let updated = 0;
+    const syncedRows = [];
+
+    for (const row of rows) {
+      const values = [
+        row.ReportDate, row.DateTime, row.Weight, `Auto sync: ${source}`,
+        source, row.SourceID, row.Amp, row.SourceStatus,
+      ];
+      let found = await client.query(
+        'SELECT * FROM grab_crane WHERE source_system = $1 AND source_id = $2 FOR UPDATE',
+        [source, row.SourceID],
+      );
+
+      if (!found.rows[0]) {
+        found = await client.query(
+          'SELECT * FROM grab_crane WHERE report_date = $1 AND date_time = $2 FOR UPDATE',
+          [row.ReportDate, row.DateTime],
+        );
+      }
+
+      let result;
+      if (found.rows[0]) {
+        const existing = found.rows[0];
+        if (existing.source_system && (
+          existing.source_system !== source || String(existing.source_id) !== String(row.SourceID)
+        )) {
+          const error = new Error('Grab timestamp is already linked to a different source record');
+          error.statusCode = 409;
+          throw error;
+        }
+        result = await client.query(`
+          UPDATE grab_crane
+          SET report_date = $1, date_time = $2, weight = $3, source_file = $4,
+              source_system = $5, source_id = $6, amp = $7, source_status = $8,
+              synced_at = now()
+          WHERE id = $9
+          RETURNING *
+        `, [...values, existing.id]);
+        updated += 1;
+      } else {
+        result = await client.query(`
+          INSERT INTO grab_crane (
+            report_date, date_time, weight, source_file, source_system,
+            source_id, amp, source_status, synced_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now())
+          RETURNING *
+        `, values);
+        created += 1;
+      }
+      syncedRows.push(rowToObj(TABLES.GrabCrane.columns, result.rows[0]));
+    }
+
+    let deleted = 0;
+    if (options.snapshotStart && options.snapshotEnd) {
+      const keepIds = new Set(rows.map((row) => String(row.SourceID)));
+      const found = await client.query(`
+        SELECT * FROM grab_crane
+        WHERE source_system = $1 AND date_time >= $2 AND date_time < $3
+        FOR UPDATE
+      `, [source, options.snapshotStart, options.snapshotEnd]);
+      for (const dbRow of found.rows) {
+        if (keepIds.has(String(dbRow.source_id))) continue;
+        const snapshot = rowToObj(TABLES.GrabCrane.columns, dbRow);
+        await writeDeletedRecord(client, 'GrabCrane', snapshot);
+        await client.query('DELETE FROM grab_crane WHERE id = $1', [dbRow.id]);
+        deleted += 1;
+      }
+    }
+
+    await writeAudit(client, 'DEVICE_SYNC', 'GrabCrane', '', null, {
+      sourceSystem: source,
+      received: rows.length,
+      created,
+      updated,
+      deleted,
+      snapshotStart: options.snapshotStart || '',
+      snapshotEnd: options.snapshotEnd || '',
+      maxSourceId: rows.reduce((max, row) => Math.max(max, Number(row.SourceID) || 0), 0),
+    });
+    await client.query('COMMIT');
+    return { rows: syncedRows, created, updated, deleted };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function restoreDeletedRecord(id) {
   await ensureSchema();
   const client = await pool.connect();
@@ -760,5 +870,5 @@ async function close() {
 module.exports = {
   XLSX_PATH: null,
   TABLES, readSheet, appendRow, appendRows, updateRow, deleteRow, deleteRowsByReportDate,
-  restoreDeletedRecord, readRecentAudit, readActiveDeleted, exportBackup, restoreBackup, close,
+  syncGrabRows, restoreDeletedRecord, readRecentAudit, readActiveDeleted, exportBackup, restoreBackup, close,
 };

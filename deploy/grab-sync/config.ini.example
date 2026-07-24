@@ -1,0 +1,17 @@
+[database]
+dsn = "mysql:host=localhost;dbname=GreenPower_1;charset=utf8mb4"
+username = "gp1sync"
+password = "CHANGE_ME_DATABASE_PASSWORD"
+
+[cloud]
+endpoint = "https://rdf2-downtime.onrender.com/api/device/grab-sync"
+device_id = "grab-pi-1"
+token = "CHANGE_ME_TO_THE_SAME_LONG_TOKEN_CONFIGURED_IN_RENDER"
+
+[sync]
+state_file = "/var/lib/gp1-grab-sync/state.json"
+max_rows_per_run = 2000
+batch_size = 200
+initial_lookback_days = 7
+reconcile_days = 7
+reconcile_interval_minutes = 60

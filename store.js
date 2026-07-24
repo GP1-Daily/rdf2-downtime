@@ -10,7 +10,10 @@ const XLSX_PATH = process.env.RDF2_XLSX_PATH
 const SHEETS = {
   Downtime: ['ID', 'EntryDate', 'StartTime', 'EndTime', 'Reason', 'Note', 'CreatedAt'],
   LineTime: ['ID', 'EntryDate', 'EventType', 'Time', 'Note', 'CreatedAt', 'StopType'],
-  GrabCrane: ['ID', 'ReportDate', 'DateTime', 'Weight', 'SourceFile', 'CreatedAt'],
+  GrabCrane: [
+    'ID', 'ReportDate', 'DateTime', 'Weight', 'SourceFile', 'CreatedAt',
+    'SourceSystem', 'SourceID', 'Amp', 'SourceStatus', 'SyncedAt',
+  ],
   YieldSettings: ['ID', 'EffectiveDate', 'RDF2Pct', 'FineFractionPct', 'HeavyFractionPct', 'MetalPct', 'CreatedAt', 'RDF2LGPct'],
   StockBaseline: ['ID', 'BaselineDate', 'RDF2Tons', 'FineFractionTons', 'MetalTons', 'CreatedAt'],
   Sales: ['ID', 'SaleDate', 'Material', 'Customer', 'Tons', 'Note', 'CreatedAt'],
@@ -369,6 +372,105 @@ async function deleteRowsByReportDate(sheetName, dateField, dateValue) {
   });
 }
 
+async function syncGrabRows(sourceSystem, rows, options = {}) {
+  return serialize(async () => {
+    const wb = await loadWorkbook();
+    const ws = wb.getWorksheet('GrabCrane');
+    const cols = SHEETS.GrabCrane;
+    const source = String(sourceSystem);
+    const sourceRow = new Map();
+    const timestampRow = new Map();
+    let maxId = 0;
+
+    ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const record = rowToObj(cols, row);
+      maxId = Math.max(maxId, Number(record.ID) || 0);
+      if (record.SourceSystem && record.SourceID !== '') {
+        sourceRow.set(`${record.SourceSystem}|${record.SourceID}`, rowNumber);
+      }
+      timestampRow.set(`${record.ReportDate}|${record.DateTime}`, rowNumber);
+    });
+
+    let created = 0;
+    let updated = 0;
+    const syncedRows = [];
+    const now = new Date().toISOString();
+    for (const data of rows) {
+      const sourceKey = `${source}|${data.SourceID}`;
+      const timestampKey = `${data.ReportDate}|${data.DateTime}`;
+      let rowNumber = sourceRow.get(sourceKey) || timestampRow.get(timestampKey);
+      let target;
+      let record;
+      if (rowNumber) {
+        target = ws.getRow(rowNumber);
+        const existing = rowToObj(cols, target);
+        if (existing.SourceSystem && (
+          existing.SourceSystem !== source || String(existing.SourceID) !== String(data.SourceID)
+        )) {
+          const error = new Error('Grab timestamp is already linked to a different source record');
+          error.statusCode = 409;
+          throw error;
+        }
+        record = {
+          ...existing,
+          ...data,
+          SourceFile: `Auto sync: ${source}`,
+          SourceSystem: source,
+          SyncedAt: now,
+        };
+        cols.forEach((column, index) => {
+          target.getCell(index + 1).value = record[column] !== undefined ? record[column] : '';
+        });
+        updated += 1;
+      } else {
+        maxId += 1;
+        record = appendWorkbookRecord(wb, 'GrabCrane', {
+          ...data,
+          SourceFile: `Auto sync: ${source}`,
+          SourceSystem: source,
+          SyncedAt: now,
+        }, maxId);
+        rowNumber = ws.rowCount;
+        created += 1;
+      }
+      sourceRow.set(sourceKey, rowNumber);
+      timestampRow.set(timestampKey, rowNumber);
+      syncedRows.push(record);
+    }
+
+    let deleted = 0;
+    if (options.snapshotStart && options.snapshotEnd) {
+      const keepIds = new Set(rows.map((row) => String(row.SourceID)));
+      const rowsToDelete = [];
+      ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+        if (rowNumber === 1) return;
+        const record = rowToObj(cols, row);
+        if (record.SourceSystem !== source) return;
+        if (record.DateTime < options.snapshotStart || record.DateTime >= options.snapshotEnd) return;
+        if (keepIds.has(String(record.SourceID))) return;
+        appendDeletedRecord(wb, 'GrabCrane', record);
+        rowsToDelete.push(rowNumber);
+      });
+      rowsToDelete.sort((a, b) => b - a).forEach((rowNumber) => ws.spliceRows(rowNumber, 1));
+      deleted = rowsToDelete.length;
+    }
+
+    appendAudit(wb, 'DEVICE_SYNC', 'GrabCrane', '', null, {
+      sourceSystem: source,
+      received: rows.length,
+      created,
+      updated,
+      deleted,
+      snapshotStart: options.snapshotStart || '',
+      snapshotEnd: options.snapshotEnd || '',
+      maxSourceId: rows.reduce((max, row) => Math.max(max, Number(row.SourceID) || 0), 0),
+    });
+    await saveWorkbook(wb);
+    return { rows: syncedRows, created, updated, deleted };
+  });
+}
+
 async function restoreDeletedRecord(id) {
   return serialize(async () => {
     const wb = await loadWorkbook();
@@ -443,5 +545,5 @@ async function restoreBackup(backup, options = {}) {
 
 module.exports = {
   XLSX_PATH, SHEETS, readSheet, appendRow, appendRows, updateRow, deleteRow,
-  deleteRowsByReportDate, restoreDeletedRecord, exportBackup, restoreBackup,
+  deleteRowsByReportDate, syncGrabRows, restoreDeletedRecord, exportBackup, restoreBackup,
 };

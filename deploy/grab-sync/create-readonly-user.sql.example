@@ -1,0 +1,5 @@
+-- Replace both CHANGE_ME values before running this as a MariaDB administrator.
+CREATE USER IF NOT EXISTS 'gp1sync'@'localhost' IDENTIFIED BY 'CHANGE_ME_STRONG_DATABASE_PASSWORD';
+ALTER USER 'gp1sync'@'localhost' IDENTIFIED BY 'CHANGE_ME_STRONG_DATABASE_PASSWORD';
+GRANT SELECT ON GreenPower_1.grab_data TO 'gp1sync'@'localhost';
+FLUSH PRIVILEGES;

@@ -11,7 +11,7 @@ const { createAuth } = require('./auth');
 const { requiredRole, hasRole } = require('./authorization');
 const { runWithRequestContext } = require('./request-context');
 const {
-  createRateLimiter, getClientIp, createRequestId, applySecurityHeaders,
+  createRateLimiter, getClientIp, createRequestId, applySecurityHeaders, constantTimeTokenEqual,
 } = require('./security');
 
 const PORT = Number(process.env.PORT) || 5600;
@@ -316,6 +316,106 @@ async function handleGrabDelete(req, res, query) {
   if (!date) return sendJson(res, 400, { ok: false, error: 'ต้องระบุ date' });
   const n = await store.deleteRowsByReportDate('GrabCrane', 'ReportDate', date);
   return sendJson(res, 200, { ok: true, deleted: n });
+}
+
+function normalizeGrabLocalDateTime(value) {
+  const match = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/.exec(String(value || '').trim());
+  if (!match || !validIsoDate(match[1])) return '';
+  if (Number(match[2]) > 23 || Number(match[3]) > 59 || Number(match[4]) > 59) return '';
+  return `${match[1]} ${match[2]}:${match[3]}:${match[4]}`;
+}
+
+function deviceBearerToken(req) {
+  const match = /^Bearer\s+(.+)$/i.exec(String(req.headers.authorization || '').trim());
+  return match ? match[1].trim() : '';
+}
+
+async function handleGrabDeviceSync(req, res) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    return sendJson(res, 405, { ok: false, error: 'Method not allowed' });
+  }
+  const ip = getClientIp(req);
+  if (!rateLimitRequest(req, res, `grab-device-auth:${ip}`, 30, 60 * 1000)) return;
+  const expectedToken = String(process.env.GRAB_SYNC_TOKEN || '');
+  if (!expectedToken) return sendJson(res, 503, { ok: false, error: 'Grab sync is not configured' });
+  if (!constantTimeTokenEqual(deviceBearerToken(req), expectedToken)) {
+    return sendJson(res, 401, { ok: false, error: 'Invalid device credentials' });
+  }
+  if (!validateJsonContentType(req, res)) return;
+
+  const body = await readBody(req);
+  const configuredDeviceId = String(process.env.GRAB_SYNC_DEVICE_ID || 'grab-pi-1');
+  const deviceId = String(body.deviceId || configuredDeviceId).trim();
+  if (deviceId !== configuredDeviceId || !/^[A-Za-z0-9._-]{1,64}$/.test(deviceId)) {
+    return sendJson(res, 400, { ok: false, error: 'Invalid device ID' });
+  }
+  if (!Array.isArray(body.rows) || body.rows.length > 2500) {
+    return sendJson(res, 400, { ok: false, error: 'rows must contain no more than 2,500 records' });
+  }
+
+  const seenIds = new Set();
+  const rows = [];
+  for (const input of body.rows) {
+    const sourceId = Number(input?.id);
+    const dateTime = normalizeGrabLocalDateTime(input?.createDate);
+    const weight = Number(input?.weight);
+    const amp = input?.amp === null || input?.amp === undefined || input?.amp === '' ? null : Number(input.amp);
+    const sourceStatus = input?.status === null || input?.status === undefined || input?.status === ''
+      ? null
+      : Number(input.status);
+    if (!Number.isSafeInteger(sourceId) || sourceId <= 0 || seenIds.has(sourceId)
+      || !dateTime || !Number.isFinite(weight) || weight < 0 || weight > 1000
+      || (amp !== null && (!Number.isFinite(amp) || amp < 0 || amp > 100000))
+      || (sourceStatus !== null && !Number.isSafeInteger(sourceStatus))) {
+      return sendJson(res, 400, { ok: false, error: 'Invalid Grab record' });
+    }
+    seenIds.add(sourceId);
+    rows.push({
+      ReportDate: dateTime.slice(0, 10),
+      DateTime: dateTime,
+      Weight: weight,
+      SourceID: sourceId,
+      Amp: amp,
+      SourceStatus: sourceStatus,
+    });
+  }
+
+  const mode = String(body.mode || 'upsert');
+  if (!['upsert', 'snapshot'].includes(mode)) {
+    return sendJson(res, 400, { ok: false, error: 'Invalid sync mode' });
+  }
+  let snapshotStart = '';
+  let snapshotEnd = '';
+  if (mode === 'snapshot') {
+    snapshotStart = normalizeGrabLocalDateTime(body.windowStart);
+    snapshotEnd = normalizeGrabLocalDateTime(body.windowEnd);
+    if (!snapshotStart || !snapshotEnd || snapshotEnd <= snapshotStart
+      || rows.some((row) => row.DateTime < snapshotStart || row.DateTime >= snapshotEnd)) {
+      return sendJson(res, 400, { ok: false, error: 'Invalid or incomplete snapshot window' });
+    }
+  }
+
+  const context = {
+    requestId: req.gp1RequestId,
+    ip,
+    userAgent: String(req.headers['user-agent'] || '').slice(0, 500),
+    user: { id: `device:${deviceId}`, email: `${deviceId}@device.local`, role: 'operator' },
+  };
+  const result = await runWithRequestContext(context, () => store.syncGrabRows(deviceId, rows, {
+    snapshotStart,
+    snapshotEnd,
+  }));
+  return sendJson(res, 200, {
+    ok: true,
+    deviceId,
+    processed: rows.length,
+    created: result.created,
+    updated: result.updated,
+    deleted: result.deleted,
+    maxSourceId: rows.reduce((max, row) => Math.max(max, row.SourceID), 0),
+    serverTime: new Date().toISOString(),
+  });
 }
 
 // ---------- Report ----------
@@ -1885,6 +1985,10 @@ const server = http.createServer(async (req, res) => {
       throw error;
     }
     const query = Object.fromEntries(parsed.searchParams.entries());
+
+    if (pathname === '/api/device/grab-sync') {
+      return await handleGrabDeviceSync(req, res);
+    }
 
     if (pathname.startsWith('/api/auth/')) {
       const authParts = pathname.split('/').filter(Boolean).slice(2);

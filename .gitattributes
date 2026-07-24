@@ -1,0 +1,4 @@
+deploy/grab-sync/*.sh text eol=lf
+deploy/grab-sync/*.php text eol=lf
+deploy/grab-sync/*.service text eol=lf
+deploy/grab-sync/*.timer text eol=lf

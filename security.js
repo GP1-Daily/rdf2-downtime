@@ -65,6 +65,14 @@ function createRequestId(req) {
   return /^[A-Za-z0-9._:-]{8,128}$/.test(supplied) ? supplied : crypto.randomUUID();
 }
 
+function constantTimeTokenEqual(provided, expected) {
+  const expectedValue = String(expected || '');
+  if (expectedValue.length < 32) return false;
+  const providedDigest = crypto.createHash('sha256').update(String(provided || '')).digest();
+  const expectedDigest = crypto.createHash('sha256').update(expectedValue).digest();
+  return crypto.timingSafeEqual(providedDigest, expectedDigest);
+}
+
 function contentSecurityPolicy(nonce) {
   return [
     "default-src 'self'",
@@ -105,6 +113,7 @@ module.exports = {
   createRateLimiter,
   getClientIp,
   createRequestId,
+  constantTimeTokenEqual,
   secureDatabaseUrl,
   contentSecurityPolicy,
   securityHeaders,
