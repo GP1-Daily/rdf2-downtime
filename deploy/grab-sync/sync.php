@@ -66,7 +66,7 @@ function postJson(string $endpoint, string $token, array $payload): array
         ],
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_TIMEOUT => 45,
+        CURLOPT_TIMEOUT => 120,
         CURLOPT_SSL_VERIFYPEER => true,
         CURLOPT_SSL_VERIFYHOST => 2,
     ]);

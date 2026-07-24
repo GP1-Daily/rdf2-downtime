@@ -8,7 +8,7 @@ Type=oneshot
 User=gp1sync
 Group=gp1sync
 Environment=GP1_GRAB_SYNC_CONFIG=/etc/gp1-grab-sync.ini
-ExecStart=/usr/bin/php /opt/gp1-grab-sync/sync.php
+ExecStart=/usr/bin/php -d pcre.jit=0 /opt/gp1-grab-sync/sync.php
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
