@@ -231,16 +231,33 @@ function createAuth(store, dependencies = {}) {
     }
   }
 
+  async function findAuthUserByEmail(email) {
+    const perPage = 200;
+    for (let page = 1; page <= 25; page += 1) {
+      const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage });
+      if (error) return null;
+      const users = Array.isArray(data?.users) ? data.users : [];
+      const match = users.find((user) => (
+        String(user.email || '').trim().toLowerCase() === email
+      ));
+      if (match) return match;
+      if (!data?.nextPage || users.length < perPage) return null;
+    }
+    return null;
+  }
+
   async function inviteUser({ email, displayName, role, redirectTo }) {
     assertConfigured();
     if (!adminClient) throw new AuthConfigurationError('ยังไม่ได้ตั้งค่า SUPABASE_SERVICE_ROLE_KEY สำหรับเชิญผู้ใช้');
     const normalizedEmail = String(email || '').trim().toLowerCase();
     if (!normalizedEmail || !ROLES.includes(role)) throw new Error('Invalid user details');
     const existing = await findProfile('', normalizedEmail);
-    const reusableProfile = existing
+    const canReuseProfile = Boolean(
+      existing
       && !profileIsActive(existing)
-      && !String(existing.AuthUserID || '').trim();
-    if (existing && !reusableProfile) {
+      && !String(existing.AuthUserID || '').trim(),
+    );
+    if (existing && !canReuseProfile) {
       const error = new Error('อีเมลนี้มีอยู่ในระบบแล้ว');
       error.statusCode = 409;
       throw error;
@@ -248,22 +265,30 @@ function createAuth(store, dependencies = {}) {
     const options = { data: { display_name: String(displayName || '').trim(), role } };
     const finalRedirect = redirectTo || process.env.AUTH_REDIRECT_URL;
     if (finalRedirect) options.redirectTo = finalRedirect;
-    const { data, error } = await adminClient.auth.admin.inviteUserByEmail(normalizedEmail, options);
-    if (error || !data.user) throw new Error('ไม่สามารถส่งคำเชิญได้ กรุณาตรวจสอบอีเมลและการตั้งค่า Supabase');
+    const inviteResult = await adminClient.auth.admin.inviteUserByEmail(normalizedEmail, options);
+    let authUser = inviteResult.data?.user || null;
+    if ((!authUser || inviteResult.error) && canReuseProfile) {
+      authUser = await findAuthUserByEmail(normalizedEmail);
+    }
+    if (!authUser) throw new Error('ไม่สามารถส่งคำเชิญได้ กรุณาตรวจสอบอีเมลและการตั้งค่า Supabase');
     try {
       const profile = {
-        AuthUserID: data.user.id,
+        AuthUserID: authUser.id,
         Email: normalizedEmail,
         DisplayName: String(displayName || '').trim() || normalizedEmail,
         Role: role,
         Active: true,
         UpdatedAt: new Date().toISOString(),
       };
-      return reusableProfile
-        ? await store.updateRow('AppUsers', reusableProfile.ID, profile)
+      const savedProfile = canReuseProfile
+        ? await store.updateRow('AppUsers', existing.ID, profile)
         : await store.appendRow('AppUsers', profile);
+      if (!savedProfile) throw new Error('Unable to save invited user profile');
+      return savedProfile;
     } catch (storeError) {
-      await adminClient.auth.admin.deleteUser(data.user.id).catch(() => {});
+      if (!canReuseProfile && !inviteResult.error && inviteResult.data?.user) {
+        await adminClient.auth.admin.deleteUser(authUser.id).catch(() => {});
+      }
       throw storeError;
     }
   }

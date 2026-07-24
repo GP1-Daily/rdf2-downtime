@@ -89,6 +89,131 @@ test('admin password assignment confirms the email and account deletion uses Sup
   }
 });
 
+test('inviting a deleted user reuses the existing profile row', async () => {
+  const previous = {
+    AUTH_DISABLED: process.env.AUTH_DISABLED,
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  };
+  const deletedProfile = {
+    ID: 42,
+    AuthUserID: '',
+    Email: 'returning@example.com',
+    DisplayName: 'Deleted User',
+    Role: 'viewer',
+    Active: false,
+  };
+  const updates = [];
+  const fakeStore = {
+    async readSheet() { return [deletedProfile]; },
+    async updateRow(sheetName, id, patch) {
+      updates.push({ sheetName, id, patch });
+      return { ...deletedProfile, ...patch };
+    },
+    async appendRow() { throw new Error('deleted profile must be reused'); },
+  };
+  const fakeClient = {
+    auth: {
+      admin: {
+        async inviteUserByEmail() {
+          return { data: { user: { id: 'restored-auth-user' } }, error: null };
+        },
+        async deleteUser() { return { error: null }; },
+      },
+    },
+  };
+  try {
+    process.env.AUTH_DISABLED = 'false';
+    process.env.SUPABASE_URL = 'https://example.supabase.co';
+    process.env.SUPABASE_ANON_KEY = 'test-anon-key';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key';
+    const auth = createAuth(fakeStore, { createClient: () => fakeClient });
+    const invited = await auth.inviteUser({
+      email: 'returning@example.com', displayName: 'Returning User', role: 'operator',
+    });
+    assert.equal(invited.ID, 42);
+    assert.equal(invited.AuthUserID, 'restored-auth-user');
+    assert.equal(invited.Active, true);
+    assert.equal(updates.length, 1);
+    assert.equal(updates[0].sheetName, 'AppUsers');
+    assert.equal(updates[0].id, 42);
+  } finally {
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});
+
+test('inviting a deleted profile reconnects an orphaned Supabase account', async () => {
+  const previous = {
+    AUTH_DISABLED: process.env.AUTH_DISABLED,
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  };
+  const deletedProfile = {
+    ID: 84,
+    AuthUserID: '',
+    Email: 'orphan@example.com',
+    DisplayName: 'Orphaned User',
+    Role: 'viewer',
+    Active: false,
+  };
+  const calls = [];
+  const fakeStore = {
+    async readSheet() { return [deletedProfile]; },
+    async updateRow(sheetName, id, patch) {
+      calls.push({ action: 'update-profile', sheetName, id, patch });
+      return { ...deletedProfile, ...patch };
+    },
+    async appendRow() { throw new Error('orphaned profile must be reused'); },
+  };
+  const fakeClient = {
+    auth: {
+      admin: {
+        async inviteUserByEmail() {
+          return { data: { user: null }, error: new Error('User already registered') };
+        },
+        async listUsers() {
+          calls.push({ action: 'list-users' });
+          return {
+            data: {
+              users: [{ id: 'orphan-auth-user', email: 'orphan@example.com' }],
+              nextPage: null,
+            },
+            error: null,
+          };
+        },
+        async deleteUser(id) {
+          calls.push({ action: 'delete-auth-user', id });
+          return { error: null };
+        },
+      },
+    },
+  };
+  try {
+    process.env.AUTH_DISABLED = 'false';
+    process.env.SUPABASE_URL = 'https://example.supabase.co';
+    process.env.SUPABASE_ANON_KEY = 'test-anon-key';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key';
+    const auth = createAuth(fakeStore, { createClient: () => fakeClient });
+    const invited = await auth.inviteUser({
+      email: 'orphan@example.com', displayName: 'Recovered User', role: 'viewer',
+    });
+    assert.equal(invited.ID, 84);
+    assert.equal(invited.AuthUserID, 'orphan-auth-user');
+    assert.equal(invited.Active, true);
+    assert.deepEqual(calls.map((call) => call.action), ['list-users', 'update-profile']);
+  } finally {
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});
+
 test('required authentication fails closed and validates CSRF origin tokens', async () => {
   const previous = {
     AUTH_DISABLED: process.env.AUTH_DISABLED,
