@@ -10,6 +10,7 @@ function timeToMinutes(t) {
 }
 
 function minutesToTime(min) {
+  if (Number(min) === 1440) return '24:00';
   min = ((min % 1440) + 1440) % 1440;
   const h = Math.floor(min / 60), m = min % 60;
   return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');

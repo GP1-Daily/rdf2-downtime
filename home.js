@@ -3,6 +3,7 @@
   let homeMotion = null;
   let homeLoadPromise = null;
   let hasLoadedDashboard = false;
+  const HOME_AUTO_REFRESH_MS = 5 * 60 * 1000;
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const valueAnimations = new WeakMap();
   const launcher = document.getElementById('workspaceLauncher');
@@ -449,6 +450,37 @@
     setText('homeRevenueLead', salesLeads ? 'Product Sales' : 'Tipping Fee');
   }
 
+  function renderGrab(report) {
+    const grab = report.grab || {};
+    const count = Number(grab.totalGrabs) || 0;
+    const average = Number(grab.avgWeight) || 0;
+    const total = Number(grab.totalWeight) || 0;
+    animateNumber('homeGrabCount', count, (value) => num(Math.round(value), 0), 620);
+    animateNumber('homeGrabAverage', average, (value) => num(value, 2), 720, 70);
+    animateNumber('homeGrabTotal', total, (value) => num(value, 2), 820, 120);
+
+    const panel = document.getElementById('homeGrabLive');
+    panel.classList.toggle('has-data', count > 0);
+    panel.style.setProperty('--grab-intensity', String(Math.min(1, count / 30)));
+    if (!count) {
+      setText('homeGrabWindow', 'ยังไม่มีข้อมูล Grab สำหรับวันนี้');
+      setText('homeGrabSync', 'Waiting for Raspberry Pi · Auto sync every 5 minutes');
+      return;
+    }
+
+    setText('homeGrabWindow', `First Grab ${grab.firstGrabTime || '-'} · Latest ${grab.lastGrabTime || '-'}`);
+    let syncLabel = 'Pi connected · Auto sync every 5 minutes';
+    if (grab.lastSyncedAt) {
+      const syncedAt = new Date(grab.lastSyncedAt);
+      if (!Number.isNaN(syncedAt.getTime())) {
+        syncLabel = `Pi synced ${syncedAt.toLocaleTimeString('th-TH', {
+          timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit',
+        })} · Auto sync every 5 minutes`;
+      }
+    }
+    setText('homeGrabSync', syncLabel);
+  }
+
   async function fetchHomeDashboard() {
     const refreshButton = document.getElementById('btnRefreshHome');
     refreshButton.disabled = true;
@@ -477,10 +509,11 @@
       const kpi = successful(results[4]);
 
       if (report) {
+        renderGrab(report);
         const running = report.line.segments.some((segment) => segment.ongoing);
         const availability = report.line.availabilityPct === null ? '-' : `${num(report.line.availabilityPct, 1)}%`;
         animateNumber('homeLineValue', report.line.netRunMinutes, (value) => `${minutes(value)} · ${availability}`);
-        setText('homeLineMeta', `${running ? 'Line Running' : 'Line Recorded'} · Downtime ${minutes(report.downtime.totalMinutes)} · ${report.grab.totalGrabs} Grab`);
+        setText('homeLineMeta', `${running ? 'Line Running' : 'Line Recorded'} · Grab span ${minutes(report.line.productionMinutes)} · Downtime ${minutes(report.downtime.totalMinutes)}`);
       }
 
       if (weekly) {
@@ -564,6 +597,18 @@
   });
   document.addEventListener('gp1:tabchange', (event) => {
     if (event.detail?.tab === 'home' && Date.now() - lastLoadedAt > 60000) {
+      loadHomeDashboard().catch((error) => toast(error.message, true));
+    }
+  });
+  window.setInterval(() => {
+    const homeActive = document.getElementById('tab-home').classList.contains('active');
+    if (homeActive && !document.hidden && Date.now() - lastLoadedAt >= HOME_AUTO_REFRESH_MS) {
+      loadHomeDashboard().catch((error) => toast(error.message, true));
+    }
+  }, HOME_AUTO_REFRESH_MS);
+  document.addEventListener('visibilitychange', () => {
+    const homeActive = document.getElementById('tab-home').classList.contains('active');
+    if (!document.hidden && homeActive && Date.now() - lastLoadedAt >= HOME_AUTO_REFRESH_MS) {
       loadHomeDashboard().catch((error) => toast(error.message, true));
     }
   });

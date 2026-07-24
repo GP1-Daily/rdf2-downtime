@@ -278,32 +278,6 @@ function computeLineSessions(rows) {
 
 // ---------- Grab Crane ----------
 
-async function handleGrabImport(req, res) {
-  const body = await readBody(req);
-  const { reportDate, rows, sourceFile, replace } = body;
-  if (!validIsoDate(reportDate) || !Array.isArray(rows)) {
-    return sendJson(res, 400, { ok: false, error: 'ต้องระบุ reportDate และ rows' });
-  }
-  if (rows.length > 10000 || !textWithin(sourceFile, 255)) {
-    return sendJson(res, 400, { ok: false, error: 'ไฟล์มีข้อมูลมากเกินกำหนดหรือชื่อไฟล์ไม่ถูกต้อง' });
-  }
-  const candidates = rows.filter((r) => r.dateTime && r.weight !== undefined && r.weight !== null && r.weight !== '');
-  const invalid = candidates.some((row) => (
-    !textWithin(row.dateTime, 100) || !Number.isFinite(Number(row.weight)) || Number(row.weight) < 0
-  ));
-  if (invalid) return sendJson(res, 400, { ok: false, error: 'พบวันที่ เวลา หรือน้ำหนักที่ไม่ถูกต้องในไฟล์ CSV' });
-  const data = candidates.map((r) => ({
-      ReportDate: reportDate,
-      DateTime: String(r.dateTime),
-      Weight: Number(r.weight),
-      SourceFile: String(sourceFile || ''),
-    }));
-  if (!data.length) return sendJson(res, 400, { ok: false, error: 'ไม่พบข้อมูล Grab ที่นำเข้าได้' });
-  if (replace) await store.deleteRowsByReportDate('GrabCrane', 'ReportDate', reportDate);
-  await store.appendRows('GrabCrane', data);
-  return sendJson(res, 200, { ok: true, imported: data.length });
-}
-
 async function handleGrabGet(req, res, query) {
   const rows = await store.readSheet('GrabCrane');
   const date = query.date;
@@ -426,6 +400,128 @@ function extractTimeOfDay(dateTimeStr) {
   return `${m[1].padStart(2, '0')}:${m[2]}`;
 }
 
+function grabDateTimePoint(row) {
+  const date = String(row.ReportDate || '');
+  const match = /(\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(String(row.DateTime || ''));
+  if (!validIsoDate(date) || !match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const second = Number(match[3] || 0);
+  if (hour > 23 || minute > 59 || second > 59) return null;
+  const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  return {
+    row,
+    date,
+    time,
+    key: `${date} ${time}:${String(second).padStart(2, '0')}`,
+  };
+}
+
+function mergeMinuteRanges(ranges) {
+  const sorted = ranges
+    .map(([start, end]) => [Math.max(0, Number(start)), Math.min(1440, Number(end))])
+    .filter(([start, end]) => Number.isFinite(start) && Number.isFinite(end) && end > start)
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const merged = [];
+  for (const range of sorted) {
+    const previous = merged[merged.length - 1];
+    if (!previous || range[0] > previous[1]) merged.push([...range]);
+    else previous[1] = Math.max(previous[1], range[1]);
+  }
+  return merged;
+}
+
+function rangeMinutes(ranges) {
+  return ranges.reduce((total, [start, end]) => total + end - start, 0);
+}
+
+function overlapWithRanges(start, end, ranges) {
+  let total = 0;
+  for (const [rangeStart, rangeEnd] of ranges) {
+    const low = Math.max(start, rangeStart);
+    const high = Math.min(end, rangeEnd);
+    if (high > low) total += high - low;
+  }
+  return total;
+}
+
+function buildProductionSegments(reportDate, sessionRanges, grabRows) {
+  const points = grabRows.map(grabDateTimePoint).filter(Boolean).sort((a, b) => a.key.localeCompare(b.key));
+  const segments = [];
+  let anchoredSessions = 0;
+  let estimatedSessions = 0;
+
+  for (const session of sessionRanges) {
+    const sessionPoints = points.filter((point) => point.key >= session.startKey && point.key <= session.endKey);
+    const anchored = sessionPoints.length >= 2;
+    const first = anchored ? sessionPoints[0] : null;
+    const last = anchored ? sessionPoints[sessionPoints.length - 1] : null;
+    const startDate = first ? first.date : session.startDate;
+    const startTime = first ? first.time : session.startTime;
+    const endDate = last ? last.date : session.endDate;
+    const endTime = last ? last.time : session.endTime;
+    if (`${endDate} ${endTime}` <= `${startDate} ${startTime}`) continue;
+
+    if (anchored) anchoredSessions += 1;
+    else estimatedSessions += 1;
+    for (const part of lib.splitRange(startDate, startTime, endDate, endTime)) {
+      if (part.date !== reportDate) continue;
+      segments.push({
+        ...part,
+        source: anchored ? 'grab' : 'manual',
+        estimated: !anchored,
+        grabCount: sessionPoints.length,
+        firstGrab: first?.key || null,
+        lastGrab: last?.key || null,
+        sessionStart: `${session.startDate} ${session.startTime}`,
+        sessionStop: session.ongoing ? null : `${session.endDate} ${session.endTime}`,
+        stopType: session.stopType,
+        ongoing: session.ongoing,
+      });
+    }
+  }
+
+  // If Start/Stop was missed entirely, two or more Pi records still provide a
+  // defensible production span for the day. It is kept visibly inferred so
+  // the operator can correct the missing line events later.
+  if (!segments.length) {
+    const dailyPoints = points.filter((point) => point.date === reportDate);
+    if (dailyPoints.length >= 2) {
+      const first = dailyPoints[0];
+      const last = dailyPoints[dailyPoints.length - 1];
+      for (const part of lib.splitRange(reportDate, first.time, reportDate, last.time)) {
+        segments.push({
+          ...part,
+          source: 'grab-inferred',
+          estimated: true,
+          grabCount: dailyPoints.length,
+          firstGrab: first.key,
+          lastGrab: last.key,
+          sessionStart: null,
+          sessionStop: null,
+          stopType: '',
+          ongoing: false,
+        });
+      }
+      anchoredSessions += 1;
+      estimatedSessions += 1;
+    }
+  }
+
+  segments.sort((a, b) => a.startTime.localeCompare(b.startTime));
+  const sources = new Set(segments.map((segment) => segment.source));
+  const runtimeSource = !segments.length
+    ? 'none'
+    : sources.size === 1 && sources.has('manual')
+      ? 'manual'
+      : sources.has('manual')
+        ? 'mixed'
+        : sources.has('grab-inferred')
+          ? 'grab-inferred'
+          : 'grab';
+  return { segments, anchoredSessions, estimatedSessions, runtimeSource };
+}
+
 async function handleReport(req, res, query) {
   const date = query.date || lib.addDays(lib.todayStr(), -1);
   const prevDate = lib.addDays(date, -1);
@@ -443,6 +539,7 @@ async function handleReport(req, res, query) {
   const sessions = computeLineSessions(lineRows);
   const nowBkk = lib.nowInBangkok();
   const lineSegments = [];
+  const sessionRanges = [];
   const incompleteSessions = [];
   for (const sess of sessions) {
     if (sess.incomplete) {
@@ -457,12 +554,18 @@ async function handleReport(req, res, query) {
           incompleteSessions.push({ type: 'no-stop', entryDate: sess.start.EntryDate, time: sess.start.Time, note: sess.start.Note });
         }
       } else if (sess.start && !sess.stop) {
-        // The one genuinely still-open session (nothing has superseded it) is
-        // still "running" up through now - give it provisional credit on
-        // every day it spans (including today, up to the current time)
-        // instead of it silently disappearing until the operator eventually
-        // logs the real Stop Line.
-        const segs = lib.splitRange(sess.start.EntryDate, sess.start.Time, nowBkk.date, nowBkk.time);
+        const range = {
+          startDate: sess.start.EntryDate,
+          startTime: sess.start.Time,
+          endDate: nowBkk.date,
+          endTime: nowBkk.time,
+          startKey: `${sess.start.EntryDate} ${sess.start.Time}:00`,
+          endKey: `${nowBkk.date} ${nowBkk.time}:59`,
+          stopType: '',
+          ongoing: true,
+        };
+        if (range.endKey >= range.startKey) sessionRanges.push(range);
+        const segs = lib.splitRange(range.startDate, range.startTime, range.endDate, range.endTime);
         for (const s of segs) {
           if (s.date !== date) continue;
           lineSegments.push({
@@ -476,7 +579,18 @@ async function handleReport(req, res, query) {
       }
       continue;
     }
-    const segs = lib.splitRange(sess.start.EntryDate, sess.start.Time, sess.stop.EntryDate, sess.stop.Time);
+    const range = {
+      startDate: sess.start.EntryDate,
+      startTime: sess.start.Time,
+      endDate: sess.stop.EntryDate,
+      endTime: sess.stop.Time,
+      startKey: `${sess.start.EntryDate} ${sess.start.Time}:00`,
+      endKey: `${sess.stop.EntryDate} ${sess.stop.Time}:59`,
+      stopType: sess.stop.StopType || '',
+      ongoing: false,
+    };
+    if (range.endKey >= range.startKey) sessionRanges.push(range);
+    const segs = lib.splitRange(range.startDate, range.startTime, range.endDate, range.endTime);
     for (const s of segs) {
       if (s.date !== date) continue;
       lineSegments.push({
@@ -492,21 +606,23 @@ async function handleReport(req, res, query) {
   const lineByPeriod = { 'เช้า': 0, 'บ่าย': 0, 'ดึก': 0 };
   for (const s of lineSegments) lineByPeriod[s.period] += s.minutes;
 
-  // ---- Downtime: split across midnight + period boundaries, then clipped to
-  // only the portion that overlaps an active Start-Stop Line window. Downtime
-  // logged while the line wasn't even running (e.g. maintenance before the
-  // first Start Line of the day) would otherwise inflate downtime past the
-  // total line time, making "net run time" negative and Availability
-  // nonsensical.
-  const activeRanges = lineSegments.map((s) => [lib.timeToMinutes(s.startTime), lib.timeToMinutes(s.endTime)]);
-  function overlapMinutes(startMin, endMin) {
-    let total = 0;
-    for (const [aStart, aEnd] of activeRanges) {
-      const lo = Math.max(startMin, aStart), hi = Math.min(endMin, aEnd);
-      if (hi > lo) total += hi - lo;
-    }
-    return total;
+  // Pi timestamps anchor the productive window. Gaps between grabs remain
+  // productive time; only an operator-recorded downtime interval subtracts
+  // from it. Start/Stop remains the session boundary and the fallback when a
+  // session has fewer than two valid Grab records.
+  const production = buildProductionSegments(date, sessionRanges, grabRows);
+  const productionSegments = production.segments;
+  const productionRanges = mergeMinuteRanges(productionSegments.map((segment) => [
+    lib.timeToMinutes(segment.startTime), lib.timeToMinutes(segment.endTime),
+  ]));
+  const productionByPeriod = { 'เช้า': 0, 'บ่าย': 0, 'ดึก': 0 };
+  for (const period of Object.keys(productionByPeriod)) {
+    const ranges = mergeMinuteRanges(productionSegments
+      .filter((segment) => segment.period === period)
+      .map((segment) => [lib.timeToMinutes(segment.startTime), lib.timeToMinutes(segment.endTime)]));
+    productionByPeriod[period] = rangeMinutes(ranges);
   }
+  const totalProductionMin = Object.values(productionByPeriod).reduce((sum, minutes) => sum + minutes, 0);
 
   const relevantDowntime = downtimeRows.filter((r) => r.EntryDate === date || r.EntryDate === prevDate);
   const downtimeSegments = [];
@@ -515,7 +631,7 @@ async function handleReport(req, res, query) {
     for (const s of segs) {
       if (s.date !== date) continue;
       const startMin = lib.timeToMinutes(s.startTime), endMin = lib.timeToMinutes(s.endTime);
-      const insideLineMinutes = overlapMinutes(startMin, endMin);
+      const insideLineMinutes = overlapWithRanges(startMin, endMin, productionRanges);
       downtimeSegments.push({
         ...s,
         id: r.ID,
@@ -532,18 +648,38 @@ async function handleReport(req, res, query) {
   }
   downtimeSegments.sort((a, b) => (a.startTime < b.startTime ? -1 : 1));
   const totalDowntimeMinRaw = downtimeSegments.reduce((s, x) => s + x.minutes, 0);
-  const totalDowntimeMin = downtimeSegments.reduce((s, x) => s + x.insideLineMinutes, 0);
   const downtimeByPeriod = { 'เช้า': 0, 'บ่าย': 0, 'ดึก': 0 };
-  for (const s of downtimeSegments) downtimeByPeriod[s.period] += s.insideLineMinutes;
+  for (const period of Object.keys(downtimeByPeriod)) {
+    const intersections = [];
+    for (const segment of downtimeSegments.filter((item) => item.period === period)) {
+      const start = lib.timeToMinutes(segment.startTime);
+      const end = lib.timeToMinutes(segment.endTime);
+      for (const [activeStart, activeEnd] of productionRanges) {
+        const low = Math.max(start, activeStart);
+        const high = Math.min(end, activeEnd);
+        if (high > low) intersections.push([low, high]);
+      }
+    }
+    downtimeByPeriod[period] = rangeMinutes(mergeMinuteRanges(intersections));
+  }
+  const totalDowntimeMin = Object.values(downtimeByPeriod).reduce((sum, minutes) => sum + minutes, 0);
 
-  const netRunMin = Math.max(0, totalLineMin - totalDowntimeMin);
-  const availabilityPct = totalLineMin > 0 ? (netRunMin / totalLineMin) * 100 : null;
+  const netRunMin = Math.max(0, totalProductionMin - totalDowntimeMin);
+  const availabilityPct = totalProductionMin > 0 ? (netRunMin / totalProductionMin) * 100 : null;
 
   // ---- Grab crane ----
-  const grabForDate = grabRows.filter((r) => r.ReportDate === date);
+  const grabForDate = grabRows
+    .filter((r) => r.ReportDate === date)
+    .sort((a, b) => String(a.DateTime).localeCompare(String(b.DateTime)));
   const totalGrabs = grabForDate.length;
   const totalWeight = grabForDate.reduce((s, r) => s + (Number(r.Weight) || 0), 0);
   const avgWeight = totalGrabs > 0 ? totalWeight / totalGrabs : null;
+  const firstGrabTime = totalGrabs ? extractTimeOfDay(grabForDate[0].DateTime) : null;
+  const lastGrabTime = totalGrabs ? extractTimeOfDay(grabForDate[totalGrabs - 1].DateTime) : null;
+  const lastSyncedAt = grabForDate.reduce((latest, row) => {
+    const value = String(row.SyncedAt || '');
+    return value > latest ? value : latest;
+  }, '') || null;
   const grabByPeriod = {
     'เช้า': { count: 0, totalWeight: 0 },
     'บ่าย': { count: 0, totalWeight: 0 },
@@ -573,6 +709,12 @@ async function handleReport(req, res, query) {
       segments: lineSegments,
       totalMinutes: totalLineMin,
       byPeriod: lineByPeriod,
+      productionSegments,
+      productionMinutes: totalProductionMin,
+      productionByPeriod,
+      runtimeSource: production.runtimeSource,
+      grabAnchoredSessions: production.anchoredSessions,
+      estimatedSessions: production.estimatedSessions,
       incomplete: incompleteSessions,
       netRunMinutes: netRunMin,
       availabilityPct,
@@ -581,6 +723,10 @@ async function handleReport(req, res, query) {
       totalGrabs,
       avgWeight,
       totalWeight,
+      firstGrabTime,
+      lastGrabTime,
+      lastSyncedAt,
+      automaticGrabs: grabForDate.filter((row) => row.SourceSystem).length,
       byPeriod: grabByPeriod,
     },
   });
@@ -1954,7 +2100,6 @@ async function dispatchBusinessApi(req, res, pathname, query) {
   if (resource === 'line') return handleLine(req, res, rest, query);
   if (resource === 'report') return handleReport(req, res, query);
   if (resource === 'grab') {
-    if (rest[0] === 'import' && req.method === 'POST') return handleGrabImport(req, res);
     if (rest.length === 0 && req.method === 'GET') return handleGrabGet(req, res, query);
     if (rest.length === 0 && req.method === 'DELETE') return handleGrabDelete(req, res, query);
   }

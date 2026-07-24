@@ -42,6 +42,7 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   const port = await getFreePort();
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rdf2-revenue-test-'));
   const workbookPath = path.join(tempDir, 'test.xlsx');
+  const grabSyncToken = 'r'.repeat(64);
   let serverError = '';
   const child = spawn(process.execPath, ['server.js'], {
     cwd: ROOT,
@@ -52,6 +53,8 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
       RDF2_XLSX_PATH: workbookPath,
       NODE_ENV: 'test',
       AUTH_DISABLED: 'true',
+      GRAB_SYNC_DEVICE_ID: 'grab-pi-1',
+      GRAB_SYNC_TOKEN: grabSyncToken,
     },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
@@ -78,6 +81,19 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
     return expectedStatus === 200 ? JSON.parse(responseText) : null;
   }
 
+  async function syncGrab(rows) {
+    const response = await fetch(`${baseUrl}/api/device/grab-sync`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${grabSyncToken}`,
+      },
+      body: JSON.stringify({ deviceId: 'grab-pi-1', mode: 'upsert', rows }),
+    });
+    const responseText = await response.text();
+    assert.equal(response.status, 200, responseText);
+  }
+
   await post('/api/revenue/customers', { name: 'ลูกค้า A' });
   await post('/api/revenue/customers', { name: 'ลูกค้า B' });
   await post('/api/revenue/customers', { name: 'TPI' });
@@ -91,14 +107,11 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   assert.equal(legacyYield.row.RDF2LGPct, 10);
   await post('/api/yield', { effectiveDate: '2026-07-01', rdf2Pct: 28, rdf2LGPct: 12, fineFractionPct: 20, heavyFractionPct: 15, metalPct: 5 });
   await post('/api/yield', { effectiveDate: '2026-07-08', rdf2Pct: 50, fineFractionPct: 10, heavyFractionPct: 20, metalPct: 5 });
-  await post('/api/grab/import', {
-    reportDate: '2026-07-06', sourceFile: 'test.csv', replace: true,
-    rows: [{ dateTime: '2026-07-06 08:00', weight: 10 }, { dateTime: '2026-07-06 09:00', weight: 20 }],
-  });
-  await post('/api/grab/import', {
-    reportDate: '2026-07-08', sourceFile: 'test.csv', replace: true,
-    rows: [{ dateTime: '2026-07-08 08:00', weight: 40 }],
-  });
+  await syncGrab([
+    { id: 1, amp: 95, weight: 10, status: 10, createDate: '2026-07-06 08:00:00' },
+    { id: 2, amp: 95, weight: 20, status: 10, createDate: '2026-07-06 09:00:00' },
+    { id: 3, amp: 95, weight: 40, status: 10, createDate: '2026-07-08 08:00:00' },
+  ]);
   await post('/api/sales', { saleDate: '2026-07-05', material: 'RDF2', customer: 'ลูกค้า A', tons: 10 });
   await post('/api/sales', { saleDate: '2026-07-06', material: 'FineFraction', customer: 'ลูกค้า A', tons: 2 });
   await post('/api/sales', { saleDate: '2026-07-06', material: 'RDF2', customer: 'ยังไม่ Setup', tons: 1 });

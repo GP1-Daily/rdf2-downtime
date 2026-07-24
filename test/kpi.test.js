@@ -42,6 +42,7 @@ test('monthly KPI uses live operational data and evaluates the 21-20 period', as
   const port = await freePort();
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rdf2-kpi-test-'));
   const workbookPath = path.join(tempDir, 'test.xlsx');
+  const grabSyncToken = 'k'.repeat(64);
   let serverError = '';
   const child = spawn(process.execPath, ['server.js'], {
     cwd: ROOT,
@@ -52,6 +53,8 @@ test('monthly KPI uses live operational data and evaluates the 21-20 period', as
       RDF2_XLSX_PATH: workbookPath,
       NODE_ENV: 'test',
       AUTH_DISABLED: 'true',
+      GRAB_SYNC_DEVICE_ID: 'grab-pi-1',
+      GRAB_SYNC_TOKEN: grabSyncToken,
     },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
@@ -86,6 +89,20 @@ test('monthly KPI uses live operational data and evaluates the 21-20 period', as
     return data;
   }
 
+  async function syncGrab(rows) {
+    const response = await fetch(`${baseUrl}/api/device/grab-sync`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${grabSyncToken}`,
+      },
+      body: JSON.stringify({ deviceId: 'grab-pi-1', mode: 'upsert', rows }),
+    });
+    const data = await response.json();
+    assert.equal(response.status, 200, JSON.stringify(data));
+    assert.equal(data.ok, true, JSON.stringify(data));
+  }
+
   const defaultWeekly = await request('/api/weekly-report?weekStart=2026-06-15');
   assert.equal(defaultWeekly.kpi.msw.monthlyTargetTons, 8000);
   assert.equal(defaultWeekly.kpi.msw.weeklyTargetTons, 2000);
@@ -105,10 +122,9 @@ test('monthly KPI uses live operational data and evaluates the 21-20 period', as
   await request('/api/revenue/rdf3-sales', 'POST', {
     saleDate: '2026-06-21', customer: 'Customer A', tons: 60,
   });
-  await request('/api/grab/import', 'POST', {
-    reportDate: '2026-06-21', sourceFile: 'grab.csv', replace: true,
-    rows: [{ dateTime: '2026-06-21 08:00', weight: 250 }],
-  });
+  await syncGrab([
+    { id: 1, amp: 95, weight: 250, status: 10, createDate: '2026-06-21 08:00:00' },
+  ]);
   await request('/api/kpi/targets', 'POST', {
     effectiveDate: '2026-06-21',
     rdf2Target: 40,

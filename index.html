@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
-<link rel="stylesheet" href="home.css?v=20260723-yieldsplit">
+<link rel="stylesheet" href="home.css?v=20260724-grab-runtime">
 <link rel="stylesheet" href="kpi.css?v=20260723-yieldsplit">
 <link rel="stylesheet" href="security-ui.css?v=20260723-security">
 <link rel="stylesheet" href="operations.css?v=20260723-entry-report">
@@ -108,9 +108,6 @@
   .stock-paused{display:none!important;}
   .quick-actions{display:flex; flex-wrap:wrap; gap:14px; margin-bottom:16px;}
   .quick-actions button{flex:1 1 250px; min-width:0;}
-  .csv-drop{border:2px dashed var(--border); border-radius:10px; padding:24px; text-align:center; color:var(--gray);}
-  .mapping-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin:14px 0;}
-  .mapping-grid label{font-size:12px; color:var(--gray); display:block; margin-bottom:4px;}
   .scroll-table{max-height:320px; overflow:auto; border:1px solid var(--border); border-radius:8px;}
   .hint{font-size:12px; color:var(--gray); margin-top:4px;}
   .kpi-card .target{font-size:11.5px; color:var(--gray); margin-top:4px;}
@@ -388,6 +385,31 @@
       </div>
     </section>
 
+    <section class="home-grab-live" id="homeGrabLive" aria-labelledby="homeGrabTitle" data-motion-section>
+      <div class="home-grab-flow" aria-hidden="true"><i></i><i></i><i></i></div>
+      <header class="home-grab-intro">
+        <div class="home-grab-kicker"><i aria-hidden="true"></i><span>LIVE MATERIAL INTAKE</span></div>
+        <h2 id="homeGrabTitle">Daily Grab</h2>
+        <p id="homeGrabWindow" data-skeleton="grab-meta">กำลังเชื่อมต่อข้อมูลจาก Grab Crane</p>
+        <small id="homeGrabSync" data-skeleton="grab-sync">Auto sync every 5 minutes</small>
+      </header>
+      <article class="home-grab-metric count">
+        <span>จำนวน Grab วันนี้</span>
+        <strong id="homeGrabCount" data-skeleton="grab-value">0</strong>
+        <small>Grab</small>
+      </article>
+      <article class="home-grab-metric average">
+        <span>น้ำหนักเฉลี่ยต่อ Grab</span>
+        <strong id="homeGrabAverage" data-skeleton="grab-value">0.00</strong>
+        <small>ตัน</small>
+      </article>
+      <article class="home-grab-metric total">
+        <span>น้ำหนักรวมวันนี้</span>
+        <strong id="homeGrabTotal" data-skeleton="grab-value">0.00</strong>
+        <small>ตัน</small>
+      </article>
+    </section>
+
     <section class="home-main-board" data-motion-section>
       <article class="home-board-section home-kpi-section">
         <header class="home-section-heading">
@@ -593,6 +615,7 @@
         <span class="report-metric-code">LINE TIME</span>
         <div class="name">เวลาเดินไลน์ (Start-Stop Line)</div>
         <div class="value" id="rLineTime">-</div>
+        <div class="target" id="rProductionSpanHint"></div>
       </div>
       <div class="kpi-card red">
         <span class="report-metric-code">DOWNTIME</span>
@@ -602,13 +625,14 @@
       </div>
       <div class="kpi-card green">
         <span class="report-metric-code">NET RUNTIME</span>
-        <div class="name">เวลาเดินเครื่องจริง (สุทธิ)</div>
+        <div class="name">เวลาเดินผลิตจริง (Grab - Downtime)</div>
         <div class="value" id="rNetRun">-</div>
       </div>
       <div class="kpi-card">
         <span class="report-metric-code">AVAILABILITY</span>
         <div class="name">Availability</div>
         <div class="value" id="rAvail">-</div>
+        <div class="target">เทียบกับช่วงผลิตอ้างอิง Grab</div>
       </div>
     </section>
 
@@ -618,7 +642,7 @@
       </header>
       <div class="scroll-table ops-table-wrap report-table-wrap">
         <table class="period-table">
-          <thead><tr><th class="left">ช่วง</th><th>เวลาเดินไลน์</th><th>เวลาหยุดเครื่อง</th><th>จำนวน Grab</th><th>น้ำหนักเฉลี่ย/แกรบ (ตัน)</th></tr></thead>
+          <thead><tr><th class="left">ช่วง</th><th>ช่วงผลิตอ้างอิง Grab</th><th>เวลาหยุดเครื่อง</th><th>จำนวน Grab</th><th>น้ำหนักเฉลี่ย/แกรบ (ตัน)</th></tr></thead>
           <tbody id="periodTable"></tbody>
         </table>
       </div>
@@ -767,60 +791,6 @@
         </section>
       </div>
     </div>
-  </section>
-
-  <!-- ===================== TAB: GRAB CRANE IMPORT ===================== -->
-  <section id="tab-grab" class="tab-panel">
-    <section class="panel">
-      <h2>นำเข้าไฟล์ CSV จากระบบ Grab Crane</h2>
-      <div class="row" style="margin-bottom:14px;">
-        <label style="font-size:13px;">วันที่ของข้อมูล:&nbsp;</label>
-        <input type="date" id="grabDate">
-      </div>
-      <div class="csv-drop">
-        <input type="file" id="csvFile" accept=".csv,text/csv">
-        <div class="hint">เลือกไฟล์ CSV ที่ export จากเว็บแอป Grab Crane</div>
-      </div>
-      <div id="mappingArea" style="display:none;">
-        <div class="mapping-grid">
-          <div>
-            <label>คอลัมน์เวลา (Timestamp)</label>
-            <select id="mapTimestamp"></select>
-          </div>
-          <div>
-            <label>คอลัมน์วันที่ (ถ้าแยกจากเวลา - ไม่บังคับ)</label>
-            <select id="mapDate"><option value="">(ไม่มี / รวมอยู่ในคอลัมน์เวลาแล้ว)</option></select>
-          </div>
-          <div>
-            <label>คอลัมน์น้ำหนัก (Weight)</label>
-            <select id="mapWeight"></select>
-          </div>
-        </div>
-        <div class="hint">ตัวอย่างข้อมูล 5 แถวแรก (ตรวจสอบว่า mapping ถูกต้อง)</div>
-        <div class="scroll-table" style="margin:10px 0;">
-          <table id="previewTable"><thead></thead><tbody></tbody></table>
-        </div>
-        <div class="row">
-          <label style="font-size:13px;"><input type="checkbox" id="grabReplace" checked style="width:auto;"> แทนที่ข้อมูลเดิมของวันนี้ (ถ้ามี)</label>
-        </div>
-        <div class="row" style="margin-top:10px;">
-          <button class="primary" id="btnConfirmImport">ยืนยันนำเข้าข้อมูล</button>
-          <span id="importResult" class="hint"></span>
-        </div>
-      </div>
-    </section>
-
-    <section class="panel">
-      <h2>
-        ตรวจสอบข้อมูลที่นำเข้าแล้ว
-        <span class="row">
-          <input type="date" id="grabCheckDate">
-          <button id="btnCheckGrab">ตรวจสอบ</button>
-          <button class="danger" id="btnDeleteGrab">ลบข้อมูลวันนี้</button>
-        </span>
-      </h2>
-      <div id="grabCheckResult"></div>
-    </section>
   </section>
 
   <!-- ===================== TAB: PRODUCTION ===================== -->
@@ -1303,7 +1273,6 @@
     </div>
     <div class="workspace-launch-panel" data-workspace-panel="entry">
       <button type="button" class="launcher-item" data-open-tab="today" data-min-role="operator"><span>OPERATIONS</span><b>Control Room</b><small>Start-Stop Line &amp; Downtime</small><em>&rarr;</em></button>
-      <button type="button" class="launcher-item" data-open-tab="grab" data-min-role="operator"><span>OPERATIONS</span><b>Grab Crane</b><small>Import Daily CSV Data</small><em>&rarr;</em></button>
       <button type="button" class="launcher-item" data-open-tab="stock" data-min-role="supervisor"><span>PRODUCTION</span><b>Production Setup</b><small>Yield Settings</small><em>&rarr;</em></button>
       <button type="button" class="launcher-item" data-open-tab="delivery" data-min-role="supervisor"><span>PLANNING</span><b>Weekly Sales Plan</b><small>Plan &amp; Actual Setup</small><em>&rarr;</em></button>
       <button type="button" class="launcher-item" data-open-tab="revenue" data-min-role="operator"><span>COMMERCIAL</span><b>Sales &amp; Revenue</b><small>Sales, MSW &amp; Price Setup</small><em>&rarr;</em></button>
@@ -1404,7 +1373,7 @@ function onClickGuarded(el, handler){
 // ---------------- Tabs ----------------
 const TAB_TITLES = {
   home:'Home', today:'Control Room', report:'Daily Report', 'weekly-report':'Weekly Report',
-  grab:'Grab Crane', stock:'Production & Yield', delivery:'Sales Plan',
+  stock:'Production & Yield', delivery:'Sales Plan',
   revenue:'Revenue Dashboard', kpi:'Monthly KPI',
 };
 
@@ -1600,10 +1569,21 @@ async function loadReport(){
   const data = await api(`/api/report?date=${date}`);
 
   document.getElementById('rLineTime').innerHTML = fmtMin(data.line.totalMinutes);
+  const runtimeSourceLabel = data.line.runtimeSource === 'grab'
+    ? 'ยืนยันด้วย Grab'
+    : data.line.runtimeSource === 'mixed'
+      ? 'Grab + Start-Stop สำรอง'
+      : data.line.runtimeSource === 'grab-inferred'
+        ? 'อนุมานจาก Grab (ไม่มี Start-Stop)'
+        : data.line.runtimeSource === 'manual'
+          ? 'ประมาณจาก Start-Stop'
+          : 'ยังไม่มีข้อมูล';
+  document.getElementById('rProductionSpanHint').textContent =
+    `ช่วงผลิต ${fmtMin(data.line.productionMinutes)} · ${runtimeSourceLabel}`;
   document.getElementById('rDowntime').innerHTML = fmtMin(data.downtime.totalMinutes);
   const rawExtra = data.downtime.totalMinutesRaw - data.downtime.totalMinutes;
   document.getElementById('rDowntimeRawHint').textContent = rawExtra > 0
-    ? `(รวมดิบ ${fmtMin(data.downtime.totalMinutesRaw)} - อีก ${fmtMin(rawExtra)} เกิดนอกช่วงเดินไลน์ ไม่นับใน Availability)`
+    ? `(รวมดิบ ${fmtMin(data.downtime.totalMinutesRaw)} - อีก ${fmtMin(rawExtra)} อยู่นอกช่วงผลิต ไม่นับใน Availability)`
     : '';
   document.getElementById('rNetRun').innerHTML = fmtMin(data.line.netRunMinutes);
   document.getElementById('rAvail').innerHTML = data.line.availabilityPct === null ? '-' : data.line.availabilityPct.toFixed(1) + ' %';
@@ -1615,7 +1595,7 @@ async function loadReport(){
     const g = data.grab.byPeriod[p];
     const tr = document.createElement('tr');
     tr.innerHTML = `<td class="left">${periodBadge(p)}</td>
-      <td>${fmtMin(data.line.byPeriod[p])}</td>
+      <td>${fmtMin(data.line.productionByPeriod[p])}</td>
       <td>${fmtMin(data.downtime.byPeriod[p])}</td>
       <td>${g.count}</td>
       <td>${g.avgWeight === null ? '-' : g.avgWeight.toFixed(2)}</td>`;
@@ -1631,7 +1611,7 @@ async function loadReport(){
     const tr = document.createElement('tr');
     const carry = s.carriedOver ? '<span class="badge carry">ต่อจากเมื่อวาน</span>' : '';
     const outside = s.outsideLineMinutes > 0
-      ? `<span class="badge outside" title="ไลน์ยังไม่ Start หรือ Stop ไปแล้ว - ไม่นับใน Availability">นอกช่วงเดินไลน์ ${fmtMin(s.outsideLineMinutes)}</span>`
+      ? `<span class="badge outside" title="อยู่นอกช่วงผลิตอ้างอิง Grab - ไม่นับใน Availability">นอกช่วงผลิต ${fmtMin(s.outsideLineMinutes)}</span>`
       : '';
     tr.innerHTML = `<td>${periodBadge(s.period)}</td>
       <td>${htmlEsc(s.startTime)}-${htmlEsc(s.endTime)}${carry}</td>
@@ -1736,9 +1716,10 @@ function renderPrintSummary(date, data){
 
   const totalsBody = document.getElementById('psTotalsTable');
   totalsBody.innerHTML = [
-    ['เวลาเดินไลน์รวม', fmtMin(data.line.totalMinutes)],
+    ['เวลาเปิดไลน์ (Start-Stop)', fmtMin(data.line.totalMinutes)],
+    ['ช่วงผลิตอ้างอิง Grab', fmtMin(data.line.productionMinutes)],
     ['รวมเวลาหยุดเครื่องทั้งหมด', fmtMin(data.downtime.totalMinutes)],
-    ['เวลาเดินเครื่องจริง (สุทธิ)', fmtMin(data.line.netRunMinutes)],
+    ['เวลาเดินผลิตจริง (สุทธิ)', fmtMin(data.line.netRunMinutes)],
     ['Availability', data.line.availabilityPct === null ? '-' : data.line.availabilityPct.toFixed(1) + ' %'],
     ['จำนวน Grab ทั้งหมด', String(data.grab.totalGrabs)],
     ['น้ำหนักเฉลี่ยต่อแกรบ', data.grab.avgWeight === null ? '-' : data.grab.avgWeight.toFixed(2) + ' ตัน'],
@@ -1757,132 +1738,6 @@ onClickGuarded(document.getElementById('btnDownloadImage'), async ()=>{
   link.download = `RDF2-สรุปประจำวัน-${reportDateEl.value}.png`;
   link.href = canvas.toDataURL('image/png');
   link.click();
-});
-
-// ---------------- GRAB CRANE IMPORT TAB ----------------
-document.getElementById('grabDate').value = todayStr();
-document.getElementById('grabCheckDate').value = todayStr();
-
-function parseCSV(text){
-  const rows = [];
-  let row = [], field = '', inQuotes = false;
-  for (let i=0;i<text.length;i++){
-    const c = text[i];
-    if (inQuotes){
-      if (c === '"'){
-        if (text[i+1] === '"'){ field += '"'; i++; } else { inQuotes = false; }
-      } else field += c;
-    } else {
-      if (c === '"') inQuotes = true;
-      else if (c === ','){ row.push(field); field=''; }
-      else if (c === '\r'){ /* skip */ }
-      else if (c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; }
-      else field += c;
-    }
-  }
-  if (field.length>0 || row.length>0){ row.push(field); rows.push(row); }
-  return rows.filter(r => !(r.length===1 && r[0].trim()===''));
-}
-
-let csvHeaders = [];
-let csvRows = [];
-
-function guessTimestampCol(headers, rows){
-  const nameMatch = headers.findIndex(h => /time|เวลา|date|วันที่|datetime/i.test(h));
-  if (nameMatch >= 0) return nameMatch;
-  for (let c=0;c<headers.length;c++){
-    const sample = rows[0] ? rows[0][c] : '';
-    if (/\d{1,2}:\d{2}/.test(sample)) return c;
-  }
-  return 0;
-}
-function guessWeightCol(headers, rows){
-  const nameMatch = headers.findIndex(h => /weight|kg|น้ำหนัก|มวล|load/i.test(h));
-  if (nameMatch >= 0) return nameMatch;
-  for (let c=0;c<headers.length;c++){
-    const sample = rows[0] ? rows[0][c] : '';
-    if (sample !== '' && !isNaN(Number(sample))) return c;
-  }
-  return headers.length > 1 ? 1 : 0;
-}
-
-document.getElementById('csvFile').addEventListener('change', async (e)=>{
-  const file = e.target.files[0];
-  if (!file) return;
-  const text = await file.text();
-  const parsed = parseCSV(text);
-  if (parsed.length < 2){ toast('ไฟล์ CSV ไม่มีข้อมูล', true); return; }
-  csvHeaders = parsed[0];
-  csvRows = parsed.slice(1);
-
-  const mapTs = document.getElementById('mapTimestamp');
-  const mapDate = document.getElementById('mapDate');
-  const mapWt = document.getElementById('mapWeight');
-  mapTs.innerHTML = ''; mapWt.innerHTML = '';
-  mapDate.innerHTML = '<option value="">(ไม่มี / รวมอยู่ในคอลัมน์เวลาแล้ว)</option>';
-  csvHeaders.forEach((h, i)=>{
-    const opt = `<option value="${i}">${htmlEsc(h || '(คอลัมน์ ' + (i+1) + ')')}</option>`;
-    mapTs.insertAdjacentHTML('beforeend', opt);
-    mapDate.insertAdjacentHTML('beforeend', opt);
-    mapWt.insertAdjacentHTML('beforeend', opt);
-  });
-  mapTs.value = guessTimestampCol(csvHeaders, csvRows);
-  mapWt.value = guessWeightCol(csvHeaders, csvRows);
-
-  renderPreview();
-  document.getElementById('mappingArea').style.display = 'block';
-});
-
-function renderPreview(){
-  const thead = document.querySelector('#previewTable thead');
-  const tbody = document.querySelector('#previewTable tbody');
-  thead.innerHTML = '<tr>' + csvHeaders.map(h=>`<th>${htmlEsc(h)}</th>`).join('') + '</tr>';
-  tbody.innerHTML = csvRows.slice(0,5).map(r => '<tr>' + r.map(c=>`<td>${htmlEsc(c)}</td>`).join('') + '</tr>').join('');
-}
-['mapTimestamp','mapDate','mapWeight'].forEach(id=>{
-  document.getElementById(id).addEventListener('change', renderPreview);
-});
-
-onClickGuarded(document.getElementById('btnConfirmImport'), async ()=>{
-  const tsCol = Number(document.getElementById('mapTimestamp').value);
-  const dateCol = document.getElementById('mapDate').value;
-  const wtCol = Number(document.getElementById('mapWeight').value);
-  const reportDate = document.getElementById('grabDate').value;
-  const replace = document.getElementById('grabReplace').checked;
-
-  const rows = csvRows.map(r => {
-    let dateTime = r[tsCol] || '';
-    if (dateCol !== ''){ dateTime = `${r[Number(dateCol)]} ${dateTime}`; }
-    return { dateTime, weight: r[wtCol] };
-  }).filter(r => r.dateTime && r.weight !== '');
-
-  try{
-    const result = await api('/api/grab/import', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ reportDate, rows, sourceFile: document.getElementById('csvFile').files[0]?.name || '', replace }) });
-    document.getElementById('importResult').textContent = `นำเข้าสำเร็จ ${result.imported} แถว (วันที่ ${reportDate})`;
-    toast(`นำเข้าข้อมูล Grab Crane สำเร็จ ${result.imported} รายการ`);
-  }catch(e){ toast(e.message, true); }
-});
-
-document.getElementById('btnCheckGrab').addEventListener('click', async ()=>{
-  const date = document.getElementById('grabCheckDate').value;
-  const data = await api(`/api/grab?date=${date}`);
-  const el = document.getElementById('grabCheckResult');
-  if (data.rows.length === 0){ el.innerHTML = '<div class="empty-note">ไม่มีข้อมูลของวันที่นี้</div>'; return; }
-  const total = data.rows.length;
-  const avg = data.rows.reduce((s,r)=>s+Number(r.Weight||0),0) / total;
-  el.innerHTML = `<div class="hint">จำนวน ${total} แกรบ / น้ำหนักเฉลี่ย ${avg.toFixed(2)} ตัน</div>
-    <div class="scroll-table" style="margin-top:8px;"><table>
-    <thead><tr><th>เวลา</th><th>น้ำหนัก (ตัน)</th></tr></thead>
-    <tbody>${data.rows.map(r=>`<tr><td>${htmlEsc(r.DateTime)}</td><td>${htmlEsc(r.Weight)}</td></tr>`).join('')}</tbody>
-    </table></div>`;
-});
-document.getElementById('btnDeleteGrab').addEventListener('click', async ()=>{
-  const date = document.getElementById('grabCheckDate').value;
-  if (!confirm(`ลบข้อมูล Grab Crane ของวันที่ ${date} ทั้งหมด?`)) return;
-  const result = await api(`/api/grab?date=${date}`, { method:'DELETE' });
-  toast(`ลบแล้ว ${result.deleted} รายการ`);
-  document.getElementById('btnCheckGrab').click();
 });
 
 // ---------------- STOCK & PRODUCTION TAB ----------------
@@ -2678,6 +2533,6 @@ initializeAppTab(initialTab && TAB_TITLES[initialTab] ? initialTab : 'home').cat
 </script>
 <script src="security-ui.js?v=20260723-security"></script>
 <script src="kpi.js?v=20260723-yieldsplit"></script>
-<script src="home.js?v=20260723-yieldsplit"></script>
+<script src="home.js?v=20260724-grab-runtime"></script>
 </body>
 </html>
