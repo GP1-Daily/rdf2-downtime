@@ -3,7 +3,7 @@
 body{margin:0;background:var(--bg);color:var(--ink);font-family:"Anuphan",Tahoma,"Segoe UI",sans-serif;letter-spacing:0}
 button,input,select{font:inherit;letter-spacing:0}
 .admin-header{display:flex;align-items:center;justify-content:space-between;min-height:72px;padding:12px max(24px,calc((100vw - 1440px)/2));border-bottom:1px solid #dce4df;background:#fff}
-.admin-brand img{display:block;width:185px;height:auto}
+.admin-brand img{display:block;width:190px;height:auto}
 .admin-account{display:flex;align-items:center;gap:16px}.admin-account>div{display:grid;text-align:right}.admin-account strong{font-size:12px}.admin-account span{color:var(--muted);font-size:9px;text-transform:uppercase}.admin-account button,.quiet-button{border:1px solid #ccd8d1;border-radius:6px;background:#fff;padding:8px 12px;color:#334155;cursor:pointer}
 main{width:min(1440px,calc(100% - 48px));margin:0 auto 60px}
 .admin-nav{display:flex;gap:8px;padding:18px 0;color:#94a3b8;font-size:11px}.admin-nav a{color:var(--green);text-decoration:none}.admin-nav strong{color:#475569}

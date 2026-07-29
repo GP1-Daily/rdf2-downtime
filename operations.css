@@ -19,9 +19,9 @@
 .ops-page-head>img{
   position:absolute;
   z-index:-1;
-  top:-102px;
-  right:22%;
-  width:250px;
+  top:22px;
+  right:18%;
+  width:460px;
   height:auto;
   opacity:.045;
   pointer-events:none;
@@ -466,10 +466,12 @@ section.panel .ops-section-head h2{
   min-width:0;
 }
 .ps-brand img{
-  width:132px;
+  width:150px;
   height:auto;
   flex:0 0 auto;
-  filter:brightness(0) invert(1);
+  padding:6px 8px;
+  border-radius:4px;
+  background:#fff;
 }
 .ps-brand>div{
   min-width:0;
@@ -544,7 +546,7 @@ section.panel .ops-section-head h2{
     flex-direction:column;
     gap:20px;
   }
-  .ops-page-head>img{top:-45px;right:-70px;width:220px;}
+  .ops-page-head>img{top:24px;right:-82px;width:350px;}
   .ops-page-title h2{font-size:27px;}
   .ops-date-field,.ops-report-filter{width:100%;}
   .ops-date-field,.ops-report-filter label{min-width:0;}
