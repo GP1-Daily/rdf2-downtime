@@ -466,12 +466,11 @@ section.panel .ops-section-head h2{
   min-width:0;
 }
 .ps-brand img{
-  width:150px;
+  width:158px;
   height:auto;
   flex:0 0 auto;
-  padding:6px 8px;
-  border-radius:4px;
-  background:#fff;
+  background:transparent;
+  filter:brightness(1.12) saturate(1.08) drop-shadow(0 0 1px rgba(235,255,246,.88)) drop-shadow(0 5px 11px rgba(0,0,0,.28));
 }
 .ps-brand>div{
   min-width:0;
