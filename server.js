@@ -32,6 +32,7 @@ const PUBLIC_FILES = new Set([
   'security-ui.css', 'security-ui.js',
   'assets/gp1-connect-logo.png', 'assets/gp1-connect-mark.png', 'assets/gp1-connect-favicon.png',
   'assets/green-power-1-logo.png',
+  'assets/green-power-1-favicon.png',
 ]);
 
 const MIME = {
