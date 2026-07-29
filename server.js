@@ -33,6 +33,7 @@ const PUBLIC_FILES = new Set([
   'assets/gp1-connect-logo.png', 'assets/gp1-connect-mark.png', 'assets/gp1-connect-favicon.png',
   'assets/green-power-1-logo.png',
   'assets/green-power-1-favicon.png',
+  'assets/green-power-1-favicon.svg',
 ]);
 
 const MIME = {

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Green Power 1 leaf">
+  <defs>
+    <linearGradient id="leaf" x1="15" y1="51" x2="50" y2="12" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#009b72"/>
+      <stop offset="0.56" stop-color="#39c987"/>
+      <stop offset="1" stop-color="#a9df4e"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#leaf)" d="M55.5 7.5C35.2 10.1 18.1 20.7 11.4 36.4 7.6 45.3 10.3 53 14.2 57c10.8.4 22.9-4.5 30.7-14.2 8.1-10 11.3-22.6 10.6-35.3Z"/>
+  <path fill="none" stroke="#067455" stroke-linecap="round" stroke-width="4.8" d="M13.8 55.8c9.8-14.9 20.9-26 35-37.2"/>
+  <path fill="none" stroke="#067455" stroke-linecap="round" stroke-width="3.4" d="m25.6 40.5-1.2-10.4m10.2 2.5 10.2-.7"/>
+</svg>
