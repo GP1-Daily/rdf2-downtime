@@ -11,6 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
 <link rel="stylesheet" href="home.css?v=20260729-transparent-logo">
 <link rel="stylesheet" href="kpi.css?v=20260723-yieldsplit">
+<link rel="stylesheet" href="monthly.css?v=20260804-monthly-report-2">
 <link rel="stylesheet" href="security-ui.css?v=20260723-security">
 <link rel="stylesheet" href="operations.css?v=20260729-transparent-logo">
 <style>
@@ -793,6 +794,153 @@
     </div>
   </section>
 
+  <!-- ===================== TAB: MONTHLY REPORT ===================== -->
+  <section id="tab-monthly-report" class="tab-panel">
+    <section class="panel monthly-report-toolbar">
+      <div>
+        <span class="monthly-toolbar-kicker">MANAGEMENT REPORT</span>
+        <h2>รายงานผลดำเนินงานประจำเดือน</h2>
+      </div>
+      <div class="monthly-toolbar-actions">
+        <button id="btnMonthlyReportPrev" class="monthly-step" title="เดือนก่อนหน้า" aria-label="เดือนก่อนหน้า">‹</button>
+        <label for="monthlyReportMonth">เดือนรายงาน</label>
+        <input type="month" id="monthlyReportMonth">
+        <button id="btnMonthlyReportNext" class="monthly-step" title="เดือนถัดไป" aria-label="เดือนถัดไป">›</button>
+        <button class="primary" id="btnLoadMonthlyReport">แสดงผล</button>
+        <button id="btnExportMonthlyReport" class="monthly-export-button"><span aria-hidden="true">↓</span> PNG</button>
+      </div>
+    </section>
+
+    <div class="monthly-report-export" id="monthlyReportExport">
+      <header class="monthly-report-head">
+        <div class="monthly-report-brand">
+          <img src="assets/green-power-1-logo.png?v=20260729-official-logo" width="2055" height="550" alt="Green Power 1">
+          <div>
+            <span>MONTHLY PERFORMANCE REPORT</span>
+            <h1>สรุปผลดำเนินงานประจำเดือน</h1>
+          </div>
+        </div>
+        <div class="monthly-report-period" id="monthlyReportPeriod">-</div>
+      </header>
+
+      <div class="monthly-report-skeleton" id="monthlyReportSkeleton" aria-label="กำลังโหลดรายงาน">
+        <div class="monthly-skeleton-line wide"></div>
+        <div class="monthly-skeleton-grid"><i></i><i></i><i></i><i></i></div>
+        <div class="monthly-skeleton-block"></div>
+        <div class="monthly-skeleton-grid lower"><i></i><i></i></div>
+      </div>
+
+      <div class="monthly-report-content" id="monthlyReportContent" hidden>
+        <section class="monthly-executive-strip" aria-label="ตัวเลขสรุปประจำเดือน">
+          <article>
+            <span>MSW เข้ากระบวนการ</span>
+            <strong id="monthlyIncomingTons">0.00 ตัน</strong>
+            <small id="monthlyIncomingMeta">0 Grab</small>
+          </article>
+          <article>
+            <span>เวลาเดินเครื่องจริง</span>
+            <strong id="monthlyNetRuntime">0 ชม. 0 น.</strong>
+            <small id="monthlyAvailability">Availability 0.0%</small>
+          </article>
+          <article>
+            <span>ส่งมอบสินค้า</span>
+            <strong id="monthlySalesTons">0.00 ตัน</strong>
+            <small id="monthlySalesMeta">0 รายการ</small>
+          </article>
+          <article class="revenue">
+            <span>รายได้รวมโดยประมาณ</span>
+            <strong id="monthlyRevenueTotal">0 บาท</strong>
+            <small id="monthlyRevenueRange">ช่วงประมาณการ 0 - 0 บาท</small>
+          </article>
+        </section>
+
+        <section class="monthly-section monthly-trend-section">
+          <div class="monthly-section-head">
+            <div><span>DAILY INTAKE</span><h2>ขยะเข้ากระบวนการรายวัน</h2></div>
+            <div class="monthly-chart-total" id="monthlyDailyAverage">เฉลี่ย 0.00 ตัน/วัน</div>
+          </div>
+          <div class="monthly-chart-scroll">
+            <div class="monthly-daily-chart" id="monthlyDailyChart"></div>
+          </div>
+        </section>
+
+        <div class="monthly-two-column">
+          <section class="monthly-section monthly-production-section">
+            <div class="monthly-section-head">
+              <div><span>PRODUCTION OUTPUT</span><h2>ผลผลิตตาม Yield</h2></div>
+              <div class="monthly-section-meta" id="monthlyProductionSource">คำนวณจาก 0.00 ตัน</div>
+            </div>
+            <div class="monthly-production-grid" id="monthlyProductionGrid"></div>
+            <div class="monthly-warning" id="monthlyYieldWarning"></div>
+          </section>
+
+          <section class="monthly-section monthly-operations-section">
+            <div class="monthly-section-head">
+              <div><span>LINE PERFORMANCE</span><h2>เวลาเดินและหยุดเครื่อง</h2></div>
+            </div>
+            <div class="monthly-operations-metrics">
+              <div><span>กรอบเวลา Start–Stop</span><strong id="monthlyLineTime">0 ชม. 0 น.</strong></div>
+              <div><span>ช่วงผลิตอ้างอิง Grab</span><strong id="monthlyProductionTime">0 ชม. 0 น.</strong></div>
+              <div class="danger"><span>Downtime ในช่วงผลิต</span><strong id="monthlyDowntimeTime">0 ชม. 0 น.</strong></div>
+            </div>
+            <div class="monthly-reason-list" id="monthlyDowntimeReasons"></div>
+          </section>
+        </div>
+
+        <section class="monthly-section monthly-revenue-section">
+          <div class="monthly-section-head">
+            <div><span>REVENUE STRUCTURE</span><h2>สัดส่วนรายได้ 2 ทาง</h2></div>
+            <div class="monthly-section-meta" id="monthlyRevenueHeadline">0 บาท</div>
+          </div>
+          <div class="monthly-revenue-layout">
+            <div class="monthly-revenue-donut" id="monthlyRevenueDonut" role="img" aria-label="สัดส่วนรายได้จากการขายสินค้าและ Tipping Fee">
+              <div><strong id="monthlyRevenueDonutValue">0%</strong><span>ยอดขายสินค้า</span></div>
+            </div>
+            <div class="monthly-revenue-source sales">
+              <span>ขายสินค้า</span>
+              <strong id="monthlySalesRevenue">0 บาท</strong>
+              <em id="monthlySalesShare">0.0%</em>
+              <small id="monthlySalesRevenueMeta">0 รายการ</small>
+            </div>
+            <div class="monthly-revenue-source tipping">
+              <span>Tipping Fee</span>
+              <strong id="monthlyTippingRevenue">0 บาท</strong>
+              <em id="monthlyTippingShare">0.0%</em>
+              <small id="monthlyTippingRevenueMeta">0.00 ตัน MSW</small>
+            </div>
+          </div>
+          <div class="monthly-warning" id="monthlyRevenueWarning"></div>
+        </section>
+
+        <section class="monthly-section">
+          <div class="monthly-section-head">
+            <div><span>SALES BY CUSTOMER</span><h2>สรุปการขายแยกตามลูกค้า</h2></div>
+            <div class="monthly-section-meta" id="monthlySalesSummary">0 รายการ · 0.00 ตัน</div>
+          </div>
+          <div class="monthly-table-scroll">
+            <table class="monthly-table monthly-sales-table">
+              <thead><tr><th class="left">ลูกค้า</th><th>RDF2</th><th>RDF2 LG</th><th>RDF3</th><th>Fine Fraction</th><th>รวม (ตัน)</th><th>รายได้ประมาณการ</th></tr></thead>
+              <tbody id="monthlySalesTable"></tbody>
+              <tfoot id="monthlySalesTotal"></tfoot>
+            </table>
+          </div>
+        </section>
+
+        <section class="monthly-section">
+          <div class="monthly-section-head">
+            <div><span>WEEKLY BREAKDOWN</span><h2>ภาพรวมแต่ละสัปดาห์ในเดือน</h2></div>
+          </div>
+          <div class="monthly-table-scroll">
+            <table class="monthly-table monthly-week-table">
+              <thead><tr><th class="left">ช่วงวันที่</th><th>MSW (ตัน)</th><th>Grab</th><th>เดินจริง</th><th>Downtime</th><th>ขาย (ตัน)</th><th>รายได้รวม</th></tr></thead>
+              <tbody id="monthlyWeekTable"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+  </section>
+
   <!-- ===================== TAB: PRODUCTION ===================== -->
   <section id="tab-stock" class="tab-panel">
 
@@ -1282,6 +1430,7 @@
     <div class="workspace-launch-panel" data-workspace-panel="insights" hidden>
       <button type="button" class="launcher-item" data-open-tab="report"><span>DAILY</span><b>Daily Report</b><small>Operating Performance Summary</small><em>&rarr;</em></button>
       <button type="button" class="launcher-item" data-open-tab="weekly-report"><span>WEEKLY</span><b>Weekly Report</b><small>Production &amp; Sales Summary</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" data-open-tab="monthly-report"><span>MONTHLY</span><b>Monthly Report</b><small>Operations, Production, Sales &amp; Revenue</small><em>&rarr;</em></button>
       <button type="button" class="launcher-item" data-open-tab="kpi"><span>MONTHLY</span><b>KPI Dashboard</b><small>Performance Against Targets</small><em>&rarr;</em></button>
       <button type="button" class="launcher-item" data-open-tab="delivery"><span>WEEKLY</span><b>Sales Plan Dashboard</b><small>Plan, Actual &amp; Opportunity Loss</small><em>&rarr;</em></button>
       <button type="button" class="launcher-item" data-open-tab="revenue"><span>MONTHLY</span><b>Revenue Dashboard</b><small>Product Sales &amp; Tipping Fee</small><em>&rarr;</em></button>
@@ -1372,7 +1521,7 @@ function onClickGuarded(el, handler){
 
 // ---------------- Tabs ----------------
 const TAB_TITLES = {
-  home:'Home', today:'Control Room', report:'Daily Report', 'weekly-report':'Weekly Report',
+  home:'Home', today:'Control Room', report:'Daily Report', 'weekly-report':'Weekly Report', 'monthly-report':'Monthly Report',
   stock:'Production & Yield', delivery:'Sales Plan',
   revenue:'Revenue Dashboard', kpi:'Monthly KPI',
 };
@@ -2502,6 +2651,9 @@ function initializeAppTab(tab, force=false){
       case 'weekly-report':
         await initWeeklyReport();
         break;
+      case 'monthly-report':
+        if (window.initMonthlyReport) await window.initMonthlyReport();
+        break;
       case 'stock':
         await loadRevenueCustomers();
         await Promise.all([loadYieldTable(), loadSalesTable()]);
@@ -2533,6 +2685,7 @@ initializeAppTab(initialTab && TAB_TITLES[initialTab] ? initialTab : 'home').cat
 </script>
 <script src="security-ui.js?v=20260723-security"></script>
 <script src="kpi.js?v=20260723-yieldsplit"></script>
+<script src="monthly.js?v=20260804-monthly-report"></script>
 <script src="home.js?v=20260724-grab-runtime"></script>
 </body>
 </html>

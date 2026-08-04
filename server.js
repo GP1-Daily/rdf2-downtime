@@ -26,7 +26,7 @@ const BODY_LIMIT_BYTES = Math.min(
 );
 const PUBLIC_FILES = new Set([
   'index.html', 'login.html', 'accept-invite.html', 'security.html',
-  'home.css', 'home.js', 'kpi.css', 'kpi.js', 'html2canvas.min.js',
+  'home.css', 'home.js', 'kpi.css', 'kpi.js', 'monthly.css', 'monthly.js', 'html2canvas.min.js',
   'operations.css',
   'login.css', 'login.js', 'invite.js', 'security.css', 'security-admin.js',
   'security-ui.css', 'security-ui.js',
@@ -1161,18 +1161,8 @@ async function handleRevenueTippingDaily(req, res, parts, query) {
   return sendJson(res, 404, { ok: false, error: 'not found' });
 }
 
-async function handleRevenueDashboard(req, res, query) {
-  const nowBkk = lib.nowInBangkok();
-  const month = validMonth(query.month) ? query.month : nowBkk.date.slice(0, 7);
+function buildRevenueDashboardData(month, stockSales, rdf3Sales, prices, tippingRows, tippingSettings) {
   const bounds = monthBounds(month);
-  const [stockSales, rdf3Sales, prices, tippingRows, tippingSettings] = await Promise.all([
-    store.readSheet('Sales'),
-    store.readSheet('RevenueRDF3Sales'),
-    store.readSheet('RevenuePrices'),
-    store.readSheet('RevenueTippingDaily'),
-    store.readSheet('RevenueTippingSettings'),
-  ]);
-
   const sales = stockSales
     .filter((row) => row.SaleDate >= bounds.start && row.SaleDate <= bounds.end && DIRECT_SALES_PRODUCTS.includes(row.Material))
     .map((row) => ({
@@ -1237,7 +1227,7 @@ async function handleRevenueDashboard(req, res, query) {
   const companyCentral = salesBase + tippingCentral;
   const salesShare = companyCentral > 0 ? salesBase / companyCentral * 100 : 0;
 
-  return sendJson(res, 200, {
+  return {
     ok: true,
     month,
     sales: {
@@ -1261,10 +1251,25 @@ async function handleRevenueDashboard(req, res, query) {
       low: salesLow + tippingLow,
       high: salesHigh + tippingHigh,
       salesSharePct: salesShare,
-      tippingSharePct: 100 - salesShare,
+      tippingSharePct: companyCentral > 0 ? 100 - salesShare : 0,
     },
     daily: Object.values(dailyMap),
-  });
+  };
+}
+
+async function handleRevenueDashboard(req, res, query) {
+  const nowBkk = lib.nowInBangkok();
+  const month = validMonth(query.month) ? query.month : nowBkk.date.slice(0, 7);
+  const [stockSales, rdf3Sales, prices, tippingRows, tippingSettings] = await Promise.all([
+    store.readSheet('Sales'),
+    store.readSheet('RevenueRDF3Sales'),
+    store.readSheet('RevenuePrices'),
+    store.readSheet('RevenueTippingDaily'),
+    store.readSheet('RevenueTippingSettings'),
+  ]);
+  return sendJson(res, 200, buildRevenueDashboardData(
+    month, stockSales, rdf3Sales, prices, tippingRows, tippingSettings,
+  ));
 }
 
 async function handleRevenue(req, res, parts, query) {
@@ -1688,6 +1693,317 @@ async function handleWeeklyReport(req, res, query) {
       byCustomer: salesByCustomer,
     },
     daily,
+  });
+}
+
+// ---------- Monthly Operations, Production, Sales & Revenue Report ----------
+
+const MONTHLY_PRODUCTION_PRODUCTS = [
+  { product: 'RDF2', tonsKey: 'rdf2' },
+  { product: 'RDF2LG', tonsKey: 'rdf2LG' },
+  { product: 'FineFraction', tonsKey: 'fineFraction' },
+];
+
+function reportSessionRanges(lineRows, nowBkk) {
+  const ranges = [];
+  for (const session of computeLineSessions(lineRows)) {
+    if (session.incomplete) {
+      if (!session.start || session.stop || session.superseded) continue;
+      const range = {
+        startDate: session.start.EntryDate,
+        startTime: session.start.Time,
+        endDate: nowBkk.date,
+        endTime: nowBkk.time,
+        startKey: `${session.start.EntryDate} ${session.start.Time}:00`,
+        endKey: `${nowBkk.date} ${nowBkk.time}:59`,
+        stopType: '',
+        ongoing: true,
+      };
+      if (range.endKey >= range.startKey) ranges.push(range);
+      continue;
+    }
+    const range = {
+      startDate: session.start.EntryDate,
+      startTime: session.start.Time,
+      endDate: session.stop.EntryDate,
+      endTime: session.stop.Time,
+      startKey: `${session.start.EntryDate} ${session.start.Time}:00`,
+      endKey: `${session.stop.EntryDate} ${session.stop.Time}:59`,
+      stopType: session.stop.StopType || '',
+      ongoing: false,
+    };
+    if (range.endKey >= range.startKey) ranges.push(range);
+  }
+  return ranges;
+}
+
+function monthlyDailyOperations(date, sessionRanges, downtimeRows, grabRows) {
+  const lineSegments = sessionRanges.flatMap((range) => (
+    lib.splitRange(range.startDate, range.startTime, range.endDate, range.endTime)
+      .filter((segment) => segment.date === date)
+  ));
+  const lineMinutes = lineSegments.reduce((sum, segment) => sum + segment.minutes, 0);
+
+  const production = buildProductionSegments(date, sessionRanges, grabRows);
+  const productionRanges = mergeMinuteRanges(production.segments.map((segment) => [
+    lib.timeToMinutes(segment.startTime), lib.timeToMinutes(segment.endTime),
+  ]));
+  const productionMinutes = rangeMinutes(productionRanges);
+  const previousDate = lib.addDays(date, -1);
+  const downtimeIntersections = [];
+  const reasonRanges = new Map();
+  const reasonEventIds = new Map();
+
+  for (const row of downtimeRows) {
+    if (row.EntryDate !== date && row.EntryDate !== previousDate) continue;
+    const eventKey = String(row.ID || `${row.EntryDate}|${row.StartTime}|${row.EndTime}|${row.Reason || ''}`);
+    const reason = cleanText(row.Reason) || 'ไม่ระบุสาเหตุ';
+    for (const segment of lib.splitEntry(row.EntryDate, row.StartTime, row.EndTime)) {
+      if (segment.date !== date) continue;
+      const start = lib.timeToMinutes(segment.startTime);
+      const end = lib.timeToMinutes(segment.endTime);
+      for (const [activeStart, activeEnd] of productionRanges) {
+        const low = Math.max(start, activeStart);
+        const high = Math.min(end, activeEnd);
+        if (high <= low) continue;
+        downtimeIntersections.push([low, high]);
+        if (!reasonRanges.has(reason)) reasonRanges.set(reason, []);
+        reasonRanges.get(reason).push([low, high]);
+        if (!reasonEventIds.has(reason)) reasonEventIds.set(reason, new Set());
+        reasonEventIds.get(reason).add(eventKey);
+      }
+    }
+  }
+
+  const downtimeMinutes = rangeMinutes(mergeMinuteRanges(downtimeIntersections));
+  const netRunMinutes = Math.max(0, productionMinutes - downtimeMinutes);
+  return {
+    lineMinutes,
+    productionMinutes,
+    downtimeMinutes,
+    netRunMinutes,
+    availabilityPct: productionMinutes > 0 ? netRunMinutes / productionMinutes * 100 : null,
+    runtimeSource: production.runtimeSource,
+    reasons: [...reasonRanges.entries()].map(([reason, ranges]) => ({
+      reason,
+      minutes: rangeMinutes(mergeMinuteRanges(ranges)),
+      eventIds: [...(reasonEventIds.get(reason) || [])],
+    })),
+  };
+}
+
+function monthlySalesSummary(stockSales, rdf3Sales, bounds, revenue) {
+  const rows = stockSales
+    .filter((row) => row.SaleDate >= bounds.start && row.SaleDate <= bounds.end
+      && DIRECT_SALES_PRODUCTS.includes(row.Material))
+    .map((row) => ({
+      date: row.SaleDate,
+      product: row.Material,
+      customer: cleanText(row.Customer) || '(ไม่ระบุลูกค้า)',
+      tons: Number(row.Tons) || 0,
+    }));
+  for (const row of rdf3Sales) {
+    if (row.SaleDate < bounds.start || row.SaleDate > bounds.end) continue;
+    rows.push({
+      date: row.SaleDate,
+      product: 'RDF3',
+      customer: cleanText(row.Customer) || '(ไม่ระบุลูกค้า)',
+      tons: Number(row.Tons) || 0,
+    });
+  }
+
+  const productMap = Object.fromEntries(REVENUE_PRODUCTS.map((product) => [product, 0]));
+  const customerMap = new Map();
+  for (const sale of rows) {
+    productMap[sale.product] = (productMap[sale.product] || 0) + sale.tons;
+    const key = sale.customer.toLocaleLowerCase('th-TH');
+    if (!customerMap.has(key)) {
+      customerMap.set(key, {
+        customer: sale.customer,
+        totalTons: 0,
+        revenue: 0,
+        products: Object.fromEntries(REVENUE_PRODUCTS.map((product) => [product, 0])),
+      });
+    }
+    const customer = customerMap.get(key);
+    customer.totalTons += sale.tons;
+    customer.products[sale.product] = (customer.products[sale.product] || 0) + sale.tons;
+  }
+  for (const pricedCustomer of revenue.sales.byCustomer) {
+    const key = pricedCustomer.customer.toLocaleLowerCase('th-TH');
+    if (customerMap.has(key)) customerMap.get(key).revenue = pricedCustomer.revenue;
+  }
+
+  return {
+    rows,
+    transactionCount: rows.length,
+    totalTons: rows.reduce((sum, row) => sum + row.tons, 0),
+    byProduct: REVENUE_PRODUCTS.map((product) => ({ product, tons: productMap[product] || 0 })),
+    byCustomer: [...customerMap.values()]
+      .sort((a, b) => b.totalTons - a.totalTons || a.customer.localeCompare(b.customer, 'th')),
+  };
+}
+
+async function handleMonthlyReport(req, res, query) {
+  const requested = cleanText(query.month);
+  if (requested && !validMonth(requested)) {
+    return sendJson(res, 400, { ok: false, error: 'รูปแบบเดือนต้องเป็น YYYY-MM' });
+  }
+  const nowBkk = lib.nowInBangkok();
+  const month = requested || nowBkk.date.slice(0, 7);
+  const bounds = monthBounds(month);
+  const dates = Array.from({ length: bounds.days }, (_, index) => lib.addDays(bounds.start, index));
+  const [
+    grabRows, yieldRows, stockSales, rdf3Sales, prices,
+    tippingRows, tippingSettings, downtimeRows, lineRows,
+  ] = await Promise.all([
+    store.readSheet('GrabCrane'),
+    store.readSheet('YieldSettings'),
+    store.readSheet('Sales'),
+    store.readSheet('RevenueRDF3Sales'),
+    store.readSheet('RevenuePrices'),
+    store.readSheet('RevenueTippingDaily'),
+    store.readSheet('RevenueTippingSettings'),
+    store.readSheet('Downtime'),
+    store.readSheet('LineTime'),
+  ]);
+
+  const revenue = buildRevenueDashboardData(
+    month, stockSales, rdf3Sales, prices, tippingRows, tippingSettings,
+  );
+  const sales = monthlySalesSummary(stockSales, rdf3Sales, bounds, revenue);
+  const sessionRanges = reportSessionRanges(lineRows, nowBkk);
+  const productionTotals = Object.fromEntries(MONTHLY_PRODUCTION_PRODUCTS.map((item) => [item.tonsKey, 0]));
+  const reasonMap = new Map();
+  let incomingTons = 0;
+  let calculatedIncomingTons = 0;
+  let totalGrabs = 0;
+  let lineMinutes = 0;
+  let productionMinutes = 0;
+  let downtimeMinutes = 0;
+  let netRunMinutes = 0;
+  const missingYieldDates = [];
+  const revenueDailyMap = new Map(revenue.daily.map((row) => [row.date, row]));
+
+  const daily = dates.map((date) => {
+    const dayGrabs = grabRows.filter((row) => row.ReportDate === date);
+    const dayIncomingTons = dayGrabs.reduce((sum, row) => sum + (Number(row.Weight) || 0), 0);
+    const yieldSetting = getApplicableYield(yieldRows, date);
+    const production = computeProduction(dayIncomingTons, yieldSetting);
+    const operations = monthlyDailyOperations(date, sessionRanges, downtimeRows, grabRows);
+    const daySales = sales.rows.filter((row) => row.date === date);
+    const dayRevenue = revenueDailyMap.get(date) || { salesRevenue: 0, tippingRevenue: 0, mswTons: 0 };
+    const productionTons = Object.fromEntries(MONTHLY_PRODUCTION_PRODUCTS.map((item) => [item.tonsKey, 0]));
+
+    incomingTons += dayIncomingTons;
+    totalGrabs += dayGrabs.length;
+    lineMinutes += operations.lineMinutes;
+    productionMinutes += operations.productionMinutes;
+    downtimeMinutes += operations.downtimeMinutes;
+    netRunMinutes += operations.netRunMinutes;
+    if (dayIncomingTons > 0 && !yieldSetting) missingYieldDates.push(date);
+    if (production) {
+      calculatedIncomingTons += dayIncomingTons;
+      for (const item of MONTHLY_PRODUCTION_PRODUCTS) {
+        const tons = production.tons[item.tonsKey];
+        productionTons[item.tonsKey] = tons;
+        productionTotals[item.tonsKey] += tons;
+      }
+    }
+    for (const reasonRow of operations.reasons) {
+      if (!reasonMap.has(reasonRow.reason)) {
+        reasonMap.set(reasonRow.reason, { reason: reasonRow.reason, minutes: 0, eventIds: new Set() });
+      }
+      const target = reasonMap.get(reasonRow.reason);
+      target.minutes += reasonRow.minutes;
+      for (const eventId of reasonRow.eventIds) target.eventIds.add(eventId);
+    }
+
+    return {
+      date,
+      grabCount: dayGrabs.length,
+      incomingTons: dayIncomingTons,
+      hasYieldSetting: !!yieldSetting,
+      productionTons,
+      lineMinutes: operations.lineMinutes,
+      productionMinutes: operations.productionMinutes,
+      downtimeMinutes: operations.downtimeMinutes,
+      netRunMinutes: operations.netRunMinutes,
+      availabilityPct: operations.availabilityPct,
+      runtimeSource: operations.runtimeSource,
+      salesTons: daySales.reduce((sum, row) => sum + row.tons, 0),
+      salesTransactions: daySales.length,
+      salesRevenue: dayRevenue.salesRevenue,
+      tippingRevenue: dayRevenue.tippingRevenue,
+      tippingMSWTons: dayRevenue.mswTons,
+    };
+  });
+
+  const weekMap = new Map();
+  for (const day of daily) {
+    const monday = mondayForDate(day.date);
+    if (!weekMap.has(monday)) {
+      weekMap.set(monday, {
+        weekStart: monday < bounds.start ? bounds.start : monday,
+        weekEnd: lib.addDays(monday, 6) > bounds.end ? bounds.end : lib.addDays(monday, 6),
+        incomingTons: 0,
+        grabCount: 0,
+        netRunMinutes: 0,
+        downtimeMinutes: 0,
+        salesTons: 0,
+        revenue: 0,
+      });
+    }
+    const week = weekMap.get(monday);
+    week.incomingTons += day.incomingTons;
+    week.grabCount += day.grabCount;
+    week.netRunMinutes += day.netRunMinutes;
+    week.downtimeMinutes += day.downtimeMinutes;
+    week.salesTons += day.salesTons;
+    week.revenue += day.salesRevenue + day.tippingRevenue;
+  }
+
+  return sendJson(res, 200, {
+    ok: true,
+    month,
+    startDate: bounds.start,
+    endDate: bounds.end,
+    incoming: {
+      totalGrabs,
+      totalTons: incomingTons,
+      avgTonsPerGrab: totalGrabs > 0 ? incomingTons / totalGrabs : null,
+    },
+    production: {
+      calculatedIncomingTons,
+      uncalculatedIncomingTons: incomingTons - calculatedIncomingTons,
+      missingYieldDates,
+      products: MONTHLY_PRODUCTION_PRODUCTS.map((item) => ({
+        product: item.product,
+        tons: productionTotals[item.tonsKey],
+        effectiveYieldPct: calculatedIncomingTons > 0
+          ? productionTotals[item.tonsKey] / calculatedIncomingTons * 100
+          : 0,
+      })),
+    },
+    operations: {
+      lineMinutes,
+      productionMinutes,
+      downtimeMinutes,
+      netRunMinutes,
+      availabilityPct: productionMinutes > 0 ? netRunMinutes / productionMinutes * 100 : null,
+      reasonTotals: [...reasonMap.values()]
+        .map((row) => ({ reason: row.reason, minutes: row.minutes, count: row.eventIds.size }))
+        .sort((a, b) => b.minutes - a.minutes || a.reason.localeCompare(b.reason, 'th')),
+    },
+    sales: {
+      transactionCount: sales.transactionCount,
+      totalTons: sales.totalTons,
+      byProduct: sales.byProduct,
+      byCustomer: sales.byCustomer,
+    },
+    revenue,
+    daily,
+    weeks: [...weekMap.values()],
   });
 }
 
@@ -2165,6 +2481,7 @@ async function dispatchBusinessApi(req, res, pathname, query) {
   }
   if (resource === 'production') return handleProduction(req, res, query);
   if (resource === 'weekly-report' && req.method === 'GET') return handleWeeklyReport(req, res, query);
+  if (resource === 'monthly-report' && req.method === 'GET') return handleMonthlyReport(req, res, query);
   if (resource === 'yield') return handleYield(req, res, rest);
   if (resource === 'sales') return handleSales(req, res, rest);
   if (resource === 'delivery-plans') return handleDeliveryPlans(req, res, rest, query);
