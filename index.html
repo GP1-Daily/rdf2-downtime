@@ -11,9 +11,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
 <link rel="stylesheet" href="home.css?v=20260729-transparent-logo">
 <link rel="stylesheet" href="kpi.css?v=20260723-yieldsplit">
-<link rel="stylesheet" href="monthly.css?v=20260804-monthly-report-2">
+<link rel="stylesheet" href="monthly.css?v=20260804-runtime-history">
 <link rel="stylesheet" href="security-ui.css?v=20260723-security">
 <link rel="stylesheet" href="operations.css?v=20260729-transparent-logo">
+<link rel="stylesheet" href="diesel.css?v=20260804-executive-report-3">
+<link rel="stylesheet" href="executive.css?v=20260804-executive-report-3">
 <style>
   :root{
     --brand:#0f8a5f; --brand-dark:#086342; --brand-bright:#22b573;
@@ -593,6 +595,53 @@
 
   </section>
 
+  <!-- ===================== TAB: DIESEL USAGE ===================== -->
+  <section id="tab-diesel" class="tab-panel">
+    <header class="diesel-page-head">
+      <div>
+        <span>FUEL MANAGEMENT</span>
+        <h2>Diesel Usage</h2>
+        <p>บันทึกการใช้น้ำมันแยกตามเครื่องจักรหนัก</p>
+      </div>
+      <label class="diesel-date-control" for="dieselDate"><span>วันที่บันทึก</span><input type="date" id="dieselDate"></label>
+    </header>
+
+    <section class="diesel-entry-band">
+      <div class="diesel-entry-copy"><span>DAILY ENTRY</span><h3>เพิ่มรายการใช้น้ำมัน</h3></div>
+      <div class="diesel-entry-form">
+        <label><span>เครื่องจักร</span><select id="dieselMachine"><option value="">เลือกเครื่องจักร</option></select></label>
+        <label><span>จำนวน (ลิตร)</span><input type="number" id="dieselLiters" min="0.01" max="100000" step="0.01" placeholder="0.00"></label>
+        <label class="diesel-note-field"><span>หมายเหตุ</span><input type="text" id="dieselNote" maxlength="500" placeholder="(ถ้ามี)"></label>
+        <button type="button" class="primary" id="btnAddDiesel">บันทึกรายการ</button>
+      </div>
+    </section>
+
+    <section class="diesel-summary-row" aria-live="polite">
+      <article><span>ใช้วันนี้</span><strong id="dieselDailyTotal">0.00</strong><small>ลิตร</small></article>
+      <article><span>จำนวนรายการ</span><strong id="dieselDailyCount">0</strong><small>รายการ</small></article>
+      <article class="diesel-summary-breakdown"><span>แยกตามเครื่องจักร</span><div id="dieselDailyBreakdown"><small>ยังไม่มีข้อมูล</small></div></article>
+    </section>
+
+    <section class="diesel-list-panel">
+      <header><div><span>USAGE LOG</span><h3>รายการประจำวัน</h3></div></header>
+      <div class="scroll-table">
+        <table class="diesel-table">
+          <thead><tr><th class="left">เครื่องจักร</th><th>น้ำมัน (ลิตร)</th><th class="left">หมายเหตุ</th><th>จัดการ</th></tr></thead>
+          <tbody id="dieselUsageTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="diesel-machine-panel" data-min-role="supervisor">
+      <header><div><span>MACHINE SETUP</span><h3>ตั้งค่ารายชื่อเครื่องจักร</h3></div></header>
+      <div class="diesel-machine-add">
+        <label for="dieselMachineName"><span>ชื่อเครื่องจักร</span><input type="text" id="dieselMachineName" maxlength="100" placeholder="เช่น Wheel Loader 1"></label>
+        <button type="button" id="btnAddDieselMachine">เพิ่มเครื่องจักร</button>
+      </div>
+      <div class="diesel-machine-list" id="dieselMachineList"></div>
+    </section>
+  </section>
+
   <!-- ===================== TAB: REPORT ===================== -->
   <section id="tab-report" class="tab-panel">
 
@@ -633,7 +682,7 @@
         <span class="report-metric-code">AVAILABILITY</span>
         <div class="name">Availability</div>
         <div class="value" id="rAvail">-</div>
-        <div class="target">เทียบกับช่วงผลิตอ้างอิง Grab</div>
+        <div class="target">เทียบกับช่วง Grab แรก–Grab สุดท้าย</div>
       </div>
     </section>
 
@@ -643,7 +692,7 @@
       </header>
       <div class="scroll-table ops-table-wrap report-table-wrap">
         <table class="period-table">
-          <thead><tr><th class="left">ช่วง</th><th>ช่วงผลิตอ้างอิง Grab</th><th>เวลาหยุดเครื่อง</th><th>จำนวน Grab</th><th>น้ำหนักเฉลี่ย/แกรบ (ตัน)</th></tr></thead>
+          <thead><tr><th class="left">ช่วง</th><th>ช่วง Grab แรก–Grab สุดท้าย</th><th>เวลาหยุดเครื่อง</th><th>จำนวน Grab</th><th>น้ำหนักเฉลี่ย/แกรบ (ตัน)</th></tr></thead>
           <tbody id="periodTable"></tbody>
         </table>
       </div>
@@ -724,6 +773,111 @@
       </div>
     </section>
 
+  </section>
+
+  <!-- ===================== TAB: EXECUTIVE DAILY REPORT ===================== -->
+  <section id="tab-executive-report" class="tab-panel">
+    <section class="executive-toolbar">
+      <div><span>SHAREABLE MANAGEMENT REPORT</span><h2>Executive Daily Report</h2></div>
+      <div class="executive-toolbar-actions">
+        <button type="button" id="btnExecutivePrev" class="executive-step" title="วันก่อนหน้า" aria-label="วันก่อนหน้า">&#8249;</button>
+        <label for="executiveReportDate"><span>วันที่รายงาน</span><input type="date" id="executiveReportDate"></label>
+        <button type="button" id="btnExecutiveNext" class="executive-step" title="วันถัดไป" aria-label="วันถัดไป">&#8250;</button>
+        <button type="button" class="primary" id="btnLoadExecutive">แสดงผล</button>
+        <button type="button" class="executive-export-button" id="btnExportExecutive"><span aria-hidden="true">&#8595;</span> PNG</button>
+      </div>
+    </section>
+
+    <div class="executive-report" id="executiveReportExport" aria-live="polite">
+      <div class="executive-skeleton" id="executiveSkeleton" aria-label="กำลังโหลดรายงาน">
+        <i class="wide"></i><i></i><i></i><i></i><i></i><i class="wide tall"></i><i class="wide"></i>
+      </div>
+      <div class="executive-content" id="executiveContent" hidden>
+        <header class="executive-report-head">
+          <div class="executive-brand">
+            <img src="assets/green-power-1-logo.png?v=20260729-official-logo" width="2055" height="550" alt="Green Power 1">
+            <div><h2>MSW Executive Dashboard</h2><p>NAKHONSAWAN FACTORY · DAILY PERFORMANCE</p></div>
+          </div>
+          <div class="executive-date"><span>REPORT DATE</span><strong id="executiveDateLabel">-</strong></div>
+        </header>
+
+        <div class="executive-report-body">
+          <section class="executive-daily-grid">
+            <article class="executive-metric incoming">
+              <header><span>MSW Incoming</span><b id="executiveIncomingStatus">RECORDED</b></header>
+              <div class="executive-metric-body">
+                <div><small>ACTUAL</small><strong id="executiveIncomingDaily">0.00</strong><em>ตัน</em></div>
+                <p>MTD <b id="executiveIncomingMTD">0.00 ตัน</b></p>
+              </div>
+            </article>
+            <article class="executive-metric production">
+              <header><span>MSW to Production</span><b id="executiveProductionPct">0%</b></header>
+              <div class="executive-metric-body split">
+                <div><small>ACTUAL</small><strong id="executiveProductionDaily">0.00</strong><em>ตัน</em></div>
+                <div><small>DAILY PLAN</small><strong id="executiveProductionPlan">285.71</strong><em>ตัน</em></div>
+              </div>
+            </article>
+            <article class="executive-metric output">
+              <header><span>RDF Output</span><b>ACTUAL</b></header>
+              <div class="executive-output-pair">
+                <div><small>RDF2</small><strong id="executiveRDF2Daily">0.00</strong><em>ตัน</em></div>
+                <div><small>RDF2 LG</small><strong id="executiveRDF2LGDaily">0.00</strong><em>ตัน</em></div>
+              </div>
+              <p id="executiveYieldNote">คำนวณจาก Yield ปัจจุบัน</p>
+            </article>
+            <article class="executive-metric diesel">
+              <header><span>Diesel</span><b>DAILY</b></header>
+              <div class="executive-metric-body">
+                <div><small>TOTAL</small><strong id="executiveDieselDaily">0.00</strong><em>ลิตร</em></div>
+                <div class="executive-machine-chips" id="executiveDieselDailyMachines"></div>
+              </div>
+            </article>
+          </section>
+
+          <section class="executive-section">
+            <header class="executive-section-title"><span>MONTHLY PERFORMANCE</span><small id="executiveMonthMeta">-</small></header>
+            <div class="executive-month-grid">
+              <article class="executive-month-target">
+                <div><span>MSW to Production</span><b id="executiveMTDPct">0%</b></div>
+                <strong id="executiveProductionMTD">0.00 <small>ตัน</small></strong>
+                <p>เป้ารายเดือน <b id="executiveMonthlyTarget">8,000.00 ตัน</b></p>
+                <div class="executive-progress"><i id="executiveMTDBar"></i></div>
+              </article>
+              <article class="executive-month-output">
+                <span>RDF OUTPUT · MTD</span>
+                <div><p>RDF2<strong id="executiveRDF2MTD">0.00 ตัน</strong></p><p>RDF2 LG<strong id="executiveRDF2LGMTD">0.00 ตัน</strong></p></div>
+              </article>
+              <article class="executive-month-diesel">
+                <span>DIESEL · MTD</span><strong id="executiveDieselMTD">0.00 <small>ลิตร</small></strong>
+                <div class="executive-machine-chips" id="executiveDieselMTDMachines"></div>
+              </article>
+            </div>
+          </section>
+
+          <section class="executive-section">
+            <header class="executive-section-title"><span>REQUIRED DAILY RATE · MSW TO PRODUCTION</span><small id="executiveRateNote">-</small></header>
+            <div class="executive-recovery-grid">
+              <div><span>DAYS REMAINING</span><strong id="executiveDaysRemaining">0</strong><small>วัน</small></div>
+              <div><span>SHORTFALL</span><strong id="executiveShortfall">0.00</strong><small>ตัน</small></div>
+              <div class="critical"><span>NEED PER DAY</span><strong id="executiveNeedPerDay">0.00</strong><small>ตัน / วัน</small></div>
+            </div>
+            <p class="executive-average-line">ค่าเฉลี่ยปัจจุบัน <b id="executiveCurrentAverage">0.00 ตัน/วัน</b><i></i>ต้องทำต่อวัน <b id="executiveRequiredAverage">0.00 ตัน/วัน</b></p>
+          </section>
+
+          <section class="executive-section executive-trend-section">
+            <header class="executive-section-title"><span>DAILY MSW TREND</span><small id="executiveTrendTotal">MTD 0.00 ตัน</small></header>
+            <div class="executive-trend-legend"><span class="target">Daily Plan</span><span class="average">Current Average</span></div>
+            <div class="executive-trend-chart" id="executiveTrendChart"></div>
+          </section>
+
+          <section class="executive-section executive-incident-section">
+            <header class="executive-section-title"><span>INCIDENT &amp; MAINTENANCE</span><small id="executiveIncidentMeta">2 เหตุหยุดนานที่สุด</small></header>
+            <div class="executive-incident-list" id="executiveIncidentList"></div>
+          </section>
+        </div>
+        <footer class="executive-report-footer"><span>GP1 Connect · Executive Daily Summary</span><span>Green Power 1 Co., Ltd.</span></footer>
+      </div>
+    </div>
   </section>
 
   <!-- ===================== TAB: WEEKLY PRODUCTION REPORT ===================== -->
@@ -880,8 +1034,8 @@
             </div>
             <div class="monthly-operations-metrics">
               <div><span>กรอบเวลา Start–Stop</span><strong id="monthlyLineTime">0 ชม. 0 น.</strong></div>
-              <div><span>ช่วงผลิตอ้างอิง Grab</span><strong id="monthlyProductionTime">0 ชม. 0 น.</strong></div>
-              <div class="danger"><span>Downtime ในช่วงผลิต</span><strong id="monthlyDowntimeTime">0 ชม. 0 น.</strong></div>
+              <div><span>ช่วง Grab แรก–Grab สุดท้าย</span><strong id="monthlyProductionTime">0 ชม. 0 น.</strong></div>
+              <div class="danger"><span>Downtime ทั้งวัน</span><strong id="monthlyDowntimeTime">0 ชม. 0 น.</strong></div>
             </div>
             <div class="monthly-reason-list" id="monthlyDowntimeReasons"></div>
           </section>
@@ -1421,6 +1575,7 @@
     </div>
     <div class="workspace-launch-panel" data-workspace-panel="entry">
       <button type="button" class="launcher-item" data-open-tab="today" data-min-role="operator"><span>OPERATIONS</span><b>Control Room</b><small>Start-Stop Line &amp; Downtime</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" data-open-tab="diesel" data-min-role="operator"><span>FUEL</span><b>Diesel Usage</b><small>Daily Heavy Equipment Fuel Entry</small><em>&rarr;</em></button>
       <button type="button" class="launcher-item" data-open-tab="stock" data-min-role="supervisor"><span>PRODUCTION</span><b>Production Setup</b><small>Yield Settings</small><em>&rarr;</em></button>
       <button type="button" class="launcher-item" data-open-tab="delivery" data-min-role="supervisor"><span>PLANNING</span><b>Weekly Sales Plan</b><small>Plan &amp; Actual Setup</small><em>&rarr;</em></button>
       <button type="button" class="launcher-item" data-open-tab="revenue" data-min-role="operator"><span>COMMERCIAL</span><b>Sales &amp; Revenue</b><small>Sales, MSW &amp; Price Setup</small><em>&rarr;</em></button>
@@ -1429,6 +1584,7 @@
     </div>
     <div class="workspace-launch-panel" data-workspace-panel="insights" hidden>
       <button type="button" class="launcher-item" data-open-tab="report"><span>DAILY</span><b>Daily Report</b><small>Operating Performance Summary</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" data-open-tab="executive-report"><span>DAILY</span><b>Executive Daily Report</b><small>MSW, Output, Diesel &amp; Incidents</small><em>&rarr;</em></button>
       <button type="button" class="launcher-item" data-open-tab="weekly-report"><span>WEEKLY</span><b>Weekly Report</b><small>Production &amp; Sales Summary</small><em>&rarr;</em></button>
       <button type="button" class="launcher-item" data-open-tab="monthly-report"><span>MONTHLY</span><b>Monthly Report</b><small>Operations, Production, Sales &amp; Revenue</small><em>&rarr;</em></button>
       <button type="button" class="launcher-item" data-open-tab="kpi"><span>MONTHLY</span><b>KPI Dashboard</b><small>Performance Against Targets</small><em>&rarr;</em></button>
@@ -1521,7 +1677,8 @@ function onClickGuarded(el, handler){
 
 // ---------------- Tabs ----------------
 const TAB_TITLES = {
-  home:'Home', today:'Control Room', report:'Daily Report', 'weekly-report':'Weekly Report', 'monthly-report':'Monthly Report',
+  home:'Home', today:'Control Room', diesel:'Diesel Usage', report:'Daily Report', 'executive-report':'Executive Daily Report',
+  'weekly-report':'Weekly Report', 'monthly-report':'Monthly Report',
   stock:'Production & Yield', delivery:'Sales Plan',
   revenue:'Revenue Dashboard', kpi:'Monthly KPI',
 };
@@ -1719,21 +1876,14 @@ async function loadReport(){
 
   document.getElementById('rLineTime').innerHTML = fmtMin(data.line.totalMinutes);
   const runtimeSourceLabel = data.line.runtimeSource === 'grab'
-    ? 'ยืนยันด้วย Grab'
-    : data.line.runtimeSource === 'mixed'
-      ? 'Grab + Start-Stop สำรอง'
-      : data.line.runtimeSource === 'grab-inferred'
-        ? 'อนุมานจาก Grab (ไม่มี Start-Stop)'
-        : data.line.runtimeSource === 'manual'
-          ? 'ประมาณจาก Start-Stop'
-          : 'ยังไม่มีข้อมูล';
+    ? 'ยืนยันจาก Grab แรก–Grab สุดท้าย'
+    : data.line.runtimeSource === 'insufficient'
+      ? 'ข้อมูล Grab ไม่พอสำหรับคำนวณ'
+      : 'ยังไม่มีข้อมูล Grab';
   document.getElementById('rProductionSpanHint').textContent =
-    `ช่วงผลิต ${fmtMin(data.line.productionMinutes)} · ${runtimeSourceLabel}`;
+    `${fmtMin(data.line.productionMinutes)} · ${runtimeSourceLabel}`;
   document.getElementById('rDowntime').innerHTML = fmtMin(data.downtime.totalMinutes);
-  const rawExtra = data.downtime.totalMinutesRaw - data.downtime.totalMinutes;
-  document.getElementById('rDowntimeRawHint').textContent = rawExtra > 0
-    ? `(รวมดิบ ${fmtMin(data.downtime.totalMinutesRaw)} - อีก ${fmtMin(rawExtra)} อยู่นอกช่วงผลิต ไม่นับใน Availability)`
-    : '';
+  document.getElementById('rDowntimeRawHint').textContent = '';
   document.getElementById('rNetRun').innerHTML = fmtMin(data.line.netRunMinutes);
   document.getElementById('rAvail').innerHTML = data.line.availabilityPct === null ? '-' : data.line.availabilityPct.toFixed(1) + ' %';
 
@@ -1759,12 +1909,9 @@ async function loadReport(){
   for (const s of data.downtime.segments){
     const tr = document.createElement('tr');
     const carry = s.carriedOver ? '<span class="badge carry">ต่อจากเมื่อวาน</span>' : '';
-    const outside = s.outsideLineMinutes > 0
-      ? `<span class="badge outside" title="อยู่นอกช่วงผลิตอ้างอิง Grab - ไม่นับใน Availability">นอกช่วงผลิต ${fmtMin(s.outsideLineMinutes)}</span>`
-      : '';
     tr.innerHTML = `<td>${periodBadge(s.period)}</td>
       <td>${htmlEsc(s.startTime)}-${htmlEsc(s.endTime)}${carry}</td>
-      <td>${fmtMin(s.minutes)}${outside}</td>
+      <td>${fmtMin(s.minutes)}</td>
       <td class="left">${htmlEsc(s.reason||'')}</td>
       <td class="left">${htmlEsc(s.note||'')}</td>`;
     dtbody.appendChild(tr);
@@ -1866,7 +2013,7 @@ function renderPrintSummary(date, data){
   const totalsBody = document.getElementById('psTotalsTable');
   totalsBody.innerHTML = [
     ['เวลาเปิดไลน์ (Start-Stop)', fmtMin(data.line.totalMinutes)],
-    ['ช่วงผลิตอ้างอิง Grab', fmtMin(data.line.productionMinutes)],
+    ['ช่วง Grab แรก–Grab สุดท้าย', fmtMin(data.line.productionMinutes)],
     ['รวมเวลาหยุดเครื่องทั้งหมด', fmtMin(data.downtime.totalMinutes)],
     ['เวลาเดินผลิตจริง (สุทธิ)', fmtMin(data.line.netRunMinutes)],
     ['Availability', data.line.availabilityPct === null ? '-' : data.line.availabilityPct.toFixed(1) + ' %'],
@@ -2648,6 +2795,12 @@ function initializeAppTab(tab, force=false){
       case 'report':
         await loadReport();
         break;
+      case 'diesel':
+        if (window.initDieselUsage) await window.initDieselUsage();
+        break;
+      case 'executive-report':
+        if (window.initExecutiveReport) await window.initExecutiveReport();
+        break;
       case 'weekly-report':
         await initWeeklyReport();
         break;
@@ -2685,7 +2838,9 @@ initializeAppTab(initialTab && TAB_TITLES[initialTab] ? initialTab : 'home').cat
 </script>
 <script src="security-ui.js?v=20260723-security"></script>
 <script src="kpi.js?v=20260723-yieldsplit"></script>
-<script src="monthly.js?v=20260804-monthly-report"></script>
+<script src="monthly.js?v=20260804-runtime-history"></script>
+<script src="diesel.js?v=20260804-executive-report-3"></script>
+<script src="executive.js?v=20260804-executive-report-3"></script>
 <script src="home.js?v=20260724-grab-runtime"></script>
 </body>
 </html>

@@ -89,6 +89,15 @@ function grab(id, dateTime, weight) {
   };
 }
 
+function legacyCsvGrab(dateTime, weight) {
+  return {
+    ReportDate: dateTime.slice(0, 10),
+    DateTime: dateTime,
+    Weight: weight,
+    SourceFile: 'legacy-july.csv',
+  };
+}
+
 test('monthly report uses calendar boundaries and combines operations, production, sales and revenue', async (t) => {
   await store.appendRows('LineTime', [
     line('2026-07-31', 'Start', '20:00'),
@@ -102,8 +111,8 @@ test('monthly report uses calendar boundaries and combines operations, productio
   ]);
   await store.appendRows('GrabCrane', [
     grab(1, '2026-07-31 23:50:00', 99),
-    grab(2, '2026-08-01 00:10:00', 10),
-    grab(3, '2026-08-01 01:50:00', 10),
+    legacyCsvGrab('2026-08-01 00:10:00', 10),
+    legacyCsvGrab('2026-08-01 01:50:00', 10),
     grab(4, '2026-08-02 08:10:00', 15),
     grab(5, '2026-08-02 09:50:00', 15),
     grab(6, '2026-09-01 08:00:00', 88),
@@ -137,6 +146,10 @@ test('monthly report uses calendar boundaries and combines operations, productio
     ExcludedMinTons: 0,
     ExcludedMaxTons: 0,
   }]);
+  await store.appendRows('KPIDailyHistory', [
+    { EntryDate: '2026-08-02', MSWTons: 999, Source: 'legacy-import' },
+    { EntryDate: '2026-08-03', MSWTons: 40, Source: 'legacy-import' },
+  ]);
 
   const baseUrl = await startServer(t);
   const response = await fetch(`${baseUrl}/api/monthly-report?month=2026-08`);
@@ -145,22 +158,29 @@ test('monthly report uses calendar boundaries and combines operations, productio
 
   assert.equal(report.startDate, '2026-08-01');
   assert.equal(report.endDate, '2026-08-31');
-  assert.deepEqual(report.incoming, { totalGrabs: 4, totalTons: 50, avgTonsPerGrab: 12.5 });
+  assert.deepEqual(report.incoming, {
+    totalGrabs: 4,
+    totalTons: 90,
+    avgTonsPerGrab: 12.5,
+    detailedTons: 50,
+    historicalTons: 40,
+    historicalDays: 1,
+  });
   assert.deepEqual(report.production.products.map((row) => row.product), ['RDF2', 'RDF2LG', 'FineFraction']);
   assert.deepEqual(Object.fromEntries(report.production.products.map((row) => [row.product, row.tons])), {
-    RDF2: 10,
-    RDF2LG: 5,
-    FineFraction: 15,
+    RDF2: 18,
+    RDF2LG: 9,
+    FineFraction: 27,
   });
   for (const excluded of ['HeavyFraction', 'Metal', 'Water']) {
     assert.equal(report.production.products.some((row) => row.product === excluded), false);
   }
 
   assert.equal(report.operations.lineMinutes, 240);
-  assert.equal(report.operations.productionMinutes, 210);
+  assert.equal(report.operations.productionMinutes, 200);
   assert.equal(report.operations.downtimeMinutes, 50);
-  assert.equal(report.operations.netRunMinutes, 160);
-  assert.ok(Math.abs(report.operations.availabilityPct - (160 / 210 * 100)) < 0.0001);
+  assert.equal(report.operations.netRunMinutes, 150);
+  assert.ok(Math.abs(report.operations.availabilityPct - (150 / 200 * 100)) < 0.0001);
   assert.deepEqual(report.operations.reasonTotals.map((row) => [row.reason, row.count, row.minutes]), [
     ['พักกะดึก', 1, 30],
     ['Plug Spinner', 1, 20],
@@ -172,9 +192,19 @@ test('monthly report uses calendar boundaries and combines operations, productio
   assert.equal(report.revenue.sales.base, 17500);
   assert.equal(report.revenue.tipping.central, 25000);
   assert.equal(report.revenue.company.central, 42500);
-  assert.equal(report.daily.find((row) => row.date === '2026-08-01').downtimeMinutes, 30);
-  assert.equal(report.daily.find((row) => row.date === '2026-08-02').downtimeMinutes, 20);
-  assert.equal(report.weeks.reduce((sum, row) => sum + row.incomingTons, 0), 50);
+  const august1 = report.daily.find((row) => row.date === '2026-08-01');
+  assert.equal(august1.downtimeMinutes, 30);
+  assert.equal(august1.incomingTons, 20);
+  assert.equal(august1.incomingSource, 'csv');
+  const august2 = report.daily.find((row) => row.date === '2026-08-02');
+  assert.equal(august2.downtimeMinutes, 20);
+  assert.equal(august2.incomingTons, 30);
+  assert.equal(august2.incomingSource, 'automatic');
+  const august3 = report.daily.find((row) => row.date === '2026-08-03');
+  assert.equal(august3.incomingTons, 40);
+  assert.equal(august3.incomingSource, 'history');
+  assert.equal(report.weeks.reduce((sum, row) => sum + row.incomingTons, 0), 90);
+  assert.equal(report.weeks.reduce((sum, row) => sum + row.historicalDays, 0), 1);
 
   const invalidResponse = await fetch(`${baseUrl}/api/monthly-report?month=08-2026`);
   assert.equal(invalidResponse.status, 400);

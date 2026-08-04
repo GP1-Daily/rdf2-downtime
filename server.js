@@ -27,7 +27,7 @@ const BODY_LIMIT_BYTES = Math.min(
 const PUBLIC_FILES = new Set([
   'index.html', 'login.html', 'accept-invite.html', 'security.html',
   'home.css', 'home.js', 'kpi.css', 'kpi.js', 'monthly.css', 'monthly.js', 'html2canvas.min.js',
-  'operations.css',
+  'operations.css', 'diesel.css', 'diesel.js', 'executive.css', 'executive.js',
   'login.css', 'login.js', 'invite.js', 'security.css', 'security-admin.js',
   'security-ui.css', 'security-ui.js',
   'assets/gp1-connect-logo.png', 'assets/gp1-connect-mark.png', 'assets/gp1-connect-favicon.png',
@@ -438,91 +438,45 @@ function rangeMinutes(ranges) {
   return ranges.reduce((total, [start, end]) => total + end - start, 0);
 }
 
-function overlapWithRanges(start, end, ranges) {
-  let total = 0;
-  for (const [rangeStart, rangeEnd] of ranges) {
-    const low = Math.max(start, rangeStart);
-    const high = Math.min(end, rangeEnd);
-    if (high > low) total += high - low;
-  }
-  return total;
-}
-
-function buildProductionSegments(reportDate, sessionRanges, grabRows) {
-  const points = grabRows.map(grabDateTimePoint).filter(Boolean).sort((a, b) => a.key.localeCompare(b.key));
-  const segments = [];
-  let anchoredSessions = 0;
-  let estimatedSessions = 0;
-
-  for (const session of sessionRanges) {
-    const sessionPoints = points.filter((point) => point.key >= session.startKey && point.key <= session.endKey);
-    const anchored = sessionPoints.length >= 2;
-    const first = anchored ? sessionPoints[0] : null;
-    const last = anchored ? sessionPoints[sessionPoints.length - 1] : null;
-    const startDate = first ? first.date : session.startDate;
-    const startTime = first ? first.time : session.startTime;
-    const endDate = last ? last.date : session.endDate;
-    const endTime = last ? last.time : session.endTime;
-    if (`${endDate} ${endTime}` <= `${startDate} ${startTime}`) continue;
-
-    if (anchored) anchoredSessions += 1;
-    else estimatedSessions += 1;
-    for (const part of lib.splitRange(startDate, startTime, endDate, endTime)) {
-      if (part.date !== reportDate) continue;
-      segments.push({
-        ...part,
-        source: anchored ? 'grab' : 'manual',
-        estimated: !anchored,
-        grabCount: sessionPoints.length,
-        firstGrab: first?.key || null,
-        lastGrab: last?.key || null,
-        sessionStart: `${session.startDate} ${session.startTime}`,
-        sessionStop: session.ongoing ? null : `${session.endDate} ${session.endTime}`,
-        stopType: session.stopType,
-        ongoing: session.ongoing,
-      });
-    }
+function buildDailyGrabProduction(reportDate, grabRows) {
+  const points = grabRows
+    .map(grabDateTimePoint)
+    .filter((point) => point && point.date === reportDate)
+    .sort((a, b) => a.key.localeCompare(b.key));
+  const first = points[0] || null;
+  const last = points[points.length - 1] || null;
+  const hasUsableSpan = points.length >= 2 && last.key > first.key;
+  if (!hasUsableSpan) {
+    return {
+      segments: [],
+      anchoredSessions: 0,
+      estimatedSessions: 0,
+      runtimeSource: points.length ? 'insufficient' : 'none',
+      firstGrab: first?.key || null,
+      lastGrab: last?.key || null,
+    };
   }
 
-  // If Start/Stop was missed entirely, two or more Pi records still provide a
-  // defensible production span for the day. It is kept visibly inferred so
-  // the operator can correct the missing line events later.
-  if (!segments.length) {
-    const dailyPoints = points.filter((point) => point.date === reportDate);
-    if (dailyPoints.length >= 2) {
-      const first = dailyPoints[0];
-      const last = dailyPoints[dailyPoints.length - 1];
-      for (const part of lib.splitRange(reportDate, first.time, reportDate, last.time)) {
-        segments.push({
-          ...part,
-          source: 'grab-inferred',
-          estimated: true,
-          grabCount: dailyPoints.length,
-          firstGrab: first.key,
-          lastGrab: last.key,
-          sessionStart: null,
-          sessionStop: null,
-          stopType: '',
-          ongoing: false,
-        });
-      }
-      anchoredSessions += 1;
-      estimatedSessions += 1;
-    }
-  }
-
-  segments.sort((a, b) => a.startTime.localeCompare(b.startTime));
-  const sources = new Set(segments.map((segment) => segment.source));
-  const runtimeSource = !segments.length
-    ? 'none'
-    : sources.size === 1 && sources.has('manual')
-      ? 'manual'
-      : sources.has('manual')
-        ? 'mixed'
-        : sources.has('grab-inferred')
-          ? 'grab-inferred'
-          : 'grab';
-  return { segments, anchoredSessions, estimatedSessions, runtimeSource };
+  const segments = lib.splitRange(reportDate, first.time, reportDate, last.time).map((part) => ({
+    ...part,
+    source: 'grab',
+    estimated: false,
+    grabCount: points.length,
+    firstGrab: first.key,
+    lastGrab: last.key,
+    sessionStart: null,
+    sessionStop: null,
+    stopType: '',
+    ongoing: false,
+  }));
+  return {
+    segments,
+    anchoredSessions: 1,
+    estimatedSessions: 0,
+    runtimeSource: 'grab',
+    firstGrab: first.key,
+    lastGrab: last.key,
+  };
 }
 
 async function handleReport(req, res, query) {
@@ -609,15 +563,10 @@ async function handleReport(req, res, query) {
   const lineByPeriod = { 'เช้า': 0, 'บ่าย': 0, 'ดึก': 0 };
   for (const s of lineSegments) lineByPeriod[s.period] += s.minutes;
 
-  // Pi timestamps anchor the productive window. Gaps between grabs remain
-  // productive time; only an operator-recorded downtime interval subtracts
-  // from it. Start/Stop remains the session boundary and the fallback when a
-  // session has fewer than two valid Grab records.
-  const production = buildProductionSegments(date, sessionRanges, grabRows);
+  // Actual runtime is always anchored to the first and last Grab recorded on
+  // this calendar date. Start/Stop remains visible as an operating log only.
+  const production = buildDailyGrabProduction(date, grabRows);
   const productionSegments = production.segments;
-  const productionRanges = mergeMinuteRanges(productionSegments.map((segment) => [
-    lib.timeToMinutes(segment.startTime), lib.timeToMinutes(segment.endTime),
-  ]));
   const productionByPeriod = { 'เช้า': 0, 'บ่าย': 0, 'ดึก': 0 };
   for (const period of Object.keys(productionByPeriod)) {
     const ranges = mergeMinuteRanges(productionSegments
@@ -633,8 +582,6 @@ async function handleReport(req, res, query) {
     const segs = lib.splitEntry(r.EntryDate, r.StartTime, r.EndTime);
     for (const s of segs) {
       if (s.date !== date) continue;
-      const startMin = lib.timeToMinutes(s.startTime), endMin = lib.timeToMinutes(s.endTime);
-      const insideLineMinutes = overlapWithRanges(startMin, endMin, productionRanges);
       downtimeSegments.push({
         ...s,
         id: r.ID,
@@ -644,8 +591,8 @@ async function handleReport(req, res, query) {
         originalEntryDate: r.EntryDate,
         originalStartTime: r.StartTime,
         originalEndTime: r.EndTime,
-        insideLineMinutes,
-        outsideLineMinutes: s.minutes - insideLineMinutes,
+        insideLineMinutes: s.minutes,
+        outsideLineMinutes: 0,
       });
     }
   }
@@ -653,17 +600,10 @@ async function handleReport(req, res, query) {
   const totalDowntimeMinRaw = downtimeSegments.reduce((s, x) => s + x.minutes, 0);
   const downtimeByPeriod = { 'เช้า': 0, 'บ่าย': 0, 'ดึก': 0 };
   for (const period of Object.keys(downtimeByPeriod)) {
-    const intersections = [];
-    for (const segment of downtimeSegments.filter((item) => item.period === period)) {
-      const start = lib.timeToMinutes(segment.startTime);
-      const end = lib.timeToMinutes(segment.endTime);
-      for (const [activeStart, activeEnd] of productionRanges) {
-        const low = Math.max(start, activeStart);
-        const high = Math.min(end, activeEnd);
-        if (high > low) intersections.push([low, high]);
-      }
-    }
-    downtimeByPeriod[period] = rangeMinutes(mergeMinuteRanges(intersections));
+    const ranges = downtimeSegments
+      .filter((item) => item.period === period)
+      .map((segment) => [lib.timeToMinutes(segment.startTime), lib.timeToMinutes(segment.endTime)]);
+    downtimeByPeriod[period] = rangeMinutes(mergeMinuteRanges(ranges));
   }
   const totalDowntimeMin = Object.values(downtimeByPeriod).reduce((sum, minutes) => sum + minutes, 0);
 
@@ -1550,6 +1490,123 @@ async function handleKPI(req, res, parts, query) {
   return sendJson(res, 404, { ok: false, error: 'unknown KPI route' });
 }
 
+// ---------- Diesel Usage ----------
+
+function recordIsActive(value) {
+  return value !== false && value !== 0 && String(value).toLowerCase() !== 'false';
+}
+
+function dieselUsageSummary(rows) {
+  const byMachineMap = new Map();
+  for (const row of rows) {
+    const machine = cleanText(row.Machine) || 'ไม่ระบุเครื่องจักร';
+    const liters = Math.max(0, Number(row.Liters) || 0);
+    byMachineMap.set(machine, (byMachineMap.get(machine) || 0) + liters);
+  }
+  return {
+    totalLiters: rows.reduce((sum, row) => sum + Math.max(0, Number(row.Liters) || 0), 0),
+    byMachine: [...byMachineMap.entries()]
+      .map(([machine, liters]) => ({ machine, liters }))
+      .sort((a, b) => b.liters - a.liters || a.machine.localeCompare(b.machine, 'th')),
+  };
+}
+
+async function handleDieselMachines(req, res, parts) {
+  if (req.method === 'GET' && parts.length === 0) {
+    const rows = await store.readSheet('DieselMachines');
+    rows.sort((a, b) => cleanText(a.Name).localeCompare(cleanText(b.Name), 'th'));
+    return sendJson(res, 200, { ok: true, rows });
+  }
+  if (req.method === 'POST' && parts.length === 0) {
+    const body = await readBody(req);
+    const name = cleanText(body.name);
+    if (!name || !textWithin(name, 100)) {
+      return sendJson(res, 400, { ok: false, error: 'กรุณาระบุชื่อเครื่องจักรไม่เกิน 100 ตัวอักษร' });
+    }
+    const rows = await store.readSheet('DieselMachines');
+    const existing = rows.find((row) => sameText(row.Name, name));
+    const row = existing
+      ? await store.updateRow('DieselMachines', existing.ID, { Name: name, Active: true })
+      : await store.appendRow('DieselMachines', { Name: name, Active: true });
+    return sendJson(res, 200, { ok: true, row, updated: !!existing });
+  }
+  if (req.method === 'PUT' && parts.length === 1) {
+    const body = await readBody(req);
+    const patch = {};
+    if (body.name !== undefined) {
+      const name = cleanText(body.name);
+      if (!name || !textWithin(name, 100)) {
+        return sendJson(res, 400, { ok: false, error: 'ชื่อเครื่องจักรไม่ถูกต้อง' });
+      }
+      const rows = await store.readSheet('DieselMachines');
+      if (rows.some((row) => String(row.ID) !== String(parts[0]) && sameText(row.Name, name))) {
+        return sendJson(res, 409, { ok: false, error: 'มีเครื่องจักรชื่อนี้อยู่แล้ว' });
+      }
+      patch.Name = name;
+    }
+    if (body.active !== undefined) patch.Active = Boolean(body.active);
+    const row = await store.updateRow('DieselMachines', parts[0], patch);
+    if (!row) return sendJson(res, 404, { ok: false, error: 'ไม่พบเครื่องจักร' });
+    return sendJson(res, 200, { ok: true, row });
+  }
+  return sendJson(res, 404, { ok: false, error: 'unknown diesel machine route' });
+}
+
+async function handleDieselUsage(req, res, parts, query) {
+  if (req.method === 'GET' && parts.length === 0) {
+    const date = cleanText(query.date);
+    const month = cleanText(query.month);
+    if (date && !validIsoDate(date)) {
+      return sendJson(res, 400, { ok: false, error: 'รูปแบบวันที่ต้องเป็น YYYY-MM-DD' });
+    }
+    if (month && !validMonth(month)) {
+      return sendJson(res, 400, { ok: false, error: 'รูปแบบเดือนต้องเป็น YYYY-MM' });
+    }
+    let rows = await store.readSheet('DieselUsage');
+    if (date) rows = rows.filter((row) => row.EntryDate === date);
+    if (month) rows = rows.filter((row) => String(row.EntryDate).startsWith(`${month}-`));
+    rows.sort((a, b) => String(b.EntryDate).localeCompare(String(a.EntryDate)) || Number(b.ID) - Number(a.ID));
+    return sendJson(res, 200, { ok: true, rows, summary: dieselUsageSummary(rows) });
+  }
+  if (req.method === 'POST' && parts.length === 0) {
+    const body = await readBody(req);
+    const entryDate = cleanText(body.entryDate);
+    const machine = cleanText(body.machine);
+    const liters = Number(body.liters);
+    const note = cleanText(body.note);
+    if (!validIsoDate(entryDate) || !machine || !Number.isFinite(liters) || liters <= 0 || liters > 100000) {
+      return sendJson(res, 400, { ok: false, error: 'กรุณาระบุวันที่ เครื่องจักร และลิตรให้ถูกต้อง' });
+    }
+    if (!textWithin(machine, 100) || !textWithin(note, 500)) {
+      return sendJson(res, 400, { ok: false, error: 'ข้อมูลรายการน้ำมันยาวเกินกำหนด' });
+    }
+    const machines = await store.readSheet('DieselMachines');
+    if (!machines.some((row) => sameText(row.Name, machine) && recordIsActive(row.Active))) {
+      return sendJson(res, 400, { ok: false, error: 'กรุณาเลือกเครื่องจักรที่เปิดใช้งานจากรายการ' });
+    }
+    const row = await store.appendRow('DieselUsage', {
+      EntryDate: entryDate,
+      Machine: machine,
+      Liters: liters,
+      Note: note,
+    });
+    return sendJson(res, 200, { ok: true, row });
+  }
+  if (req.method === 'DELETE' && parts.length === 1) {
+    const deleted = await store.deleteRow('DieselUsage', parts[0]);
+    return sendJson(res, 200, { ok: deleted });
+  }
+  return sendJson(res, 404, { ok: false, error: 'unknown diesel usage route' });
+}
+
+async function handleDiesel(req, res, parts, query) {
+  const section = parts[0];
+  const rest = parts.slice(1);
+  if (section === 'machines') return handleDieselMachines(req, res, rest);
+  if (section === 'usage') return handleDieselUsage(req, res, rest, query);
+  return sendJson(res, 404, { ok: false, error: 'unknown diesel route' });
+}
+
 // ---------- Weekly Production & Sales Report ----------
 
 const WEEKLY_PRODUCTION_PRODUCTS = [
@@ -1744,13 +1801,13 @@ function monthlyDailyOperations(date, sessionRanges, downtimeRows, grabRows) {
   ));
   const lineMinutes = lineSegments.reduce((sum, segment) => sum + segment.minutes, 0);
 
-  const production = buildProductionSegments(date, sessionRanges, grabRows);
+  const production = buildDailyGrabProduction(date, grabRows);
   const productionRanges = mergeMinuteRanges(production.segments.map((segment) => [
     lib.timeToMinutes(segment.startTime), lib.timeToMinutes(segment.endTime),
   ]));
   const productionMinutes = rangeMinutes(productionRanges);
   const previousDate = lib.addDays(date, -1);
-  const downtimeIntersections = [];
+  const downtimeRanges = [];
   const reasonRanges = new Map();
   const reasonEventIds = new Map();
 
@@ -1762,20 +1819,16 @@ function monthlyDailyOperations(date, sessionRanges, downtimeRows, grabRows) {
       if (segment.date !== date) continue;
       const start = lib.timeToMinutes(segment.startTime);
       const end = lib.timeToMinutes(segment.endTime);
-      for (const [activeStart, activeEnd] of productionRanges) {
-        const low = Math.max(start, activeStart);
-        const high = Math.min(end, activeEnd);
-        if (high <= low) continue;
-        downtimeIntersections.push([low, high]);
-        if (!reasonRanges.has(reason)) reasonRanges.set(reason, []);
-        reasonRanges.get(reason).push([low, high]);
-        if (!reasonEventIds.has(reason)) reasonEventIds.set(reason, new Set());
-        reasonEventIds.get(reason).add(eventKey);
-      }
+      if (end <= start) continue;
+      downtimeRanges.push([start, end]);
+      if (!reasonRanges.has(reason)) reasonRanges.set(reason, []);
+      reasonRanges.get(reason).push([start, end]);
+      if (!reasonEventIds.has(reason)) reasonEventIds.set(reason, new Set());
+      reasonEventIds.get(reason).add(eventKey);
     }
   }
 
-  const downtimeMinutes = rangeMinutes(mergeMinuteRanges(downtimeIntersections));
+  const downtimeMinutes = rangeMinutes(mergeMinuteRanges(downtimeRanges));
   const netRunMinutes = Math.max(0, productionMinutes - downtimeMinutes);
   return {
     lineMinutes,
@@ -1855,7 +1908,7 @@ async function handleMonthlyReport(req, res, query) {
   const dates = Array.from({ length: bounds.days }, (_, index) => lib.addDays(bounds.start, index));
   const [
     grabRows, yieldRows, stockSales, rdf3Sales, prices,
-    tippingRows, tippingSettings, downtimeRows, lineRows,
+    tippingRows, tippingSettings, downtimeRows, lineRows, historyRows,
   ] = await Promise.all([
     store.readSheet('GrabCrane'),
     store.readSheet('YieldSettings'),
@@ -1866,6 +1919,7 @@ async function handleMonthlyReport(req, res, query) {
     store.readSheet('RevenueTippingSettings'),
     store.readSheet('Downtime'),
     store.readSheet('LineTime'),
+    store.readSheet('KPIDailyHistory'),
   ]);
 
   const revenue = buildRevenueDashboardData(
@@ -1873,9 +1927,13 @@ async function handleMonthlyReport(req, res, query) {
   );
   const sales = monthlySalesSummary(stockSales, rdf3Sales, bounds, revenue);
   const sessionRanges = reportSessionRanges(lineRows, nowBkk);
+  const historyByDate = new Map(historyRows.map((row) => [row.EntryDate, row]));
   const productionTotals = Object.fromEntries(MONTHLY_PRODUCTION_PRODUCTS.map((item) => [item.tonsKey, 0]));
   const reasonMap = new Map();
   let incomingTons = 0;
+  let detailedIncomingTons = 0;
+  let historicalIncomingTons = 0;
+  let historicalDays = 0;
   let calculatedIncomingTons = 0;
   let totalGrabs = 0;
   let lineMinutes = 0;
@@ -1887,7 +1945,19 @@ async function handleMonthlyReport(req, res, query) {
 
   const daily = dates.map((date) => {
     const dayGrabs = grabRows.filter((row) => row.ReportDate === date);
-    const dayIncomingTons = dayGrabs.reduce((sum, row) => sum + (Number(row.Weight) || 0), 0);
+    const detailedTons = dayGrabs.reduce((sum, row) => sum + (Number(row.Weight) || 0), 0);
+    const historicalTons = dayGrabs.length === 0
+      ? Math.max(0, Number(historyByDate.get(date)?.MSWTons) || 0)
+      : 0;
+    const dayIncomingTons = dayGrabs.length > 0 ? detailedTons : historicalTons;
+    const automaticGrabCount = dayGrabs.filter((row) => row.SourceSystem).length;
+    const incomingSource = dayGrabs.length === 0
+      ? (historicalTons > 0 ? 'history' : 'none')
+      : automaticGrabCount === dayGrabs.length
+        ? 'automatic'
+        : automaticGrabCount > 0
+          ? 'mixed'
+          : 'csv';
     const yieldSetting = getApplicableYield(yieldRows, date);
     const production = computeProduction(dayIncomingTons, yieldSetting);
     const operations = monthlyDailyOperations(date, sessionRanges, downtimeRows, grabRows);
@@ -1896,6 +1966,9 @@ async function handleMonthlyReport(req, res, query) {
     const productionTons = Object.fromEntries(MONTHLY_PRODUCTION_PRODUCTS.map((item) => [item.tonsKey, 0]));
 
     incomingTons += dayIncomingTons;
+    detailedIncomingTons += detailedTons;
+    historicalIncomingTons += historicalTons;
+    if (historicalTons > 0) historicalDays += 1;
     totalGrabs += dayGrabs.length;
     lineMinutes += operations.lineMinutes;
     productionMinutes += operations.productionMinutes;
@@ -1923,6 +1996,7 @@ async function handleMonthlyReport(req, res, query) {
       date,
       grabCount: dayGrabs.length,
       incomingTons: dayIncomingTons,
+      incomingSource,
       hasYieldSetting: !!yieldSetting,
       productionTons,
       lineMinutes: operations.lineMinutes,
@@ -1948,6 +2022,7 @@ async function handleMonthlyReport(req, res, query) {
         weekEnd: lib.addDays(monday, 6) > bounds.end ? bounds.end : lib.addDays(monday, 6),
         incomingTons: 0,
         grabCount: 0,
+        historicalDays: 0,
         netRunMinutes: 0,
         downtimeMinutes: 0,
         salesTons: 0,
@@ -1957,6 +2032,7 @@ async function handleMonthlyReport(req, res, query) {
     const week = weekMap.get(monday);
     week.incomingTons += day.incomingTons;
     week.grabCount += day.grabCount;
+    if (day.incomingSource === 'history') week.historicalDays += 1;
     week.netRunMinutes += day.netRunMinutes;
     week.downtimeMinutes += day.downtimeMinutes;
     week.salesTons += day.salesTons;
@@ -1971,7 +2047,10 @@ async function handleMonthlyReport(req, res, query) {
     incoming: {
       totalGrabs,
       totalTons: incomingTons,
-      avgTonsPerGrab: totalGrabs > 0 ? incomingTons / totalGrabs : null,
+      avgTonsPerGrab: totalGrabs > 0 ? detailedIncomingTons / totalGrabs : null,
+      detailedTons: detailedIncomingTons,
+      historicalTons: historicalIncomingTons,
+      historicalDays,
     },
     production: {
       calculatedIncomingTons,
@@ -2004,6 +2083,185 @@ async function handleMonthlyReport(req, res, query) {
     revenue,
     daily,
     weeks: [...weekMap.values()],
+  });
+}
+
+// ---------- Executive Daily MSW Report ----------
+
+function reportIntakeForDate(date, grabRows, historyByDate) {
+  const rows = grabRows.filter((row) => row.ReportDate === date);
+  const detailedTons = rows.reduce((sum, row) => sum + Math.max(0, Number(row.Weight) || 0), 0);
+  const historicalTons = rows.length === 0
+    ? Math.max(0, Number(historyByDate.get(date)?.MSWTons) || 0)
+    : 0;
+  const automaticCount = rows.filter((row) => row.SourceSystem).length;
+  const source = rows.length === 0
+    ? (historicalTons > 0 ? 'history' : 'none')
+    : automaticCount === rows.length
+      ? 'automatic'
+      : automaticCount > 0
+        ? 'mixed'
+        : 'csv';
+  return {
+    tons: rows.length > 0 ? detailedTons : historicalTons,
+    grabCount: rows.length,
+    source,
+  };
+}
+
+function dailyDowntimeIncidents(date, downtimeRows) {
+  const previousDate = lib.addDays(date, -1);
+  const incidents = new Map();
+  for (const row of downtimeRows) {
+    if (row.EntryDate !== date && row.EntryDate !== previousDate) continue;
+    const segments = lib.splitEntry(row.EntryDate, row.StartTime, row.EndTime)
+      .filter((segment) => segment.date === date);
+    if (!segments.length) continue;
+    const key = String(row.ID || `${row.EntryDate}|${row.StartTime}|${row.EndTime}|${row.Reason || ''}`);
+    const startMinute = Math.min(...segments.map((segment) => lib.timeToMinutes(segment.startTime)));
+    const endMinute = Math.max(...segments.map((segment) => lib.timeToMinutes(segment.endTime)));
+    incidents.set(key, {
+      id: row.ID || key,
+      reason: cleanText(row.Reason) || 'ไม่ระบุสาเหตุ',
+      note: cleanText(row.Note),
+      minutes: segments.reduce((sum, segment) => sum + segment.minutes, 0),
+      startTime: lib.minutesToTime(startMinute),
+      endTime: lib.minutesToTime(endMinute),
+      carriedOver: row.EntryDate !== date,
+    });
+  }
+  return [...incidents.values()]
+    .sort((a, b) => b.minutes - a.minutes || String(a.startTime).localeCompare(String(b.startTime)));
+}
+
+async function handleExecutiveReport(req, res, query) {
+  const requested = cleanText(query.date);
+  const date = requested || lib.addDays(lib.todayStr(), -1);
+  if (!validIsoDate(date)) {
+    return sendJson(res, 400, { ok: false, error: 'รูปแบบวันที่ต้องเป็น YYYY-MM-DD' });
+  }
+
+  const month = date.slice(0, 7);
+  const bounds = monthBounds(month);
+  const elapsedDays = Number(date.slice(8, 10));
+  const daysRemaining = Math.max(0, bounds.days - elapsedDays);
+  const datesToReport = Array.from({ length: elapsedDays }, (_, index) => lib.addDays(bounds.start, index));
+  const [
+    tippingRows, grabRows, historyRows, yieldRows, targetRows,
+    dieselRows, downtimeRows,
+  ] = await Promise.all([
+    store.readSheet('RevenueTippingDaily'),
+    store.readSheet('GrabCrane'),
+    store.readSheet('KPIDailyHistory'),
+    store.readSheet('YieldSettings'),
+    store.readSheet('KPITargetSettings'),
+    store.readSheet('DieselUsage'),
+    store.readSheet('Downtime'),
+  ]);
+
+  const historyByDate = new Map(historyRows.map((row) => [row.EntryDate, row]));
+  const targetSetting = applicableRow(targetRows, date, 'EffectiveDate') || DEFAULT_KPI_TARGET;
+  const monthlyTargetTons = Math.max(0, Number(targetSetting.MSWTarget) || 0);
+  const weeklyTargetTons = monthlyTargetTons / 4;
+  const dailyTargetTons = weeklyTargetTons / 7;
+  const weekStart = mondayForDate(date);
+
+  let productionMTDTons = 0;
+  let rdf2MTDTons = 0;
+  let rdf2LGMTDTons = 0;
+  let weekActualTons = 0;
+  const daily = datesToReport.map((entryDate) => {
+    const intake = reportIntakeForDate(entryDate, grabRows, historyByDate);
+    const production = computeProduction(intake.tons, getApplicableYield(yieldRows, entryDate));
+    productionMTDTons += intake.tons;
+    if (production) {
+      rdf2MTDTons += production.tons.rdf2;
+      rdf2LGMTDTons += production.tons.rdf2LG;
+    }
+    if (entryDate >= weekStart) weekActualTons += intake.tons;
+    return {
+      date: entryDate,
+      tons: intake.tons,
+      grabCount: intake.grabCount,
+      source: intake.source,
+    };
+  });
+
+  const selectedIntake = reportIntakeForDate(date, grabRows, historyByDate);
+  const selectedYield = getApplicableYield(yieldRows, date);
+  const selectedProduction = computeProduction(selectedIntake.tons, selectedYield);
+  const dailyRDF2Tons = selectedProduction?.tons.rdf2 || 0;
+  const dailyRDF2LGTons = selectedProduction?.tons.rdf2LG || 0;
+
+  const incomingRow = tippingRows.find((row) => row.EntryDate === date);
+  const incomingMTDRows = tippingRows.filter((row) => row.EntryDate >= bounds.start && row.EntryDate <= date);
+  const incomingMTDTons = incomingMTDRows.reduce((sum, row) => sum + Math.max(0, Number(row.MSWTons) || 0), 0);
+
+  const dayDieselRows = dieselRows.filter((row) => row.EntryDate === date);
+  const monthDieselRows = dieselRows.filter((row) => row.EntryDate >= bounds.start && row.EntryDate <= date);
+  const dayDiesel = dieselUsageSummary(dayDieselRows);
+  const monthDiesel = dieselUsageSummary(monthDieselRows);
+
+  const shortfallTons = Math.max(0, monthlyTargetTons - productionMTDTons);
+  const currentAverageTons = elapsedDays > 0 ? productionMTDTons / elapsedDays : 0;
+  const requiredPerDayTons = daysRemaining > 0
+    ? shortfallTons / daysRemaining
+    : shortfallTons > 0
+      ? null
+      : 0;
+  const incidents = dailyDowntimeIncidents(date, downtimeRows);
+
+  return sendJson(res, 200, {
+    ok: true,
+    date,
+    month,
+    monthStart: bounds.start,
+    monthEnd: bounds.end,
+    elapsedDays,
+    daysInMonth: bounds.days,
+    targets: {
+      dailyTons: dailyTargetTons,
+      weeklyTons: weeklyTargetTons,
+      monthlyTons: monthlyTargetTons,
+    },
+    incoming: {
+      hasData: !!incomingRow,
+      dailyTons: Math.max(0, Number(incomingRow?.MSWTons) || 0),
+      mtdTons: incomingMTDTons,
+      recordedDays: incomingMTDRows.length,
+    },
+    production: {
+      dailyTons: selectedIntake.tons,
+      dailyGrabCount: selectedIntake.grabCount,
+      dailySource: selectedIntake.source,
+      dailyAchievementPct: dailyTargetTons > 0 ? selectedIntake.tons / dailyTargetTons * 100 : null,
+      weeklyTons: weekActualTons,
+      weeklyAchievementPct: weeklyTargetTons > 0 ? weekActualTons / weeklyTargetTons * 100 : null,
+      mtdTons: productionMTDTons,
+      monthlyAchievementPct: monthlyTargetTons > 0 ? productionMTDTons / monthlyTargetTons * 100 : null,
+    },
+    output: {
+      hasYieldSetting: !!selectedYield,
+      daily: { rdf2Tons: dailyRDF2Tons, rdf2LGTons: dailyRDF2LGTons },
+      mtd: { rdf2Tons: rdf2MTDTons, rdf2LGTons: rdf2LGMTDTons },
+    },
+    diesel: {
+      daily: { ...dayDiesel, rows: dayDieselRows },
+      mtd: monthDiesel,
+    },
+    recovery: {
+      daysRemaining,
+      shortfallTons,
+      requiredPerDayTons,
+      currentAverageTons,
+      gapPerDayTons: requiredPerDayTons === null ? null : requiredPerDayTons - currentAverageTons,
+    },
+    incidents: {
+      totalCount: incidents.length,
+      totalMinutes: incidents.reduce((sum, incident) => sum + incident.minutes, 0),
+      top: incidents.slice(0, 2),
+    },
+    trend: daily,
   });
 }
 
@@ -2482,6 +2740,7 @@ async function dispatchBusinessApi(req, res, pathname, query) {
   if (resource === 'production') return handleProduction(req, res, query);
   if (resource === 'weekly-report' && req.method === 'GET') return handleWeeklyReport(req, res, query);
   if (resource === 'monthly-report' && req.method === 'GET') return handleMonthlyReport(req, res, query);
+  if (resource === 'executive-report' && req.method === 'GET') return handleExecutiveReport(req, res, query);
   if (resource === 'yield') return handleYield(req, res, rest);
   if (resource === 'sales') return handleSales(req, res, rest);
   if (resource === 'delivery-plans') return handleDeliveryPlans(req, res, rest, query);
@@ -2491,6 +2750,7 @@ async function dispatchBusinessApi(req, res, pathname, query) {
   }
   if (resource === 'revenue') return handleRevenue(req, res, rest, query);
   if (resource === 'kpi') return handleKPI(req, res, rest, query);
+  if (resource === 'diesel') return handleDiesel(req, res, rest, query);
   return sendJson(res, 404, { ok: false, error: 'unknown api route' });
 }
 

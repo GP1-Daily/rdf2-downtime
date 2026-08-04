@@ -39,17 +39,26 @@
       const tons = Number(row.incomingTons) || 0;
       const height = maxTons > 0 ? tons / maxTons * 100 : 0;
       const day = Number(row.date.slice(-2));
-      return `<div class="monthly-day-bar" title="${revenueEsc(deliveryDateLabel(row.date))}: ${revenueNumber(tons)} ตัน">
+      const sourceLabel = {
+        automatic: 'ข้อมูลจาก Pi',
+        csv: 'ข้อมูลจาก CSV',
+        mixed: 'ข้อมูลจาก CSV + Pi',
+        history: 'ข้อมูลย้อนหลัง',
+        none: 'ไม่มีข้อมูล',
+      }[row.incomingSource] || 'ไม่ระบุแหล่งข้อมูล';
+      const barClasses = [tons > 0 ? '' : 'zero', row.incomingSource === 'history' ? 'historical' : '']
+        .filter(Boolean).join(' ');
+      return `<div class="monthly-day-bar" title="${revenueEsc(deliveryDateLabel(row.date))}: ${revenueNumber(tons)} ตัน · ${revenueEsc(sourceLabel)}">
         <div class="monthly-day-column">
-          <i class="${tons > 0 ? '' : 'zero'}" style="--bar-height:${height.toFixed(2)}%;--bar-min-height:${tons > 0 ? '3px' : '1px'};--bar-delay:${Math.min(index * 14, 280)}ms"></i>
+          <i class="${barClasses}" style="--bar-height:${height.toFixed(2)}%;--bar-min-height:${tons > 0 ? '3px' : '1px'};--bar-delay:${Math.min(index * 14, 280)}ms"></i>
         </div>
         <b>${day}</b>
       </div>`;
     }).join('');
     const activeDays = data.daily.filter((row) => Number(row.incomingTons) > 0).length;
     document.getElementById('monthlyDailyAverage').textContent = activeDays
-      ? `เฉลี่ย ${revenueNumber(data.incoming.totalTons / activeDays)} ตัน/วันที่มี Grab`
-      : 'ยังไม่มี Grab ในเดือนนี้';
+      ? `เฉลี่ย ${revenueNumber(data.incoming.totalTons / activeDays)} ตัน/วันที่มีข้อมูล`
+      : 'ยังไม่มีข้อมูลขยะเข้าระบบในเดือนนี้';
   }
 
   function renderProduction(data) {
@@ -83,7 +92,7 @@
         <div class="monthly-reason-track"><i style="--reason-width:${width.toFixed(2)}%"></i></div>
         <strong>${minutesLabel(row.minutes)}</strong>
       </div>`;
-    }).join('') : '<div class="monthly-reason-empty">ไม่มี Downtime ในช่วงผลิต</div>';
+    }).join('') : '<div class="monthly-reason-empty">ไม่มี Downtime ในเดือนนี้</div>';
   }
 
   function renderRevenue(data) {
@@ -152,7 +161,10 @@
   function renderMonthlyReport(data) {
     document.getElementById('monthlyReportPeriod').textContent = revenueMonthLabel(data.month);
     document.getElementById('monthlyIncomingTons').textContent = `${revenueNumber(data.incoming.totalTons)} ตัน`;
-    document.getElementById('monthlyIncomingMeta').textContent = `${data.incoming.totalGrabs.toLocaleString('th-TH')} Grab · เฉลี่ย ${data.incoming.avgTonsPerGrab === null ? '-' : revenueNumber(data.incoming.avgTonsPerGrab)} ตัน/Grab`;
+    const historyMeta = data.incoming.historicalDays > 0
+      ? ` · ข้อมูลย้อนหลัง ${data.incoming.historicalDays.toLocaleString('th-TH')} วัน ${revenueNumber(data.incoming.historicalTons)} ตัน`
+      : '';
+    document.getElementById('monthlyIncomingMeta').textContent = `${data.incoming.totalGrabs.toLocaleString('th-TH')} Grab · เฉลี่ย ${data.incoming.avgTonsPerGrab === null ? '-' : revenueNumber(data.incoming.avgTonsPerGrab)} ตัน/Grab${historyMeta}`;
     document.getElementById('monthlyNetRuntime').textContent = minutesLabel(data.operations.netRunMinutes);
     document.getElementById('monthlyAvailability').textContent = `Availability ${percentLabel(data.operations.availabilityPct)}`;
     document.getElementById('monthlySalesTons').textContent = `${revenueNumber(data.sales.totalTons)} ตัน`;

@@ -22,6 +22,7 @@
       entryPanel.hidden = true;
       insightPanel.hidden = false;
     }
+    document.dispatchEvent(new CustomEvent('gp1:sessionready', { detail: { user } }));
   } catch (error) {
     if (!location.pathname.endsWith('/login.html')) toast(error.message, true);
   }

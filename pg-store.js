@@ -144,6 +144,19 @@ const TABLES = {
       MSWTarget: 'msw_target', ComplaintLimit: 'complaint_limit', CreatedAt: 'created_at',
     },
   },
+  DieselMachines: {
+    table: 'diesel_machines',
+    columns: {
+      ID: 'id', Name: 'name', Active: 'active', CreatedAt: 'created_at',
+    },
+  },
+  DieselUsage: {
+    table: 'diesel_usage',
+    columns: {
+      ID: 'id', EntryDate: 'entry_date', Machine: 'machine', Liters: 'liters',
+      Note: 'note', CreatedAt: 'created_at',
+    },
+  },
   AppUsers: {
     table: 'app_users',
     columns: {
@@ -351,6 +364,25 @@ function ensureSchema() {
       ALTER TABLE kpi_target_settings
         ADD COLUMN IF NOT EXISTS rdf2_lg_target NUMERIC NOT NULL DEFAULT 0;
 
+      CREATE TABLE IF NOT EXISTS diesel_machines (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        active BOOLEAN NOT NULL DEFAULT true,
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS diesel_machines_name_idx
+        ON diesel_machines (lower(name));
+      CREATE TABLE IF NOT EXISTS diesel_usage (
+        id SERIAL PRIMARY KEY,
+        entry_date TEXT NOT NULL,
+        machine TEXT NOT NULL,
+        liters NUMERIC NOT NULL CHECK (liters > 0),
+        note TEXT DEFAULT '',
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS diesel_usage_date_idx
+        ON diesel_usage (entry_date);
+
       CREATE TABLE IF NOT EXISTS app_users (
         id SERIAL PRIMARY KEY,
         auth_user_id TEXT,
@@ -437,15 +469,16 @@ function ensureSchema() {
         revenue_customers, revenue_prices, revenue_rdf3_sales,
         revenue_tipping_settings, revenue_tipping_daily, weekly_delivery_plans,
         kpi_daily_history, kpi_complaints, kpi_target_settings,
+        diesel_machines, diesel_usage,
         app_users, audit_log, deleted_records
       FROM PUBLIC;
       DO $gp1_security$
       BEGIN
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-          EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE downtime, line_time, grab_crane, yield_settings, stock_baseline, sales, revenue_customers, revenue_prices, revenue_rdf3_sales, revenue_tipping_settings, revenue_tipping_daily, weekly_delivery_plans, kpi_daily_history, kpi_complaints, kpi_target_settings, app_users, audit_log, deleted_records FROM anon';
+          EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE downtime, line_time, grab_crane, yield_settings, stock_baseline, sales, revenue_customers, revenue_prices, revenue_rdf3_sales, revenue_tipping_settings, revenue_tipping_daily, weekly_delivery_plans, kpi_daily_history, kpi_complaints, kpi_target_settings, diesel_machines, diesel_usage, app_users, audit_log, deleted_records FROM anon';
         END IF;
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-          EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE downtime, line_time, grab_crane, yield_settings, stock_baseline, sales, revenue_customers, revenue_prices, revenue_rdf3_sales, revenue_tipping_settings, revenue_tipping_daily, weekly_delivery_plans, kpi_daily_history, kpi_complaints, kpi_target_settings, app_users, audit_log, deleted_records FROM authenticated';
+          EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE downtime, line_time, grab_crane, yield_settings, stock_baseline, sales, revenue_customers, revenue_prices, revenue_rdf3_sales, revenue_tipping_settings, revenue_tipping_daily, weekly_delivery_plans, kpi_daily_history, kpi_complaints, kpi_target_settings, diesel_machines, diesel_usage, app_users, audit_log, deleted_records FROM authenticated';
         END IF;
       END
       $gp1_security$;

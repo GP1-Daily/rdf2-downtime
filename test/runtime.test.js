@@ -89,7 +89,7 @@ function grab(id, dateTime, weight = 4.8) {
   };
 }
 
-test('runtime uses first-to-last Grab per session and merges overlapping downtime', async (t) => {
+test('runtime uses the daily first-to-last Grab span and subtracts all merged downtime', async (t) => {
   await store.appendRows('LineTime', [
     line('2026-07-24', 'Start', '08:00'),
     line('2026-07-24', 'Stop', '12:00', 'break'),
@@ -99,7 +99,7 @@ test('runtime uses first-to-last Grab per session and merges overlapping downtim
   await store.appendRows('Downtime', [
     downtime('2026-07-24', '09:00', '09:30', 'overlap-a'),
     downtime('2026-07-24', '09:15', '09:45', 'overlap-b'),
-    downtime('2026-07-24', '12:15', '12:45', 'outside-session'),
+    downtime('2026-07-24', '18:30', '19:00', 'after-last-grab'),
   ]);
   await store.appendRows('GrabCrane', [
     grab(1, '2026-07-24 08:10:00'),
@@ -114,14 +114,14 @@ test('runtime uses first-to-last Grab per session and merges overlapping downtim
   const report = await response.json();
 
   assert.equal(report.line.totalMinutes, 540);
-  assert.equal(report.line.productionMinutes, 490);
+  assert.equal(report.line.productionMinutes, 575);
   assert.equal(report.line.runtimeSource, 'grab');
-  assert.equal(report.line.grabAnchoredSessions, 2);
-  assert.deepEqual(Object.values(report.line.productionByPeriod), [220, 225, 45]);
+  assert.equal(report.line.grabAnchoredSessions, 1);
+  assert.deepEqual(Object.values(report.line.productionByPeriod), [230, 300, 45]);
   assert.equal(report.downtime.totalMinutesRaw, 90);
-  assert.equal(report.downtime.totalMinutes, 45);
-  assert.equal(report.line.netRunMinutes, 445);
-  assert.ok(Math.abs(report.line.availabilityPct - (445 / 490 * 100)) < 0.0001);
+  assert.equal(report.downtime.totalMinutes, 75);
+  assert.equal(report.line.netRunMinutes, 500);
+  assert.ok(Math.abs(report.line.availabilityPct - (500 / 575 * 100)) < 0.0001);
   assert.equal(report.grab.firstGrabTime, '08:10');
   assert.equal(report.grab.lastGrabTime, '17:45');
 
@@ -153,19 +153,19 @@ test('cross-midnight sessions and downtime are split into their calendar days', 
   const day26 = await fetch(`${baseUrl}/api/report?date=2026-07-26`).then((response) => response.json());
 
   assert.equal(day25.line.totalMinutes, 240);
-  assert.equal(day25.line.productionMinutes, 230);
+  assert.equal(day25.line.productionMinutes, 220);
   assert.equal(day25.downtime.totalMinutes, 30);
-  assert.equal(day25.line.netRunMinutes, 200);
+  assert.equal(day25.line.netRunMinutes, 190);
   assert.equal(day25.grab.totalGrabs, 2);
 
   assert.equal(day26.line.totalMinutes, 480);
-  assert.equal(day26.line.productionMinutes, 470);
+  assert.equal(day26.line.productionMinutes, 460);
   assert.equal(day26.downtime.totalMinutes, 60);
-  assert.equal(day26.line.netRunMinutes, 410);
+  assert.equal(day26.line.netRunMinutes, 400);
   assert.equal(day26.grab.totalGrabs, 2);
 });
 
-test('Start and Stop remain the visible fallback when a session has fewer than two Grabs', async (t) => {
+test('a single Grab does not fall back to Start and Stop for actual runtime', async (t) => {
   await store.appendRows('LineTime', [
     line('2026-07-27', 'Start', '08:00'),
     line('2026-07-27', 'Stop', '10:00', 'end'),
@@ -176,8 +176,8 @@ test('Start and Stop remain the visible fallback when a session has fewer than t
   const report = await fetch(`${baseUrl}/api/report?date=2026-07-27`).then((response) => response.json());
 
   assert.equal(report.line.totalMinutes, 120);
-  assert.equal(report.line.productionMinutes, 120);
-  assert.equal(report.line.runtimeSource, 'manual');
-  assert.equal(report.line.estimatedSessions, 1);
-  assert.equal(report.line.netRunMinutes, 120);
+  assert.equal(report.line.productionMinutes, 0);
+  assert.equal(report.line.runtimeSource, 'insufficient');
+  assert.equal(report.line.estimatedSessions, 0);
+  assert.equal(report.line.netRunMinutes, 0);
 });
