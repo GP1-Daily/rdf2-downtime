@@ -104,6 +104,8 @@
     setText('executiveIncomingDaily', numberLabel(data.incoming.dailyTons));
     setText('executiveIncomingMTD', `${numberLabel(data.incoming.mtdTons)} ตัน`);
     setText('executiveIncomingStatus', data.incoming.hasData ? 'RECORDED' : 'NO ENTRY');
+    const incomingCard = document.querySelector('.executive-metric.incoming');
+    incomingCard.classList.toggle('empty', !data.incoming.hasData);
 
     setText('executiveProductionPct', percentLabel(data.production.dailyAchievementPct));
     setText('executiveProductionDaily', numberLabel(data.production.dailyTons));
@@ -114,6 +116,8 @@
     setText('executiveRDF2Daily', numberLabel(data.output.daily.rdf2Tons));
     setText('executiveRDF2LGDaily', numberLabel(data.output.daily.rdf2LGTons));
     setText('executiveYieldNote', data.output.hasYieldSetting ? 'คำนวณจาก Yield ที่มีผลในวันที่รายงาน' : 'ยังไม่มีค่า Yield สำหรับวันที่รายงาน');
+    const outputCard = document.querySelector('.executive-metric.output');
+    outputCard.classList.toggle('missing-yield', !data.output.hasYieldSetting);
 
     setText('executiveDieselDaily', numberLabel(data.diesel.daily.totalLiters));
     renderMachineChips('executiveDieselDailyMachines', data.diesel.daily.byMachine);
@@ -191,7 +195,7 @@
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const canvas = await capture(report, {
         scale: 2,
-        backgroundColor: '#f5f8fb',
+        backgroundColor: '#eef3f0',
         logging: false,
         useCORS: true,
         windowWidth: 1080,
