@@ -11,7 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
 <link rel="stylesheet" href="home.css?v=20260729-transparent-logo">
 <link rel="stylesheet" href="kpi.css?v=20260723-yieldsplit">
-<link rel="stylesheet" href="monthly.css?v=20260805-unified-history-bars">
+<link rel="stylesheet" href="monthly.css?v=20260805-monthly-donut-export-v4">
 <link rel="stylesheet" href="security-ui.css?v=20260723-security">
 <link rel="stylesheet" href="operations.css?v=20260729-transparent-logo">
 <link rel="stylesheet" href="diesel.css?v=20260805-fuel-limits">
@@ -1069,7 +1069,7 @@
                   <circle id="monthlyRevenueSalesArc" cx="21" cy="21" r="15.9155" pathLength="100" fill="none" stroke="#236bb0" stroke-width="6" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
                   <circle id="monthlyRevenueTippingArc" cx="21" cy="21" r="15.9155" pathLength="100" fill="none" stroke="#17a35d" stroke-width="6" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
                 </g>
-                <circle cx="21" cy="21" r="13.9" fill="#ffffff"></circle>
+                <circle cx="21" cy="21" r="14.2" fill="#ffffff"></circle>
               </svg>
               <div><strong id="monthlyRevenueDonutValue">0%</strong><span>ยอดขายสินค้า</span></div>
             </div>
@@ -2483,6 +2483,7 @@ let deliveryLastDashboard = null;
 async function exportDeliveryElement(area, fileName){
   if(document.fonts?.ready) await document.fonts.ready;
   const capture = await ensureHtml2Canvas();
+  const containsMonthlyRevenueDonut = area.contains(document.getElementById('monthlyRevenueDonut'));
   area.classList.add('exporting');
   try{
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -2492,6 +2493,49 @@ async function exportDeliveryElement(area, fileName){
       logging:false,
       useCORS:true,
       windowWidth:1220,
+      onclone: clonedDocument => {
+        if(!containsMonthlyRevenueDonut) return;
+        const donut = clonedDocument.getElementById('monthlyRevenueDonut');
+        const svg = donut?.querySelector('svg');
+        const label = donut?.querySelector(':scope > div');
+        if(!donut || !svg || !label) return;
+
+        const important = (element, property, value) => element.style.setProperty(property, value, 'important');
+        important(donut, 'box-sizing', 'border-box');
+        important(donut, 'width', '178px');
+        important(donut, 'height', '178px');
+        important(donut, 'padding', '0');
+        important(donut, 'display', 'block');
+        important(donut, 'position', 'relative');
+        important(donut, 'background', 'transparent');
+        important(donut, 'box-shadow', 'none');
+        important(donut, 'border-radius', '50%');
+
+        important(svg, 'display', 'block');
+        important(svg, 'position', 'absolute');
+        important(svg, 'inset', '0');
+        important(svg, 'width', '178px');
+        important(svg, 'height', '178px');
+
+        important(label, 'position', 'absolute');
+        important(label, 'inset', '0');
+        important(label, 'width', '178px');
+        important(label, 'height', '178px');
+        important(label, 'padding', '0');
+        important(label, 'margin', '0');
+        important(label, 'display', 'flex');
+        important(label, 'flex-direction', 'column');
+        important(label, 'align-items', 'center');
+        important(label, 'justify-content', 'center');
+        important(label, 'background', 'transparent');
+        important(label, 'border-radius', '0');
+        important(label, 'transform', 'none');
+
+        if(!donut.classList.contains('no-data')){
+          important(clonedDocument.getElementById('monthlyRevenueSalesArc'), 'display', 'block');
+          important(clonedDocument.getElementById('monthlyRevenueTippingArc'), 'display', 'block');
+        }
+      },
     });
     const link = document.createElement('a');
     link.download = fileName;
@@ -3024,7 +3068,7 @@ initializeAppTab(initialTab && TAB_TITLES[initialTab] ? initialTab : 'home').cat
 </script>
 <script src="security-ui.js?v=20260723-security"></script>
 <script src="kpi.js?v=20260723-yieldsplit"></script>
-<script src="monthly.js?v=20260805-fuel-limits"></script>
+<script src="monthly.js?v=20260805-monthly-donut-export-v4"></script>
 <script src="diesel.js?v=20260805-fuel-limits"></script>
 <script src="executive.js?v=20260805-daily-report"></script>
 <script src="home.js?v=20260724-grab-runtime"></script>
