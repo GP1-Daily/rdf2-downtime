@@ -348,13 +348,21 @@
 }
 
 .monthly-revenue-donut {
+  --sales-share: 0%;
   width: 178px;
   height: 178px;
   margin: 0 auto;
+  padding: 22px;
+  display: grid;
+  place-items: center;
   position: relative;
+  border-radius: 50%;
+  background: conic-gradient(#236bb0 0 var(--sales-share), #17a35d var(--sales-share) 100%);
+  box-shadow: inset 0 0 0 1px rgba(15, 35, 27, .08);
 }
 
 .monthly-revenue-donut svg {
+  display: none;
   position: absolute;
   inset: 0;
   width: 100%;
@@ -367,13 +375,37 @@
 }
 
 .monthly-revenue-donut > div {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  background: #fff;
+  border-radius: 50%;
   text-align: center;
+}
+
+.monthly-revenue-donut.no-data { background: #dbe5e0; }
+
+.monthly-report-export.exporting .monthly-revenue-donut {
+  padding: 0;
+  display: block;
+  background: none;
+  box-shadow: none;
+}
+
+.monthly-report-export.exporting .monthly-revenue-donut svg { display: block; }
+
+.monthly-report-export.exporting .monthly-revenue-donut > div {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  background: transparent;
+  border-radius: 0;
 }
 
 .monthly-revenue-donut strong { color: #183c59; font-size: 24px; line-height: 1.1; }

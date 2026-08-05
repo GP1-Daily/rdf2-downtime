@@ -109,6 +109,7 @@
     const safeSalesShare = Math.max(0, Math.min(100, salesShare));
     const safeTippingShare = Math.max(0, Math.min(100 - safeSalesShare, tippingShare));
     const donut = document.getElementById('monthlyRevenueDonut');
+    donut.style.setProperty('--sales-share', `${safeSalesShare}%`);
     donut.classList.toggle('no-data', Number(revenue.company.central) <= 0);
     donut.setAttribute('aria-label', `ขายสินค้า ${percentLabel(salesShare)} และ Tipping Fee ${percentLabel(tippingShare)}`);
     const salesArc = document.getElementById('monthlyRevenueSalesArc');
