@@ -113,6 +113,22 @@
   .quick-actions button{flex:1 1 250px; min-width:0;}
   .scroll-table{max-height:320px; overflow:auto; border:1px solid var(--border); border-radius:8px;}
   .hint{font-size:12px; color:var(--gray); margin-top:4px;}
+  .history-toolbar{display:flex; align-items:end; justify-content:space-between; gap:16px; margin:2px 0 12px; padding:12px 14px; background:#f5faf7; border:1px solid #d8e8df; border-radius:8px;}
+  .history-toolbar-copy{min-width:0;}
+  .history-toolbar-copy strong{display:block; color:#163b30; font-size:13px;}
+  .history-summary{display:block; margin-top:2px; color:#64748b; font-size:11.5px; line-height:1.45;}
+  .history-filter{display:flex; align-items:center; gap:9px; flex:0 0 auto;}
+  .history-filter span{font-size:11.5px; color:#64748b; white-space:nowrap;}
+  .history-filter input{width:155px; min-height:38px; background:#fff;}
+  .history-rule{display:flex; align-items:center; gap:7px; margin:-2px 0 12px; color:#557068; font-size:11.5px;}
+  .history-rule::before{content:""; width:7px; height:7px; border-radius:50%; background:#17a673; flex:0 0 auto;}
+  .history-duplicate{display:none; margin:-2px 0 12px; padding:9px 11px; color:#8a4b08; background:#fff8e8; border:1px solid #f4d48e; border-radius:7px; font-size:11.5px; font-weight:600;}
+  .history-duplicate.show{display:block;}
+  tr.possible-duplicate td{background:#fffaf0;}
+  tr.possible-duplicate:hover td{background:#fff5dd;}
+  .record-date{font-weight:600; color:#243b35;}
+  .record-created{display:block; margin-top:2px; color:#81928c; font-size:10px; font-weight:400; white-space:nowrap;}
+  .duplicate-badge{display:inline-flex; align-items:center; margin-top:4px; padding:2px 6px; border-radius:4px; color:#8a4b08; background:#ffedbd; font-size:9.5px; font-weight:700;}
   .kpi-card .target{font-size:11.5px; color:var(--gray); margin-top:4px;}
   .badge.outside{background:var(--gray-bg); color:var(--gray); margin-left:6px;}
   .revenue-toolbar h2{margin-bottom:0;}
@@ -292,6 +308,9 @@
   }
   @media(max-width:700px){
     main{padding:14px;}
+    .history-toolbar{align-items:stretch; flex-direction:column;}
+    .history-filter{justify-content:space-between;}
+    .history-filter input{width:min(180px,58vw);}
     .revenue-toolbar .row{justify-content:flex-start;}
     .revenue-report-head,.revenue-total-strip{flex-direction:column; align-items:flex-start;}
     .revenue-report-meta{text-align:left; min-width:0;}
@@ -1398,6 +1417,14 @@
         <div><label>หมายเหตุ</label><input type="text" id="tippingNote"></div>
         <div><button class="primary" id="btnSaveTippingDaily">บันทึก MSW</button></div>
       </div>
+      <div class="history-toolbar">
+        <div class="history-toolbar-copy">
+          <strong>ตรวจสอบข้อมูลย้อนหลัง</strong>
+          <span class="history-summary" id="tippingHistorySummary">กำลังโหลดข้อมูล...</span>
+        </div>
+        <label class="history-filter" for="tippingHistoryMonth"><span>เดือนที่แสดง</span><input type="month" id="tippingHistoryMonth"></label>
+      </div>
+      <div class="history-rule">หนึ่งวันมีข้อมูล MSW ได้หนึ่งรายการ การบันทึกวันที่เดิมจะอัปเดตค่าเดิม</div>
       <div class="scroll-table">
         <table>
           <thead><tr><th>วันที่</th><th>MSW (ตัน)</th><th class="left">หมายเหตุ</th><th>จัดการ</th></tr></thead>
@@ -1424,6 +1451,14 @@
         <div><label>หมายเหตุ</label><input type="text" id="saleNote" placeholder="(ถ้ามี)"></div>
         <div><button class="primary" id="btnAddSale">+ บันทึกการขาย</button></div>
       </div>
+      <div class="history-toolbar">
+        <div class="history-toolbar-copy">
+          <strong>ตรวจสอบรายการขายย้อนหลัง</strong>
+          <span class="history-summary" id="salesHistorySummary">กำลังโหลดข้อมูล...</span>
+        </div>
+        <label class="history-filter" for="salesHistoryMonth"><span>เดือนที่แสดง</span><input type="month" id="salesHistoryMonth"></label>
+      </div>
+      <div class="history-duplicate" id="salesDuplicateNotice"></div>
       <div class="scroll-table">
         <table>
           <thead><tr><th>วันที่</th><th>วัสดุ</th><th class="left">ลูกค้า</th><th>ตัน</th><th class="left">หมายเหตุ</th><th>จัดการ</th></tr></thead>
@@ -1441,6 +1476,14 @@
         <div><label>หมายเหตุ</label><input type="text" id="rdf3SaleNote"></div>
         <div><button class="primary" id="btnAddRDF3Sale">+ บันทึกการขาย RDF3</button></div>
       </div>
+      <div class="history-toolbar">
+        <div class="history-toolbar-copy">
+          <strong>ตรวจสอบรายการ RDF3 ย้อนหลัง</strong>
+          <span class="history-summary" id="rdf3SalesHistorySummary">กำลังโหลดข้อมูล...</span>
+        </div>
+        <label class="history-filter" for="rdf3SalesHistoryMonth"><span>เดือนที่แสดง</span><input type="month" id="rdf3SalesHistoryMonth"></label>
+      </div>
+      <div class="history-duplicate" id="rdf3SalesDuplicateNotice"></div>
       <div class="scroll-table">
         <table>
           <thead><tr><th>วันที่</th><th class="left">ลูกค้า</th><th>ตัน</th><th class="left">หมายเหตุ</th><th>จัดการ</th></tr></thead>
@@ -1657,7 +1700,13 @@ async function api(path, opts){
     throw new Error('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่');
   }
   const data = await res.json();
-  if (!data.ok) throw new Error(data.error || 'เกิดข้อผิดพลาด');
+  if (!data.ok){
+    const error = new Error(data.error || 'เกิดข้อผิดพลาด');
+    error.code = data.code || '';
+    error.status = res.status;
+    error.details = data;
+    throw error;
+  }
   return data;
 }
 
@@ -2101,17 +2150,97 @@ onClickGuarded(document.getElementById('btnSaveBaseline'), async ()=>{
   }catch(e){ toast(e.message, true); }
 });
 
+function historyMonthValue(id){
+  return document.getElementById(id)?.value || todayStr().slice(0, 7);
+}
+
+function normalizedHistoryText(value){
+  return String(value ?? '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('th-TH');
+}
+
+function saleHistoryKey(row, fixedMaterial=''){
+  return [
+    row.SaleDate,
+    fixedMaterial || row.Material,
+    normalizedHistoryText(row.Customer),
+    Number(row.Tons).toFixed(3),
+    normalizedHistoryText(row.Note),
+  ].join('|');
+}
+
+function duplicateHistoryInfo(rows, keyForRow){
+  const counts = new Map();
+  rows.forEach(row => {
+    const key = keyForRow(row);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  });
+  const keys = new Set([...counts].filter(([, count]) => count > 1).map(([key]) => key));
+  return {
+    keys,
+    groupCount: keys.size,
+    rowCount: rows.filter(row => keys.has(keyForRow(row))).length,
+  };
+}
+
+function recordCreatedLabel(value){
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return 'บันทึก ' + parsed.toLocaleString('th-TH', {
+    day:'2-digit', month:'short', year:'2-digit', hour:'2-digit', minute:'2-digit', timeZone:'Asia/Bangkok',
+  });
+}
+
+function historyDateCell(date, createdAt, possibleDuplicate=false){
+  const created = recordCreatedLabel(createdAt);
+  return `<span class="record-date">${htmlEsc(date)}</span>${created ? `<small class="record-created">${htmlEsc(created)}</small>` : ''}${possibleDuplicate ? '<span class="duplicate-badge">ตรวจสอบรายการซ้ำ</span>' : ''}`;
+}
+
+function updateDuplicateNotice(id, info){
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.toggle('show', info.groupCount > 0);
+  el.textContent = info.groupCount > 0
+    ? `พบ ${info.groupCount.toLocaleString('th-TH')} ชุด (${info.rowCount.toLocaleString('th-TH')} รายการ) ที่ข้อมูลตรงกันทุกช่อง กรุณาตรวจสอบก่อนลบ`
+    : '';
+}
+
+async function submitSaleWithDuplicateCheck(path, payload, label){
+  try{
+    return await api(path, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+  }catch(e){
+    if (e.code !== 'POSSIBLE_DUPLICATE') throw e;
+    const existing = e.details?.duplicate || {};
+    const confirmed = window.confirm(
+      `พบ${label}ที่เหมือนกันแล้ว\nวันที่ ${existing.SaleDate || payload.saleDate} · ${existing.Customer || payload.customer} · ${Number(existing.Tons ?? payload.tons).toFixed(2)} ตัน\n\nหากเป็นคนละเที่ยวจริง กด ตกลง เพื่อบันทึกเพิ่ม`,
+    );
+    if (!confirmed) return null;
+    return api(path, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ ...payload, allowDuplicate:true }),
+    });
+  }
+}
+
 async function loadSalesTable(){
-  const data = await api('/api/sales');
+  const month = historyMonthValue('salesHistoryMonth');
+  const data = await api(`/api/sales?month=${encodeURIComponent(month)}`);
   const tbody = document.getElementById('salesTable');
+  const totalTons = Number(data.summary?.totalTons) || data.rows.reduce((sum, row) => sum + (Number(row.Tons) || 0), 0);
+  document.getElementById('salesHistorySummary').textContent = `${revenueMonthLabel(month)} · ${data.rows.length.toLocaleString('th-TH')} รายการ · ${revenueNumber(totalTons)} ตัน`;
+  const duplicateInfo = duplicateHistoryInfo(data.rows, row => saleHistoryKey(row));
+  updateDuplicateNotice('salesDuplicateNotice', duplicateInfo);
   if (data.rows.length === 0){
     tbody.innerHTML = '<tr><td colspan="6" class="empty-note">ยังไม่มีรายการขาย</td></tr>';
     return;
   }
   const materialLabel = { RDF2: 'RDF2', RDF2LG: 'RDF2 LG', FineFraction: 'Fine Fraction', Metal: 'Metal' };
-  tbody.innerHTML = data.rows.map(r => `<tr><td>${htmlEsc(r.SaleDate)}</td><td>${htmlEsc(materialLabel[r.Material] || r.Material)}</td>
+  tbody.innerHTML = data.rows.map(r => {
+    const possibleDuplicate = duplicateInfo.keys.has(saleHistoryKey(r));
+    return `<tr class="${possibleDuplicate ? 'possible-duplicate' : ''}"><td>${historyDateCell(r.SaleDate, r.CreatedAt, possibleDuplicate)}</td><td>${htmlEsc(materialLabel[r.Material] || r.Material)}</td>
     <td class="left">${htmlEsc(r.Customer||'')}</td><td>${Number(r.Tons).toFixed(2)}</td><td class="left">${htmlEsc(r.Note||'')}</td>
-    <td><button class="danger" data-id="${htmlEsc(r.ID)}">ลบ</button></td></tr>`).join('');
+    <td><button class="danger" data-id="${htmlEsc(r.ID)}">ลบ</button></td></tr>`;
+  }).join('');
   tbody.querySelectorAll('button[data-id]').forEach(btn => {
     btn.addEventListener('click', async () => {
       try{
@@ -2130,14 +2259,14 @@ onClickGuarded(document.getElementById('btnAddSale'), async ()=>{
   const tons = document.getElementById('saleTons').value;
   if (!saleDate || !customer || !tons){ toast('กรุณาระบุวันที่ ลูกค้า และจำนวนตัน', true); return; }
   try{
-    await api('/api/sales', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        saleDate, material, customer, tons,
-        note: document.getElementById('saleNote').value,
-      }) });
+    const saved = await submitSaleWithDuplicateCheck('/api/sales', {
+      saleDate, material, customer, tons, note:document.getElementById('saleNote').value,
+    }, 'รายการขาย');
+    if (!saved) return;
     document.getElementById('saleTons').value = '';
     document.getElementById('saleNote').value = '';
     document.getElementById('revenueMonth').value = saleDate.slice(0, 7);
+    document.getElementById('salesHistoryMonth').value = saleDate.slice(0, 7);
     toast('บันทึกการขายแล้ว');
     await Promise.all([loadSalesTable(), loadRevenueDashboard()]);
   }catch(e){ toast(e.message, true); }
@@ -2508,6 +2637,9 @@ function initDeliveryPlans(){
 
 const currentMonth = todayStr().slice(0, 7);
 document.getElementById('revenueMonth').value = currentMonth;
+document.getElementById('tippingHistoryMonth').value = currentMonth;
+document.getElementById('salesHistoryMonth').value = currentMonth;
+document.getElementById('rdf3SalesHistoryMonth').value = currentMonth;
 document.getElementById('revenuePriceDate').value = todayStr();
 document.getElementById('tippingSettingDate').value = todayStr();
 document.getElementById('tippingEntryDate').value = todayStr();
@@ -2617,10 +2749,12 @@ onClickGuarded(document.getElementById('btnSaveTippingSetting'), async ()=>{
 });
 
 async function loadTippingDaily(){
-  const month = document.getElementById('revenueMonth').value || currentMonth;
+  const month = historyMonthValue('tippingHistoryMonth');
   const data = await api(`/api/revenue/tipping-daily?month=${encodeURIComponent(month)}`);
   const tbody = document.getElementById('tippingDailyTable');
-  tbody.innerHTML = data.rows.length ? data.rows.map(r => `<tr><td>${revenueEsc(r.EntryDate)}</td><td>${revenueNumber(r.MSWTons)}</td><td class="left">${revenueEsc(r.Note)}</td><td><button class="danger" data-id="${revenueEsc(r.ID)}">ลบ</button></td></tr>`).join('') : revenueEmpty(4);
+  const totalTons = Number(data.summary?.totalTons) || data.rows.reduce((sum, row) => sum + (Number(row.MSWTons) || 0), 0);
+  document.getElementById('tippingHistorySummary').textContent = `${revenueMonthLabel(month)} · ${data.rows.length.toLocaleString('th-TH')} วัน · ${revenueNumber(totalTons)} ตัน`;
+  tbody.innerHTML = data.rows.length ? data.rows.map(r => `<tr><td>${historyDateCell(r.EntryDate, r.CreatedAt)}</td><td>${revenueNumber(r.MSWTons)}</td><td class="left">${revenueEsc(r.Note)}</td><td><button class="danger" data-id="${revenueEsc(r.ID)}">ลบ</button></td></tr>`).join('') : revenueEmpty(4, 'ยังไม่มีข้อมูล MSW ในเดือนนี้');
   tbody.querySelectorAll('button[data-id]').forEach(btn => btn.addEventListener('click', async ()=>{
     try{
       await api(`/api/revenue/tipping-daily/${encodeURIComponent(btn.dataset.id)}`, { method:'DELETE' });
@@ -2641,15 +2775,24 @@ onClickGuarded(document.getElementById('btnSaveTippingDaily'), async ()=>{
     document.getElementById('tippingMSWTons').value = '';
     document.getElementById('tippingNote').value = '';
     document.getElementById('revenueMonth').value = entryDate.slice(0, 7);
+    document.getElementById('tippingHistoryMonth').value = entryDate.slice(0, 7);
     await Promise.all([loadTippingDaily(), loadRevenueDashboard()]);
     toast(data.updated ? 'อัปเดต MSW ของวันนี้แล้ว' : 'บันทึก MSW แล้ว');
   }catch(e){ toast(e.message, true); }
 });
 
 async function loadRDF3Sales(){
-  const data = await api('/api/revenue/rdf3-sales');
+  const month = historyMonthValue('rdf3SalesHistoryMonth');
+  const data = await api(`/api/revenue/rdf3-sales?month=${encodeURIComponent(month)}`);
   const tbody = document.getElementById('rdf3SalesTable');
-  tbody.innerHTML = data.rows.length ? data.rows.map(r => `<tr><td>${revenueEsc(r.SaleDate)}</td><td class="left">${revenueEsc(r.Customer)}</td><td>${revenueNumber(r.Tons)}</td><td class="left">${revenueEsc(r.Note)}</td><td><button class="danger" data-id="${revenueEsc(r.ID)}">ลบ</button></td></tr>`).join('') : revenueEmpty(5);
+  const totalTons = Number(data.summary?.totalTons) || data.rows.reduce((sum, row) => sum + (Number(row.Tons) || 0), 0);
+  document.getElementById('rdf3SalesHistorySummary').textContent = `${revenueMonthLabel(month)} · ${data.rows.length.toLocaleString('th-TH')} รายการ · ${revenueNumber(totalTons)} ตัน`;
+  const duplicateInfo = duplicateHistoryInfo(data.rows, row => saleHistoryKey(row, 'RDF3'));
+  updateDuplicateNotice('rdf3SalesDuplicateNotice', duplicateInfo);
+  tbody.innerHTML = data.rows.length ? data.rows.map(r => {
+    const possibleDuplicate = duplicateInfo.keys.has(saleHistoryKey(r, 'RDF3'));
+    return `<tr class="${possibleDuplicate ? 'possible-duplicate' : ''}"><td>${historyDateCell(r.SaleDate, r.CreatedAt, possibleDuplicate)}</td><td class="left">${revenueEsc(r.Customer)}</td><td>${revenueNumber(r.Tons)}</td><td class="left">${revenueEsc(r.Note)}</td><td><button class="danger" data-id="${revenueEsc(r.ID)}">ลบ</button></td></tr>`;
+  }).join('') : revenueEmpty(5, 'ยังไม่มีรายการขาย RDF3 ในเดือนนี้');
   tbody.querySelectorAll('button[data-id]').forEach(btn => btn.addEventListener('click', async ()=>{
     try{
       await api(`/api/revenue/rdf3-sales/${encodeURIComponent(btn.dataset.id)}`, { method:'DELETE' });
@@ -2665,12 +2808,14 @@ onClickGuarded(document.getElementById('btnAddRDF3Sale'), async ()=>{
   const tons = document.getElementById('rdf3SaleTons').value;
   if (!saleDate || !customer || !tons){ toast('กรุณาระบุวันที่ ลูกค้า และจำนวนตัน RDF3', true); return; }
   try{
-    await api('/api/revenue/rdf3-sales', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+    const saved = await submitSaleWithDuplicateCheck('/api/revenue/rdf3-sales', {
       saleDate, customer, tons, note:document.getElementById('rdf3SaleNote').value,
-    }) });
+    }, 'รายการขาย RDF3');
+    if (!saved) return;
     document.getElementById('rdf3SaleTons').value = '';
     document.getElementById('rdf3SaleNote').value = '';
     document.getElementById('revenueMonth').value = saleDate.slice(0, 7);
+    document.getElementById('rdf3SalesHistoryMonth').value = saleDate.slice(0, 7);
     await Promise.all([loadRDF3Sales(), loadRevenueDashboard()]);
     toast('บันทึกการขาย RDF3 แล้ว');
   }catch(e){ toast(e.message, true); }
@@ -2756,8 +2901,24 @@ async function loadRevenueDashboard(){
 }
 
 onClickGuarded(document.getElementById('btnLoadRevenue'), async ()=>{
-  try{ await Promise.all([loadRevenueDashboard(), loadTippingDaily()]); }
+  try{
+    const month = document.getElementById('revenueMonth').value || currentMonth;
+    document.getElementById('tippingHistoryMonth').value = month;
+    document.getElementById('salesHistoryMonth').value = month;
+    document.getElementById('rdf3SalesHistoryMonth').value = month;
+    await Promise.all([loadRevenueDashboard(), loadTippingDaily(), loadSalesTable(), loadRDF3Sales()]);
+  }
   catch(e){ toast(e.message, true); }
+});
+
+document.getElementById('tippingHistoryMonth').addEventListener('change', ()=>{
+  loadTippingDaily().catch(e => toast(e.message, true));
+});
+document.getElementById('salesHistoryMonth').addEventListener('change', ()=>{
+  loadSalesTable().catch(e => toast(e.message, true));
+});
+document.getElementById('rdf3SalesHistoryMonth').addEventListener('change', ()=>{
+  loadRDF3Sales().catch(e => toast(e.message, true));
 });
 
 onClickGuarded(document.getElementById('btnExportRevenueImage'), async ()=>{
@@ -2791,7 +2952,7 @@ onClickGuarded(document.getElementById('btnExportRevenueImage'), async ()=>{
 async function initRevenue(){
   try{
     await loadRevenueCustomers();
-    await Promise.all([loadRevenuePrices(), loadTippingSettings(), loadTippingDaily(), loadRDF3Sales(), loadRevenueDashboard()]);
+    await Promise.all([loadRevenuePrices(), loadTippingSettings(), loadTippingDaily(), loadSalesTable(), loadRDF3Sales(), loadRevenueDashboard()]);
   }catch(e){ toast(e.message, true); }
 }
 

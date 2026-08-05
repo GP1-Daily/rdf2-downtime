@@ -807,25 +807,67 @@ function normalizeCustomerProduct(product, customer) {
   return product === 'RDF2' && isTPICustomer(customer) ? 'RDF2LG' : product;
 }
 
-async function handleSales(req, res, parts) {
+function comparableSaleText(value) {
+  return cleanText(value).replace(/\s+/g, ' ').toLocaleLowerCase('th-TH');
+}
+
+function findMatchingSale(rows, sale) {
+  return rows.find((row) => row.SaleDate === sale.SaleDate
+    && row.Material === sale.Material
+    && comparableSaleText(row.Customer) === comparableSaleText(sale.Customer)
+    && Math.abs((Number(row.Tons) || 0) - sale.Tons) < 0.000001
+    && comparableSaleText(row.Note) === comparableSaleText(sale.Note));
+}
+
+async function handleSales(req, res, parts, query = {}) {
   if (req.method === 'GET' && parts.length === 0) {
-    const rows = await store.readSheet('Sales');
+    let rows = await store.readSheet('Sales');
+    if (query.month) {
+      if (!validMonth(query.month)) {
+        return sendJson(res, 400, { ok: false, error: 'รูปแบบเดือนต้องเป็น YYYY-MM' });
+      }
+      rows = rows.filter((row) => String(row.SaleDate).startsWith(`${query.month}-`));
+    }
     rows.sort((a, b) => (a.SaleDate < b.SaleDate ? 1 : -1));
-    return sendJson(res, 200, { ok: true, rows });
+    return sendJson(res, 200, {
+      ok: true,
+      rows,
+      summary: {
+        transactionCount: rows.length,
+        totalTons: rows.reduce((sum, row) => sum + (Number(row.Tons) || 0), 0),
+      },
+    });
   }
   if (req.method === 'POST' && parts.length === 0) {
     const body = await readBody(req);
     const { saleDate, material, customer, tons, note } = body;
-    if (!saleDate || !material || !tons) {
+    const saleTons = Number(tons);
+    if (!validIsoDate(saleDate) || !material || !cleanText(customer)
+      || !Number.isFinite(saleTons) || saleTons <= 0) {
       return sendJson(res, 400, { ok: false, error: 'ต้องระบุ saleDate, material, tons' });
     }
     const normalizedMaterial = normalizeCustomerProduct(material, customer);
     if (!SALES_MATERIALS.includes(normalizedMaterial)) {
       return sendJson(res, 400, { ok: false, error: 'material ต้องเป็น RDF2, RDF2 LG, FineFraction หรือ Metal' });
     }
-    const record = await store.appendRow('Sales', {
-      SaleDate: saleDate, Material: normalizedMaterial, Customer: customer || '', Tons: Number(tons), Note: note || '',
-    });
+    const data = {
+      SaleDate: saleDate,
+      Material: normalizedMaterial,
+      Customer: cleanText(customer),
+      Tons: saleTons,
+      Note: cleanText(note),
+    };
+    const rows = await store.readSheet('Sales');
+    const duplicate = findMatchingSale(rows, data);
+    if (duplicate && body.allowDuplicate !== true) {
+      return sendJson(res, 409, {
+        ok: false,
+        code: 'POSSIBLE_DUPLICATE',
+        error: 'พบรายการขายที่มีข้อมูลเหมือนกันทุกช่อง',
+        duplicate,
+      });
+    }
+    const record = await store.appendRow('Sales', data);
     return sendJson(res, 200, { ok: true, row: record });
   }
   if (req.method === 'DELETE' && parts.length === 1) {
@@ -1006,26 +1048,56 @@ async function handleRevenuePrices(req, res, parts) {
   return sendJson(res, 404, { ok: false, error: 'not found' });
 }
 
-async function handleRevenueRDF3Sales(req, res, parts) {
+async function handleRevenueRDF3Sales(req, res, parts, query = {}) {
   if (req.method === 'GET' && parts.length === 0) {
-    const rows = await store.readSheet('RevenueRDF3Sales');
+    let rows = await store.readSheet('RevenueRDF3Sales');
+    if (query.month) {
+      if (!validMonth(query.month)) {
+        return sendJson(res, 400, { ok: false, error: 'รูปแบบเดือนต้องเป็น YYYY-MM' });
+      }
+      rows = rows.filter((row) => String(row.SaleDate).startsWith(`${query.month}-`));
+    }
     rows.sort((a, b) => String(b.SaleDate).localeCompare(String(a.SaleDate)));
-    return sendJson(res, 200, { ok: true, rows });
+    return sendJson(res, 200, {
+      ok: true,
+      rows,
+      summary: {
+        transactionCount: rows.length,
+        totalTons: rows.reduce((sum, row) => sum + (Number(row.Tons) || 0), 0),
+      },
+    });
   }
   if (req.method === 'POST' && parts.length === 0) {
     const body = await readBody(req);
     const saleDate = cleanText(body.saleDate);
     const customer = cleanText(body.customer);
     const tons = Number(body.tons);
-    if (!saleDate || !customer || !Number.isFinite(tons) || tons <= 0) {
+    if (!validIsoDate(saleDate) || !customer || !Number.isFinite(tons) || tons <= 0) {
       return sendJson(res, 400, { ok: false, error: 'กรุณาระบุวันที่ ลูกค้า และจำนวนตัน RDF3' });
     }
     const customers = await store.readSheet('RevenueCustomers');
     if (!customers.some((row) => sameText(row.Name, customer))) {
       return sendJson(res, 400, { ok: false, error: 'ไม่พบลูกค้าในรายการ Setup' });
     }
+    const data = {
+      SaleDate: saleDate,
+      Material: 'RDF3',
+      Customer: customer,
+      Tons: tons,
+      Note: cleanText(body.note),
+    };
+    const rows = await store.readSheet('RevenueRDF3Sales');
+    const duplicate = findMatchingSale(rows.map((row) => ({ ...row, Material: 'RDF3' })), data);
+    if (duplicate && body.allowDuplicate !== true) {
+      return sendJson(res, 409, {
+        ok: false,
+        code: 'POSSIBLE_DUPLICATE',
+        error: 'พบรายการขาย RDF3 ที่มีข้อมูลเหมือนกันทุกช่อง',
+        duplicate,
+      });
+    }
     const row = await store.appendRow('RevenueRDF3Sales', {
-      SaleDate: saleDate, Customer: customer, Tons: tons, Note: cleanText(body.note),
+      SaleDate: data.SaleDate, Customer: data.Customer, Tons: data.Tons, Note: data.Note,
     });
     return sendJson(res, 200, { ok: true, row });
   }
@@ -1075,9 +1147,21 @@ async function handleRevenueTippingSettings(req, res, parts) {
 async function handleRevenueTippingDaily(req, res, parts, query) {
   if (req.method === 'GET' && parts.length === 0) {
     let rows = await store.readSheet('RevenueTippingDaily');
-    if (query.month) rows = rows.filter((row) => String(row.EntryDate).startsWith(`${query.month}-`));
+    if (query.month) {
+      if (!validMonth(query.month)) {
+        return sendJson(res, 400, { ok: false, error: 'รูปแบบเดือนต้องเป็น YYYY-MM' });
+      }
+      rows = rows.filter((row) => String(row.EntryDate).startsWith(`${query.month}-`));
+    }
     rows.sort((a, b) => String(b.EntryDate).localeCompare(String(a.EntryDate)));
-    return sendJson(res, 200, { ok: true, rows });
+    return sendJson(res, 200, {
+      ok: true,
+      rows,
+      summary: {
+        recordedDays: rows.length,
+        totalTons: rows.reduce((sum, row) => sum + (Number(row.MSWTons) || 0), 0),
+      },
+    });
   }
   if (req.method === 'POST' && parts.length === 0) {
     const body = await readBody(req);
@@ -1217,7 +1301,7 @@ async function handleRevenue(req, res, parts, query) {
   const rest = parts.slice(1);
   if (section === 'customers') return handleRevenueCustomers(req, res, rest);
   if (section === 'prices') return handleRevenuePrices(req, res, rest);
-  if (section === 'rdf3-sales') return handleRevenueRDF3Sales(req, res, rest);
+  if (section === 'rdf3-sales') return handleRevenueRDF3Sales(req, res, rest, query);
   if (section === 'tipping-settings') return handleRevenueTippingSettings(req, res, rest);
   if (section === 'tipping-daily') return handleRevenueTippingDaily(req, res, rest, query);
   if (section === 'dashboard' && req.method === 'GET') return handleRevenueDashboard(req, res, query);
@@ -2884,7 +2968,7 @@ async function dispatchBusinessApi(req, res, pathname, query) {
   if (resource === 'monthly-report' && req.method === 'GET') return handleMonthlyReport(req, res, query);
   if (resource === 'executive-report' && req.method === 'GET') return handleExecutiveReport(req, res, query);
   if (resource === 'yield') return handleYield(req, res, rest);
-  if (resource === 'sales') return handleSales(req, res, rest);
+  if (resource === 'sales') return handleSales(req, res, rest, query);
   if (resource === 'delivery-plans') return handleDeliveryPlans(req, res, rest, query);
   if (resource === 'stock') {
     if (rest[0] === 'baseline') return handleStockBaseline(req, res);

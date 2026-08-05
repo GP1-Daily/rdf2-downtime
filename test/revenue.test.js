@@ -118,6 +118,11 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   await post('/api/sales', { saleDate: '2026-07-06', material: 'RDF2', customer: 'TPI', tons: 20 });
   await post('/api/revenue/rdf3-sales', { saleDate: '2026-07-07', customer: 'ลูกค้า A', tons: 4 });
   await post('/api/revenue/rdf3-sales', { saleDate: '2026-07-07', customer: 'ลูกค้าที่ไม่มี', tons: 1 }, 400);
+  await post('/api/sales', { saleDate: '2026-08-01', material: 'RDF2', customer: 'ลูกค้า A', tons: 9, note: 'A-01' });
+  await post('/api/sales', { saleDate: '2026-08-01', material: 'RDF2', customer: 'ลูกค้า A', tons: 9, note: 'A-01' }, 409);
+  await post('/api/sales', { saleDate: '2026-08-01', material: 'RDF2', customer: 'ลูกค้า A', tons: 9, note: 'A-01', allowDuplicate: true });
+  await post('/api/revenue/rdf3-sales', { saleDate: '2026-08-01', customer: 'ลูกค้า A', tons: 7, note: 'R3-01' });
+  await post('/api/revenue/rdf3-sales', { saleDate: '2026-08-01', customer: 'ลูกค้า A', tons: 7, note: 'R3-01' }, 409);
   await post('/api/revenue/tipping-daily', { entryDate: '2026-07-05', mswTons: 320 });
   await post('/api/revenue/tipping-daily', { entryDate: '2026-07-05', mswTons: 300 });
   await post('/api/revenue/tipping-daily', { entryDate: '2026-07-06', mswTons: 100 });
@@ -152,6 +157,19 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   const dailyResponse = await fetch(`${baseUrl}/api/revenue/tipping-daily?month=2026-07`);
   const dailyRows = await dailyResponse.json();
   assert.equal(dailyRows.rows.length, 2, 'same-day MSW input must update instead of duplicate');
+  assert.deepEqual(dailyRows.summary, { recordedDays: 2, totalTons: 400 });
+
+  const julySalesResponse = await fetch(`${baseUrl}/api/sales?month=2026-07`);
+  const julySales = await julySalesResponse.json();
+  assert.equal(julySales.rows.length, 4, 'sales history month filter must not mix in August rows');
+  assert.equal(julySales.summary.totalTons, 33);
+  const augustSalesResponse = await fetch(`${baseUrl}/api/sales?month=2026-08`);
+  const augustSales = await augustSalesResponse.json();
+  assert.equal(augustSales.rows.length, 2, 'confirmed same-looking trips remain separate records');
+
+  const julyRDF3Response = await fetch(`${baseUrl}/api/revenue/rdf3-sales?month=2026-07`);
+  const julyRDF3 = await julyRDF3Response.json();
+  assert.equal(julyRDF3.rows.length, 1);
 
   const planResponse = await fetch(`${baseUrl}/api/delivery-plans/dashboard?weekStart=2026-07-06`);
   const planDashboard = await planResponse.json();
