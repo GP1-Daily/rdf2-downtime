@@ -11,3 +11,16 @@ test('inline application scripts have valid JavaScript syntax', () => {
     assert.doesNotThrow(() => new Function(script[1])); // eslint-disable-line no-new-func
   }
 });
+
+test('monthly revenue donut uses export-safe SVG arcs', () => {
+  const root = path.resolve(__dirname, '..');
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const css = fs.readFileSync(path.join(root, 'monthly.css'), 'utf8');
+  const script = fs.readFileSync(path.join(root, 'monthly.js'), 'utf8');
+
+  assert.match(html, /id="monthlyRevenueSalesArc"/);
+  assert.match(html, /id="monthlyRevenueTippingArc"/);
+  assert.match(script, /salesArc\.style\.strokeDasharray/);
+  assert.match(script, /tippingArc\.style\.strokeDasharray/);
+  assert.doesNotMatch(css, /\.monthly-revenue-donut\s*{[^}]*conic-gradient/s);
+});

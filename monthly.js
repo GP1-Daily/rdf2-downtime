@@ -106,10 +106,17 @@
     const revenue = data.revenue;
     const salesShare = Number(revenue.company.salesSharePct) || 0;
     const tippingShare = Number(revenue.company.tippingSharePct) || 0;
+    const safeSalesShare = Math.max(0, Math.min(100, salesShare));
+    const safeTippingShare = Math.max(0, Math.min(100 - safeSalesShare, tippingShare));
     const donut = document.getElementById('monthlyRevenueDonut');
-    donut.style.setProperty('--sales-share', `${Math.max(0, Math.min(100, salesShare))}%`);
     donut.classList.toggle('no-data', Number(revenue.company.central) <= 0);
     donut.setAttribute('aria-label', `ขายสินค้า ${percentLabel(salesShare)} และ Tipping Fee ${percentLabel(tippingShare)}`);
+    const salesArc = document.getElementById('monthlyRevenueSalesArc');
+    const tippingArc = document.getElementById('monthlyRevenueTippingArc');
+    salesArc.style.strokeDasharray = `${safeSalesShare} ${100 - safeSalesShare}`;
+    salesArc.style.strokeDashoffset = '0';
+    tippingArc.style.strokeDasharray = `${safeTippingShare} ${100 - safeTippingShare}`;
+    tippingArc.style.strokeDashoffset = `${-safeSalesShare}`;
     document.getElementById('monthlyRevenueDonutValue').textContent = percentLabel(salesShare);
     document.getElementById('monthlyRevenueTotal').textContent = revenueMoney(revenue.company.central);
     document.getElementById('monthlyRevenueHeadline').textContent = revenueMoney(revenue.company.central);
