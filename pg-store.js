@@ -148,6 +148,7 @@ const TABLES = {
     table: 'diesel_machines',
     columns: {
       ID: 'id', Name: 'name', Active: 'active', CreatedAt: 'created_at',
+      DailyLimitLiters: 'daily_limit_liters',
     },
   },
   DieselUsage: {
@@ -368,8 +369,11 @@ function ensureSchema() {
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
         active BOOLEAN NOT NULL DEFAULT true,
+        daily_limit_liters NUMERIC NOT NULL DEFAULT 0 CHECK (daily_limit_liters >= 0),
         created_at TIMESTAMPTZ DEFAULT now()
       );
+      ALTER TABLE diesel_machines
+        ADD COLUMN IF NOT EXISTS daily_limit_liters NUMERIC NOT NULL DEFAULT 0;
       CREATE UNIQUE INDEX IF NOT EXISTS diesel_machines_name_idx
         ON diesel_machines (lower(name));
       CREATE TABLE IF NOT EXISTS diesel_usage (

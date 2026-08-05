@@ -47,11 +47,50 @@
     if (element) element.textContent = value;
   }
 
-  function renderMachineChips(id, rows) {
+  function achievement(actual, plan) {
+    const target = Number(plan) || 0;
+    return target > 0 ? (Number(actual) || 0) / target * 100 : null;
+  }
+
+  function setProgress(id, value) {
+    const element = document.getElementById(id);
+    if (element) element.style.width = `${Math.min(100, Math.max(0, Number(value) || 0))}%`;
+  }
+
+  function renderFuelList(id, rows) {
     const target = document.getElementById(id);
     target.innerHTML = rows.length
-      ? rows.map((row) => `<span>${htmlEsc(row.machine)} ${numberLabel(row.liters)} L</span>`).join('')
-      : '<span>ไม่มีการบันทึก</span>';
+      ? rows.map((row) => {
+        const usage = row.utilizationPct === null ? 0 : Math.max(0, Number(row.utilizationPct) || 0);
+        return `<div class="fuel-limit-row ${row.exceeded ? 'exceeded' : ''}">
+          <div><strong>${htmlEsc(row.machine)}</strong><span>${numberLabel(row.liters)} / ${Number(row.limitLiters) > 0 ? numberLabel(row.limitLiters) : '-'} L</span></div>
+          <div class="fuel-limit-track"><i style="--fuel-progress:${Math.min(100, usage)}%"></i></div>
+          <b>${row.utilizationPct === null ? 'ไม่ตั้งลิมิต' : percentLabel(row.utilizationPct)}</b>
+        </div>`;
+      }).join('')
+      : '<div class="executive-empty-row">ยังไม่มีรายการเครื่องจักร</div>';
+  }
+
+  function renderDailyComparisons(data) {
+    const rows = [
+      { key: 'msw', label: 'MSW to Production', actual: data.production.dailyTons, plan: data.targets.dailyTons },
+      { key: 'rdf2', label: 'RDF2', actual: data.output.daily.rdf2Tons, plan: data.output.plan.rdf2Tons },
+      { key: 'rdf2lg', label: 'RDF2 LG', actual: data.output.daily.rdf2LGTons, plan: data.output.plan.rdf2LGTons },
+    ];
+    document.getElementById('executiveDailyComparisons').innerHTML = rows.map((row) => {
+      const pct = achievement(row.actual, row.plan);
+      const scale = Math.max(1, Number(row.actual) || 0, Number(row.plan) || 0);
+      const planWidth = Number(row.plan) > 0 ? Number(row.plan) / scale * 100 : 0;
+      const actualWidth = Number(row.actual) > 0 ? Number(row.actual) / scale * 100 : 0;
+      const achieved = pct !== null && pct >= 100;
+      return `<article class="executive-comparison-row ${row.key} ${achieved ? 'achieved' : ''}">
+        <div class="executive-comparison-label"><strong>${row.label}</strong><span>${pct === null ? 'ยังไม่มีข้อมูลสำหรับแผน' : `${percentLabel(pct)} ของแผน`}</span></div>
+        <div class="executive-comparison-bars">
+          <div><span>PLAN</span><i><b style="width:${planWidth}%"></b></i><strong>${numberLabel(row.plan)} ตัน</strong></div>
+          <div class="actual"><span>ACTUAL</span><i><b style="width:${actualWidth}%"></b></i><strong>${numberLabel(row.actual)} ตัน</strong></div>
+        </div>
+      </article>`;
+    }).join('');
   }
 
   function renderTrend(data) {
@@ -102,35 +141,44 @@
   function renderExecutive(data) {
     setText('executiveDateLabel', thaiDate(data.date));
     setText('executiveIncomingDaily', numberLabel(data.incoming.dailyTons));
-    setText('executiveIncomingMTD', `${numberLabel(data.incoming.mtdTons)} ตัน`);
-    setText('executiveIncomingStatus', data.incoming.hasData ? 'RECORDED' : 'NO ENTRY');
-    const incomingCard = document.querySelector('.executive-metric.incoming');
-    incomingCard.classList.toggle('empty', !data.incoming.hasData);
+    setText('executiveIncomingStatus', `${data.incoming.hasData ? 'บันทึกแล้ว' : 'ยังไม่บันทึก'} · MTD ${numberLabel(data.incoming.mtdTons)} ตัน`);
 
-    setText('executiveProductionPct', percentLabel(data.production.dailyAchievementPct));
+    setText('executiveProductionPct', `${percentLabel(data.production.dailyAchievementPct)} ของแผน`);
     setText('executiveProductionDaily', numberLabel(data.production.dailyTons));
-    setText('executiveProductionPlan', numberLabel(data.targets.dailyTons));
-    const productionCard = document.querySelector('.executive-metric.production');
-    productionCard.classList.toggle('achieved', Number(data.production.dailyAchievementPct) >= 100);
 
     setText('executiveRDF2Daily', numberLabel(data.output.daily.rdf2Tons));
     setText('executiveRDF2LGDaily', numberLabel(data.output.daily.rdf2LGTons));
-    setText('executiveYieldNote', data.output.hasYieldSetting ? 'คำนวณจาก Yield ที่มีผลในวันที่รายงาน' : 'ยังไม่มีค่า Yield สำหรับวันที่รายงาน');
-    const outputCard = document.querySelector('.executive-metric.output');
-    outputCard.classList.toggle('missing-yield', !data.output.hasYieldSetting);
+    setText('executiveYieldNote', data.output.hasYieldSetting ? 'คำนวณจาก Yield ที่มีผล' : 'ยังไม่มีค่า Yield');
 
     setText('executiveDieselDaily', numberLabel(data.diesel.daily.totalLiters));
-    renderMachineChips('executiveDieselDailyMachines', data.diesel.daily.byMachine);
+    setText('executiveDieselDailyLimit', numberLabel(data.diesel.daily.totalLimitLiters));
+    setText('executiveDieselDailyPct', `${percentLabel(data.diesel.daily.utilizationPct)} ของลิมิต`);
+    renderFuelList('executiveDieselDailyMachines', data.diesel.daily.byMachine);
+
+    renderDailyComparisons(data);
+    const plan = data.output.plan;
+    setText('executiveOutputPlanMeta', plan.basisDays
+      ? `Plan RDF จากค่าเฉลี่ยย้อนหลัง ${plan.basisDays.toLocaleString('th-TH')} วัน (${thaiDate(plan.startDate)} - ${thaiDate(plan.endDate)})`
+      : 'ยังไม่มีข้อมูลย้อนหลังเพียงพอสำหรับ Plan RDF');
 
     setText('executiveMonthMeta', `${monthLabel(data.month)} · วันที่ ${data.elapsedDays} จาก ${data.daysInMonth}`);
     setText('executiveMTDPct', percentLabel(data.production.monthlyAchievementPct));
-    document.getElementById('executiveMTDBar').style.width = `${Math.min(100, Math.max(0, Number(data.production.monthlyAchievementPct) || 0))}%`;
+    setProgress('executiveMTDBar', data.production.monthlyAchievementPct);
     setText('executiveProductionMTD', `${numberLabel(data.production.mtdTons)} ตัน`);
     setText('executiveMonthlyTarget', `${numberLabel(data.targets.monthlyTons)} ตัน`);
+
+    const rdf2MTDPct = achievement(data.output.mtd.rdf2Tons, plan.mtdRDF2Tons);
+    const rdf2LGMTDPct = achievement(data.output.mtd.rdf2LGTons, plan.mtdRDF2LGTons);
     setText('executiveRDF2MTD', `${numberLabel(data.output.mtd.rdf2Tons)} ตัน`);
+    setText('executiveRDF2MTDPlan', `${numberLabel(plan.mtdRDF2Tons)} ตัน`);
+    setText('executiveRDF2MTDPct', percentLabel(rdf2MTDPct));
+    setProgress('executiveRDF2MTDBar', rdf2MTDPct);
     setText('executiveRDF2LGMTD', `${numberLabel(data.output.mtd.rdf2LGTons)} ตัน`);
-    setText('executiveDieselMTD', `${numberLabel(data.diesel.mtd.totalLiters)} ลิตร`);
-    renderMachineChips('executiveDieselMTDMachines', data.diesel.mtd.byMachine);
+    setText('executiveRDF2LGMTDPlan', `${numberLabel(plan.mtdRDF2LGTons)} ตัน`);
+    setText('executiveRDF2LGMTDPct', percentLabel(rdf2LGMTDPct));
+    setProgress('executiveRDF2LGMTDBar', rdf2LGMTDPct);
+    setText('executiveDieselMTD', `MTD ${numberLabel(data.diesel.mtd.totalLiters)} / ${numberLabel(data.diesel.mtd.totalLimitLiters)} ลิตร · ${percentLabel(data.diesel.mtd.utilizationPct)}`);
+    renderFuelList('executiveDieselMTDMachines', data.diesel.mtd.byMachine);
 
     setText('executiveDaysRemaining', Number(data.recovery.daysRemaining).toLocaleString('th-TH'));
     setText('executiveShortfall', numberLabel(data.recovery.shortfallTons));
@@ -201,10 +249,10 @@
         windowWidth: 1080,
       });
       const link = document.createElement('a');
-      link.download = `GP1-Executive-Daily-${dateInput.value}.png`;
+      link.download = `GP1-Daily-Report-${dateInput.value}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
-      toast('ดาวน์โหลด Executive Daily Report แล้ว');
+      toast('ดาวน์โหลด Daily Report แล้ว');
     } catch (error) {
       toast(`ไม่สามารถ Export ภาพได้: ${error.message}`, true);
     } finally {

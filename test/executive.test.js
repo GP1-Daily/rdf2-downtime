@@ -56,13 +56,13 @@ async function startServer(t) {
     }
   });
   const baseUrl = `http://127.0.0.1:${port}`;
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  for (let attempt = 0; attempt < 300; attempt += 1) {
     try {
       if ((await fetch(`${baseUrl}/login.html`)).ok) return baseUrl;
     } catch (_) {
       // Server is still starting.
     }
-    if (attempt === 99) throw new Error(`server did not start: ${serverError}`);
+    if (attempt === 299) throw new Error(`server did not start: ${serverError}`);
     await delay(50);
   }
   throw new Error(`server did not start: ${serverError}`);
@@ -128,9 +128,9 @@ test('diesel entry and executive daily report combine source systems without dou
     { EntryDate: '2026-08-04', StartTime: '12:00', EndTime: '14:00', Reason: 'Shredder', Note: '' },
   ]);
   await store.appendRows('DieselMachines', [
-    { Name: 'Wheel Loader 1', Active: true },
-    { Name: 'Excavator 1', Active: true },
-    { Name: 'Old Loader', Active: false },
+    { Name: 'Wheel Loader 1', Active: true, DailyLimitLiters: 150 },
+    { Name: 'Excavator 1', Active: true, DailyLimitLiters: 100 },
+    { Name: 'Old Loader', Active: false, DailyLimitLiters: 50 },
   ]);
 
   const baseUrl = await startServer(t);
@@ -152,9 +152,15 @@ test('diesel entry and executive daily report combine source systems without dou
   const usage = await fetch(`${baseUrl}/api/diesel/usage?date=2026-08-04`).then((response) => response.json());
   assert.equal(usage.rows.length, 2);
   assert.equal(usage.summary.totalLiters, 200);
+  assert.equal(usage.summary.totalLimitLiters, 250);
+  assert.equal(usage.summary.utilizationPct, 80);
   assert.deepEqual(usage.summary.byMachine.map((row) => [row.machine, row.liters]), [
     ['Wheel Loader 1', 120],
     ['Excavator 1', 80],
+  ]);
+  assert.deepEqual(usage.summary.byMachine.map((row) => [row.machine, row.limitLiters]), [
+    ['Wheel Loader 1', 150],
+    ['Excavator 1', 100],
   ]);
 
   const response = await fetch(`${baseUrl}/api/executive-report?date=2026-08-04`);
@@ -170,8 +176,17 @@ test('diesel entry and executive daily report combine source systems without dou
   assert.equal(report.output.daily.rdf2LGTons, 25);
   assert.equal(report.output.mtd.rdf2Tons, 210);
   assert.equal(report.output.mtd.rdf2LGTons, 105);
+  assert.equal(report.output.plan.basisDays, 3);
+  assert.ok(Math.abs(report.output.plan.rdf2Tons - (160 / 3)) < 0.0001);
+  assert.ok(Math.abs(report.output.plan.rdf2LGTons - (80 / 3)) < 0.0001);
+  assert.ok(Math.abs(report.output.plan.mtdRDF2Tons - (640 / 3)) < 0.0001);
+  assert.ok(Math.abs(report.output.plan.mtdRDF2LGTons - (320 / 3)) < 0.0001);
   assert.equal(report.diesel.daily.totalLiters, 200);
+  assert.equal(report.diesel.daily.totalLimitLiters, 250);
+  assert.equal(report.diesel.daily.utilizationPct, 80);
   assert.equal(report.diesel.mtd.totalLiters, 200);
+  assert.equal(report.diesel.mtd.totalLimitLiters, 1000);
+  assert.equal(report.diesel.mtd.utilizationPct, 20);
   assert.equal(report.recovery.daysRemaining, 27);
   assert.equal(report.recovery.shortfallTons, 6950);
   assert.equal(report.trend.length, 4);
@@ -188,6 +203,31 @@ test('diesel entry and executive daily report combine source systems without dou
     ['Plug Spinner', 60],
   ]);
 
+  const createdMachine = await jsonRequest(baseUrl, '/api/diesel/machines', 'POST', {
+    name: 'Dozer 1', dailyLimitLiters: 60,
+  });
+  assert.equal(createdMachine.response.status, 200);
+  const machineId = createdMachine.data.row.ID;
+  const editedMachine = await jsonRequest(baseUrl, `/api/diesel/machines/${machineId}`, 'PUT', {
+    name: 'Dozer 2', dailyLimitLiters: 75,
+  });
+  assert.equal(editedMachine.response.status, 200);
+  assert.equal(editedMachine.data.row.Name, 'Dozer 2');
+  assert.equal(Number(editedMachine.data.row.DailyLimitLiters), 75);
+  const deletedMachine = await jsonRequest(baseUrl, `/api/diesel/machines/${machineId}`, 'DELETE');
+  assert.equal(deletedMachine.response.status, 200);
+
+  const machineRows = await fetch(`${baseUrl}/api/diesel/machines`).then((item) => item.json());
+  const usedMachine = machineRows.rows.find((row) => row.Name === 'Wheel Loader 1');
+  const renamedMachine = await jsonRequest(baseUrl, `/api/diesel/machines/${usedMachine.ID}`, 'PUT', {
+    name: 'Wheel Loader A', dailyLimitLiters: 160,
+  });
+  assert.equal(renamedMachine.response.status, 200);
+  const usageAfterRename = await fetch(`${baseUrl}/api/diesel/usage?date=2026-08-04`).then((item) => item.json());
+  assert.equal(usageAfterRename.rows.some((row) => row.Machine === 'Wheel Loader A'), true);
+  const refusedDelete = await jsonRequest(baseUrl, `/api/diesel/machines/${usedMachine.ID}`, 'DELETE');
+  assert.equal(refusedDelete.response.status, 409);
+
   assert.equal((await fetch(`${baseUrl}/diesel.js`)).status, 200);
   const executiveCssResponse = await fetch(`${baseUrl}/executive.css`);
   assert.equal(executiveCssResponse.status, 200);
@@ -198,4 +238,6 @@ test('diesel entry and executive daily report combine source systems without dou
   const page = await fetch(`${baseUrl}/`).then((pageResponse) => pageResponse.text());
   assert.match(page, /id="tab-diesel"/);
   assert.match(page, /id="tab-executive-report"/);
+  assert.match(page, /<h2>Control Report<\/h2>/);
+  assert.match(page, /<h2>Daily Report<\/h2>/);
 });

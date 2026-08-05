@@ -54,17 +54,19 @@
 .diesel-summary-row{
   min-height:126px;
   display:grid;
-  grid-template-columns:.7fr .7fr 1.6fr;
+  grid-template-columns:repeat(4,minmax(0,1fr));
   background:#fff;
   border:1px solid #dce7e1;
 }
 .diesel-summary-row article{padding:20px 26px; border-right:1px solid #e1e9e5; display:flex; flex-direction:column; justify-content:center;}
+.diesel-summary-row article:nth-child(4){border-right:0;}
 .diesel-summary-row article:last-child{border-right:0;}
 .diesel-summary-row span{font-size:11px; font-weight:700; color:#718096;}
 .diesel-summary-row strong{margin-top:4px; color:var(--diesel-ink); font-size:30px; line-height:1.05; letter-spacing:0;}
 .diesel-summary-row small{color:#738196; font-size:11px;}
-.diesel-summary-breakdown #dieselDailyBreakdown{display:flex; flex-wrap:wrap; gap:7px; margin-top:9px;}
-.diesel-breakdown-chip{padding:5px 9px; border:1px solid #cce2d7; background:var(--diesel-soft); color:#116a4c; font-size:11px; font-weight:700; border-radius:5px;}
+.diesel-summary-row small.danger{color:#b42318; font-weight:800;}
+.diesel-summary-breakdown{grid-column:1 / -1; border-top:1px solid #e1e9e5;}
+.diesel-summary-breakdown #dieselDailyBreakdown{display:grid; gap:9px; margin-top:11px;}
 .diesel-list-panel,.diesel-machine-panel{background:#fff; border:1px solid #dce7e1;}
 .diesel-list-panel > header,.diesel-machine-panel > header{padding:18px 26px; border-bottom:1px solid #e1e9e5;}
 .diesel-table{width:100%; border-collapse:collapse;}
@@ -74,24 +76,48 @@
 .diesel-table tbody tr:last-child td{border-bottom:0;}
 .diesel-table .diesel-row-liters{font-weight:800; color:#0e704e;}
 .diesel-table button{padding:6px 10px; font-size:11px;}
-.diesel-machine-add{padding:18px 26px; display:grid; grid-template-columns:minmax(220px,1fr) auto; gap:12px; align-items:end; background:#f9fbfa;}
+.diesel-machine-add{padding:18px 26px; display:grid; grid-template-columns:minmax(220px,1.35fr) minmax(180px,.8fr) auto; gap:12px; align-items:end; background:#f9fbfa;}
 .diesel-machine-add button{height:43px; color:#0c7350; border-color:#8fcab0; font-weight:700;}
-.diesel-machine-list{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border-top:1px solid #e1e9e5;}
-.diesel-machine-item{min-height:70px; padding:13px 16px; border-right:1px solid #e1e9e5; border-bottom:1px solid #e1e9e5; display:flex; align-items:center; justify-content:space-between; gap:12px;}
-.diesel-machine-item:nth-child(3n){border-right:0;}
+.diesel-machine-list{border-top:1px solid #e1e9e5;}
+.diesel-machine-item{min-height:70px; padding:14px 18px; border-bottom:1px solid #e1e9e5;}
+.diesel-machine-item:last-child{border-bottom:0;}
+.diesel-machine-readonly{display:flex; align-items:center; justify-content:space-between; gap:18px;}
+.diesel-machine-readonly > div:first-child{display:grid; gap:3px; min-width:0;}
 .diesel-machine-item strong{font-size:13px; color:var(--diesel-ink); overflow-wrap:anywhere;}
-.diesel-machine-item button{padding:6px 9px; font-size:10px; color:#7b8795;}
+.diesel-machine-item small{font-size:10px; color:#738196;}
+.diesel-machine-actions{display:flex; align-items:center; gap:7px; flex-wrap:wrap; justify-content:flex-end;}
+.diesel-machine-item button{padding:7px 10px; font-size:10px; color:#5f6f80;}
+.diesel-machine-item button.primary{color:#fff;}
+.diesel-machine-editor{display:grid; grid-template-columns:minmax(180px,1fr) minmax(160px,.7fr) auto; gap:10px; align-items:end;}
+.diesel-machine-editor[hidden],.diesel-machine-readonly[hidden]{display:none !important;}
+.diesel-machine-editor label{display:grid; gap:5px;}
+.diesel-machine-editor label span{font-size:10px; color:#68798b; font-weight:700;}
+.diesel-machine-editor input{width:100%; min-height:40px; background:#fff; border-color:#bdd2c7;}
+.diesel-machine-editor > div{display:flex; gap:7px;}
 .diesel-machine-item.inactive{background:#f7f8f8; opacity:.72;}
 .diesel-empty{padding:20px; color:#7a8796; text-align:center; font-size:12px;}
+
+.fuel-limit-list{display:grid; gap:10px;}
+.fuel-limit-row{display:grid; grid-template-columns:minmax(170px,1fr) minmax(160px,1.6fr) 72px; align-items:center; gap:13px; min-width:0;}
+.fuel-limit-row > div:first-child{display:flex; align-items:baseline; justify-content:space-between; gap:10px; min-width:0;}
+.fuel-limit-row > div:first-child strong{color:#213247; font-size:12px; overflow-wrap:anywhere;}
+.fuel-limit-row > div:first-child span{color:#6e7d8e; font-size:10px; white-space:nowrap;}
+.fuel-limit-track{height:8px; overflow:hidden; background:#e5ece8; border-radius:4px;}
+.fuel-limit-track i{display:block; width:var(--fuel-progress,0%); height:100%; background:#15966a; transition:width .55s ease;}
+.fuel-limit-row > b{color:#147552; font-size:11px; text-align:right;}
+.fuel-limit-row.exceeded .fuel-limit-track i{background:#c73a2d;}
+.fuel-limit-row.exceeded > b{color:#b42318;}
+.report-fuel-list{padding:18px 20px;}
+.report-fuel-total{color:#0f8a5f; font-size:20px; font-weight:800;}
+.report-fuel-total.danger{color:#b42318;}
 
 @media (max-width:900px){
   .diesel-entry-band{grid-template-columns:1fr; gap:16px;}
   .diesel-entry-form{grid-template-columns:1fr 1fr;}
   .diesel-note-field{grid-column:1 / -1;}
   .diesel-entry-form button{width:100%;}
-  .diesel-machine-list{grid-template-columns:repeat(2,minmax(0,1fr));}
-  .diesel-machine-item:nth-child(3n){border-right:1px solid #e1e9e5;}
-  .diesel-machine-item:nth-child(2n){border-right:0;}
+  .diesel-machine-editor{grid-template-columns:1fr 1fr;}
+  .diesel-machine-editor > div{grid-column:1 / -1;}
 }
 
 @media (max-width:640px){
@@ -102,9 +128,16 @@
   .diesel-note-field{grid-column:auto;}
   .diesel-summary-row{grid-template-columns:1fr 1fr;}
   .diesel-summary-row article{padding:18px;}
-  .diesel-summary-row article:nth-child(2){border-right:0;}
+  .diesel-summary-row article:nth-child(2n){border-right:0;}
   .diesel-summary-breakdown{grid-column:1 / -1; border-top:1px solid #e1e9e5;}
   .diesel-machine-add{grid-template-columns:1fr; padding:16px;}
-  .diesel-machine-list{grid-template-columns:1fr;}
-  .diesel-machine-item,.diesel-machine-item:nth-child(3n){border-right:0;}
+  .diesel-machine-readonly{align-items:flex-start; flex-direction:column;}
+  .diesel-machine-actions{justify-content:flex-start;}
+  .diesel-machine-editor{grid-template-columns:1fr;}
+  .diesel-machine-editor > div{grid-column:auto;}
+  .fuel-limit-row{grid-template-columns:1fr 60px; gap:7px 10px;}
+  .fuel-limit-row > div:first-child{grid-column:1 / -1;}
+  .fuel-limit-track{grid-column:1;}
 }
+
+@media (prefers-reduced-motion:reduce){.fuel-limit-track i{transition:none;}}

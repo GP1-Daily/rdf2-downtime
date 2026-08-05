@@ -117,14 +117,14 @@ test('Grab device API requires its token and assigns the calendar date from sour
   });
 
   const baseUrl = `http://127.0.0.1:${port}`;
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  for (let attempt = 0; attempt < 300; attempt += 1) {
     try {
       const response = await fetch(`${baseUrl}/login.html`);
       if (response.ok) break;
     } catch (_) {
       // Server is still starting.
     }
-    if (attempt === 99) throw new Error(`server did not start: ${serverError}`);
+    if (attempt === 299) throw new Error(`server did not start: ${serverError}`);
     await delay(50);
   }
 

@@ -1496,18 +1496,55 @@ function recordIsActive(value) {
   return value !== false && value !== 0 && String(value).toLowerCase() !== 'false';
 }
 
-function dieselUsageSummary(rows) {
+function dieselUsageSummary(rows, machines = [], periodDays = 1) {
+  const days = Math.max(1, Math.min(366, Math.floor(Number(periodDays) || 1)));
   const byMachineMap = new Map();
+  for (const row of machines) {
+    const machine = cleanText(row.Name);
+    if (!machine) continue;
+    byMachineMap.set(machine.toLocaleLowerCase('th-TH'), {
+      machine,
+      liters: 0,
+      dailyLimitLiters: Math.max(0, Number(row.DailyLimitLiters) || 0),
+      active: recordIsActive(row.Active),
+    });
+  }
   for (const row of rows) {
     const machine = cleanText(row.Machine) || 'ไม่ระบุเครื่องจักร';
     const liters = Math.max(0, Number(row.Liters) || 0);
-    byMachineMap.set(machine, (byMachineMap.get(machine) || 0) + liters);
+    const key = machine.toLocaleLowerCase('th-TH');
+    const current = byMachineMap.get(key) || {
+      machine,
+      liters: 0,
+      dailyLimitLiters: 0,
+      active: false,
+    };
+    current.liters += liters;
+    byMachineMap.set(key, current);
   }
+  const byMachine = [...byMachineMap.values()]
+    .filter((row) => row.active || row.liters > 0)
+    .map((row) => {
+      const limitLiters = row.dailyLimitLiters * days;
+      return {
+        machine: row.machine,
+        liters: row.liters,
+        dailyLimitLiters: row.dailyLimitLiters,
+        limitLiters,
+        remainingLiters: limitLiters > 0 ? Math.max(0, limitLiters - row.liters) : null,
+        utilizationPct: limitLiters > 0 ? row.liters / limitLiters * 100 : null,
+        exceeded: limitLiters > 0 && row.liters > limitLiters,
+      };
+    })
+    .sort((a, b) => b.liters - a.liters || a.machine.localeCompare(b.machine, 'th'));
+  const totalLimitLiters = byMachine.reduce((sum, row) => sum + row.limitLiters, 0);
+  const totalLiters = rows.reduce((sum, row) => sum + Math.max(0, Number(row.Liters) || 0), 0);
   return {
-    totalLiters: rows.reduce((sum, row) => sum + Math.max(0, Number(row.Liters) || 0), 0),
-    byMachine: [...byMachineMap.entries()]
-      .map(([machine, liters]) => ({ machine, liters }))
-      .sort((a, b) => b.liters - a.liters || a.machine.localeCompare(b.machine, 'th')),
+    periodDays: days,
+    totalLiters,
+    totalLimitLiters,
+    utilizationPct: totalLimitLiters > 0 ? totalLiters / totalLimitLiters * 100 : null,
+    byMachine,
   };
 }
 
@@ -1520,34 +1557,61 @@ async function handleDieselMachines(req, res, parts) {
   if (req.method === 'POST' && parts.length === 0) {
     const body = await readBody(req);
     const name = cleanText(body.name);
-    if (!name || !textWithin(name, 100)) {
-      return sendJson(res, 400, { ok: false, error: 'กรุณาระบุชื่อเครื่องจักรไม่เกิน 100 ตัวอักษร' });
+    const dailyLimitLiters = Number(body.dailyLimitLiters);
+    if (!name || !textWithin(name, 100)
+      || !Number.isFinite(dailyLimitLiters) || dailyLimitLiters <= 0 || dailyLimitLiters > 100000) {
+      return sendJson(res, 400, { ok: false, error: 'กรุณาระบุชื่อและลิมิตน้ำมันต่อวันของเครื่องจักรให้ถูกต้อง' });
     }
     const rows = await store.readSheet('DieselMachines');
     const existing = rows.find((row) => sameText(row.Name, name));
     const row = existing
-      ? await store.updateRow('DieselMachines', existing.ID, { Name: name, Active: true })
-      : await store.appendRow('DieselMachines', { Name: name, Active: true });
+      ? await store.updateRow('DieselMachines', existing.ID, { Name: name, Active: true, DailyLimitLiters: dailyLimitLiters })
+      : await store.appendRow('DieselMachines', { Name: name, Active: true, DailyLimitLiters: dailyLimitLiters });
     return sendJson(res, 200, { ok: true, row, updated: !!existing });
   }
   if (req.method === 'PUT' && parts.length === 1) {
     const body = await readBody(req);
     const patch = {};
+    const rows = await store.readSheet('DieselMachines');
+    const existing = rows.find((row) => String(row.ID) === String(parts[0]));
+    if (!existing) return sendJson(res, 404, { ok: false, error: 'ไม่พบเครื่องจักร' });
     if (body.name !== undefined) {
       const name = cleanText(body.name);
       if (!name || !textWithin(name, 100)) {
         return sendJson(res, 400, { ok: false, error: 'ชื่อเครื่องจักรไม่ถูกต้อง' });
       }
-      const rows = await store.readSheet('DieselMachines');
       if (rows.some((row) => String(row.ID) !== String(parts[0]) && sameText(row.Name, name))) {
         return sendJson(res, 409, { ok: false, error: 'มีเครื่องจักรชื่อนี้อยู่แล้ว' });
       }
       patch.Name = name;
     }
+    if (body.dailyLimitLiters !== undefined) {
+      const dailyLimitLiters = Number(body.dailyLimitLiters);
+      if (!Number.isFinite(dailyLimitLiters) || dailyLimitLiters <= 0 || dailyLimitLiters > 100000) {
+        return sendJson(res, 400, { ok: false, error: 'ลิมิตน้ำมันต่อวันต้องมากกว่า 0 และไม่เกิน 100,000 ลิตร' });
+      }
+      patch.DailyLimitLiters = dailyLimitLiters;
+    }
     if (body.active !== undefined) patch.Active = Boolean(body.active);
     const row = await store.updateRow('DieselMachines', parts[0], patch);
-    if (!row) return sendJson(res, 404, { ok: false, error: 'ไม่พบเครื่องจักร' });
+    if (patch.Name && !sameText(existing.Name, patch.Name)) {
+      const usageRows = await store.readSheet('DieselUsage');
+      for (const usage of usageRows.filter((usage) => sameText(usage.Machine, existing.Name))) {
+        await store.updateRow('DieselUsage', usage.ID, { Machine: patch.Name });
+      }
+    }
     return sendJson(res, 200, { ok: true, row });
+  }
+  if (req.method === 'DELETE' && parts.length === 1) {
+    const rows = await store.readSheet('DieselMachines');
+    const existing = rows.find((row) => String(row.ID) === String(parts[0]));
+    if (!existing) return sendJson(res, 404, { ok: false, error: 'ไม่พบเครื่องจักร' });
+    const usageRows = await store.readSheet('DieselUsage');
+    if (usageRows.some((row) => sameText(row.Machine, existing.Name))) {
+      return sendJson(res, 409, { ok: false, error: 'เครื่องจักรนี้มีประวัติการใช้น้ำมันแล้ว กรุณาแก้ชื่อหรือพักใช้งานแทนการลบ' });
+    }
+    const deleted = await store.deleteRow('DieselMachines', parts[0]);
+    return sendJson(res, 200, { ok: deleted });
   }
   return sendJson(res, 404, { ok: false, error: 'unknown diesel machine route' });
 }
@@ -1562,11 +1626,13 @@ async function handleDieselUsage(req, res, parts, query) {
     if (month && !validMonth(month)) {
       return sendJson(res, 400, { ok: false, error: 'รูปแบบเดือนต้องเป็น YYYY-MM' });
     }
+    const machines = await store.readSheet('DieselMachines');
     let rows = await store.readSheet('DieselUsage');
     if (date) rows = rows.filter((row) => row.EntryDate === date);
     if (month) rows = rows.filter((row) => String(row.EntryDate).startsWith(`${month}-`));
     rows.sort((a, b) => String(b.EntryDate).localeCompare(String(a.EntryDate)) || Number(b.ID) - Number(a.ID));
-    return sendJson(res, 200, { ok: true, rows, summary: dieselUsageSummary(rows) });
+    const periodDays = month ? monthBounds(month).days : 1;
+    return sendJson(res, 200, { ok: true, rows, summary: dieselUsageSummary(rows, machines, periodDays) });
   }
   if (req.method === 'POST' && parts.length === 0) {
     const body = await readBody(req);
@@ -1627,12 +1693,14 @@ async function handleWeeklyReport(req, res, query) {
   const weekEndExclusive = lib.addDays(weekStart, 7);
   const weekEnd = lib.addDays(weekStart, 6);
   const dates = Array.from({ length: 7 }, (_, index) => lib.addDays(weekStart, index));
-  const [grabRows, yieldRows, stockSales, rdf3Sales, kpiTargetRows] = await Promise.all([
+  const [grabRows, yieldRows, stockSales, rdf3Sales, kpiTargetRows, dieselRows, dieselMachines] = await Promise.all([
     store.readSheet('GrabCrane'),
     store.readSheet('YieldSettings'),
     store.readSheet('Sales'),
     store.readSheet('RevenueRDF3Sales'),
     store.readSheet('KPITargetSettings'),
+    store.readSheet('DieselUsage'),
+    store.readSheet('DieselMachines'),
   ]);
 
   const productionTons = Object.fromEntries(WEEKLY_PRODUCTION_PRODUCTS.map((item) => [item.tonsKey, 0]));
@@ -1715,6 +1783,8 @@ async function handleWeeklyReport(req, res, query) {
 
   const salesByCustomer = [...salesCustomerMap.values()]
     .sort((a, b) => b.totalTons - a.totalTons || a.customer.localeCompare(b.customer, 'th'));
+  const weekDieselRows = dieselRows
+    .filter((row) => row.EntryDate >= weekStart && row.EntryDate < weekEndExclusive);
 
   return sendJson(res, 200, {
     ok: true,
@@ -1749,6 +1819,7 @@ async function handleWeeklyReport(req, res, query) {
       byProduct: REVENUE_PRODUCTS.map((product) => ({ product, tons: salesProductMap[product] })),
       byCustomer: salesByCustomer,
     },
+    diesel: dieselUsageSummary(weekDieselRows, dieselMachines, 7),
     daily,
   });
 }
@@ -1909,6 +1980,7 @@ async function handleMonthlyReport(req, res, query) {
   const [
     grabRows, yieldRows, stockSales, rdf3Sales, prices,
     tippingRows, tippingSettings, downtimeRows, lineRows, historyRows,
+    dieselRows, dieselMachines,
   ] = await Promise.all([
     store.readSheet('GrabCrane'),
     store.readSheet('YieldSettings'),
@@ -1920,6 +1992,8 @@ async function handleMonthlyReport(req, res, query) {
     store.readSheet('Downtime'),
     store.readSheet('LineTime'),
     store.readSheet('KPIDailyHistory'),
+    store.readSheet('DieselUsage'),
+    store.readSheet('DieselMachines'),
   ]);
 
   const revenue = buildRevenueDashboardData(
@@ -2038,6 +2112,8 @@ async function handleMonthlyReport(req, res, query) {
     week.salesTons += day.salesTons;
     week.revenue += day.salesRevenue + day.tippingRevenue;
   }
+  const monthDieselRows = dieselRows
+    .filter((row) => row.EntryDate >= bounds.start && row.EntryDate <= bounds.end);
 
   return sendJson(res, 200, {
     ok: true,
@@ -2080,13 +2156,14 @@ async function handleMonthlyReport(req, res, query) {
       byProduct: sales.byProduct,
       byCustomer: sales.byCustomer,
     },
+    diesel: dieselUsageSummary(monthDieselRows, dieselMachines, bounds.days),
     revenue,
     daily,
     weeks: [...weekMap.values()],
   });
 }
 
-// ---------- Executive Daily MSW Report ----------
+// ---------- Daily Performance Report ----------
 
 function reportIntakeForDate(date, grabRows, historyByDate) {
   const rows = grabRows.filter((row) => row.ReportDate === date);
@@ -2106,6 +2183,64 @@ function reportIntakeForDate(date, grabRows, historyByDate) {
     tons: rows.length > 0 ? detailedTons : historicalTons,
     grabCount: rows.length,
     source,
+  };
+}
+
+function historicalRDFOutputPlan(date, grabRows, historyRows, yieldRows, maxDays = 30) {
+  const historyByDate = new Map(historyRows.map((row) => [row.EntryDate, row]));
+  const candidates = [...new Set([
+    ...grabRows.map((row) => row.ReportDate),
+    ...historyRows.map((row) => row.EntryDate),
+  ])]
+    .filter((entryDate) => validIsoDate(entryDate) && entryDate < date)
+    .sort((a, b) => b.localeCompare(a));
+  const samples = [];
+
+  for (const entryDate of candidates) {
+    const dayGrabs = grabRows.filter((row) => row.ReportDate === entryDate);
+    const history = historyByDate.get(entryDate);
+    let rdf2Tons = 0;
+    let rdf2LGTons = 0;
+    let validSample = false;
+
+    if (dayGrabs.length) {
+      const intakeTons = dayGrabs.reduce((sum, row) => sum + Math.max(0, Number(row.Weight) || 0), 0);
+      const production = computeProduction(intakeTons, getApplicableYield(yieldRows, entryDate));
+      if (intakeTons > 0 && production) {
+        rdf2Tons = production.tons.rdf2;
+        rdf2LGTons = production.tons.rdf2LG;
+        validSample = true;
+      }
+    } else if (history) {
+      const historicalRDF2 = Math.max(0, Number(history.RDF2Tons) || 0);
+      const historicalRDF2LG = Math.max(0, Number(history.RDF2LGTons) || 0);
+      if (historicalRDF2 > 0 || historicalRDF2LG > 0) {
+        rdf2Tons = historicalRDF2;
+        rdf2LGTons = historicalRDF2LG;
+        validSample = true;
+      } else {
+        const intakeTons = Math.max(0, Number(history.MSWTons) || 0);
+        const production = computeProduction(intakeTons, getApplicableYield(yieldRows, entryDate));
+        if (intakeTons > 0 && production) {
+          rdf2Tons = production.tons.rdf2;
+          rdf2LGTons = production.tons.rdf2LG;
+          validSample = true;
+        }
+      }
+    }
+
+    if (!validSample) continue;
+    samples.push({ date: entryDate, rdf2Tons, rdf2LGTons });
+    if (samples.length >= maxDays) break;
+  }
+
+  const basisDays = samples.length;
+  return {
+    basisDays,
+    rdf2Tons: basisDays ? samples.reduce((sum, row) => sum + row.rdf2Tons, 0) / basisDays : 0,
+    rdf2LGTons: basisDays ? samples.reduce((sum, row) => sum + row.rdf2LGTons, 0) / basisDays : 0,
+    startDate: basisDays ? samples[samples.length - 1].date : '',
+    endDate: basisDays ? samples[0].date : '',
   };
 }
 
@@ -2148,7 +2283,7 @@ async function handleExecutiveReport(req, res, query) {
   const datesToReport = Array.from({ length: elapsedDays }, (_, index) => lib.addDays(bounds.start, index));
   const [
     tippingRows, grabRows, historyRows, yieldRows, targetRows,
-    dieselRows, downtimeRows,
+    dieselRows, dieselMachines, downtimeRows,
   ] = await Promise.all([
     store.readSheet('RevenueTippingDaily'),
     store.readSheet('GrabCrane'),
@@ -2156,6 +2291,7 @@ async function handleExecutiveReport(req, res, query) {
     store.readSheet('YieldSettings'),
     store.readSheet('KPITargetSettings'),
     store.readSheet('DieselUsage'),
+    store.readSheet('DieselMachines'),
     store.readSheet('Downtime'),
   ]);
 
@@ -2192,6 +2328,7 @@ async function handleExecutiveReport(req, res, query) {
   const selectedProduction = computeProduction(selectedIntake.tons, selectedYield);
   const dailyRDF2Tons = selectedProduction?.tons.rdf2 || 0;
   const dailyRDF2LGTons = selectedProduction?.tons.rdf2LG || 0;
+  const outputPlan = historicalRDFOutputPlan(date, grabRows, historyRows, yieldRows);
 
   const incomingRow = tippingRows.find((row) => row.EntryDate === date);
   const incomingMTDRows = tippingRows.filter((row) => row.EntryDate >= bounds.start && row.EntryDate <= date);
@@ -2199,8 +2336,8 @@ async function handleExecutiveReport(req, res, query) {
 
   const dayDieselRows = dieselRows.filter((row) => row.EntryDate === date);
   const monthDieselRows = dieselRows.filter((row) => row.EntryDate >= bounds.start && row.EntryDate <= date);
-  const dayDiesel = dieselUsageSummary(dayDieselRows);
-  const monthDiesel = dieselUsageSummary(monthDieselRows);
+  const dayDiesel = dieselUsageSummary(dayDieselRows, dieselMachines, 1);
+  const monthDiesel = dieselUsageSummary(monthDieselRows, dieselMachines, elapsedDays);
 
   const shortfallTons = Math.max(0, monthlyTargetTons - productionMTDTons);
   const currentAverageTons = elapsedDays > 0 ? productionMTDTons / elapsedDays : 0;
@@ -2244,6 +2381,11 @@ async function handleExecutiveReport(req, res, query) {
       hasYieldSetting: !!selectedYield,
       daily: { rdf2Tons: dailyRDF2Tons, rdf2LGTons: dailyRDF2LGTons },
       mtd: { rdf2Tons: rdf2MTDTons, rdf2LGTons: rdf2LGMTDTons },
+      plan: {
+        ...outputPlan,
+        mtdRDF2Tons: outputPlan.rdf2Tons * elapsedDays,
+        mtdRDF2LGTons: outputPlan.rdf2LGTons * elapsedDays,
+      },
     },
     diesel: {
       daily: { ...dayDiesel, rows: dayDieselRows },

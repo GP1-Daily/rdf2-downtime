@@ -78,6 +78,13 @@
     warning.classList.toggle('show', data.production.missingYieldDates.length > 0);
   }
 
+  function renderDiesel(data) {
+    const diesel = data.diesel;
+    const utilization = diesel.utilizationPct === null ? '-' : `${revenueNumber(diesel.utilizationPct, 1)}%`;
+    document.getElementById('monthlyDieselSummary').textContent = `${revenueNumber(diesel.totalLiters)} / ${revenueNumber(diesel.totalLimitLiters)} ลิตร · ${utilization}`;
+    document.getElementById('monthlyDieselMachines').innerHTML = reportFuelRowsHtml(diesel);
+  }
+
   function renderOperations(data) {
     const operations = data.operations;
     document.getElementById('monthlyLineTime').textContent = minutesLabel(operations.lineMinutes);
@@ -172,6 +179,7 @@
     renderDailyChart(data);
     renderProduction(data);
     renderOperations(data);
+    renderDiesel(data);
     renderRevenue(data);
     renderSales(data);
     renderWeeks(data);

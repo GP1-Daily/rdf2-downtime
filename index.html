@@ -11,11 +11,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
 <link rel="stylesheet" href="home.css?v=20260729-transparent-logo">
 <link rel="stylesheet" href="kpi.css?v=20260723-yieldsplit">
-<link rel="stylesheet" href="monthly.css?v=20260804-runtime-history">
+<link rel="stylesheet" href="monthly.css?v=20260805-unified-history-bars">
 <link rel="stylesheet" href="security-ui.css?v=20260723-security">
 <link rel="stylesheet" href="operations.css?v=20260729-transparent-logo">
-<link rel="stylesheet" href="diesel.css?v=20260804-executive-report-3">
-<link rel="stylesheet" href="executive.css?v=20260804-gp1-theme-2">
+<link rel="stylesheet" href="diesel.css?v=20260805-fuel-limits">
+<link rel="stylesheet" href="executive.css?v=20260805-daily-report">
 <style>
   :root{
     --brand:#0f8a5f; --brand-dark:#086342; --brand-bright:#22b573;
@@ -618,6 +618,8 @@
 
     <section class="diesel-summary-row" aria-live="polite">
       <article><span>ใช้วันนี้</span><strong id="dieselDailyTotal">0.00</strong><small>ลิตร</small></article>
+      <article><span>ลิมิตรวมวันนี้</span><strong id="dieselDailyLimit">0.00</strong><small>ลิตร</small></article>
+      <article><span>ใช้ไป</span><strong id="dieselDailyUtilization">0.0%</strong><small id="dieselDailyStatus">อยู่ในลิมิต</small></article>
       <article><span>จำนวนรายการ</span><strong id="dieselDailyCount">0</strong><small>รายการ</small></article>
       <article class="diesel-summary-breakdown"><span>แยกตามเครื่องจักร</span><div id="dieselDailyBreakdown"><small>ยังไม่มีข้อมูล</small></div></article>
     </section>
@@ -636,6 +638,7 @@
       <header><div><span>MACHINE SETUP</span><h3>ตั้งค่ารายชื่อเครื่องจักร</h3></div></header>
       <div class="diesel-machine-add">
         <label for="dieselMachineName"><span>ชื่อเครื่องจักร</span><input type="text" id="dieselMachineName" maxlength="100" placeholder="เช่น Wheel Loader 1"></label>
+        <label for="dieselMachineLimit"><span>ลิมิตน้ำมันต่อวัน (ลิตร)</span><input type="number" id="dieselMachineLimit" min="0.01" max="100000" step="0.01" placeholder="0.00"></label>
         <button type="button" id="btnAddDieselMachine">เพิ่มเครื่องจักร</button>
       </div>
       <div class="diesel-machine-list" id="dieselMachineList"></div>
@@ -648,8 +651,8 @@
     <header class="ops-page-head report-page-head">
       <img src="assets/green-power-1-logo.png?v=20260729-official-logo" width="2055" height="550" alt="" aria-hidden="true">
       <div class="ops-page-title">
-        <span>DAILY PERFORMANCE</span>
-        <h2>Daily Report</h2>
+        <span>CONTROL PERFORMANCE</span>
+        <h2>Control Report</h2>
         <p>OPERATIONS SUMMARY</p>
       </div>
       <div class="ops-report-filter">
@@ -755,7 +758,7 @@
         <div class="ps-header">
           <div class="ps-brand">
             <img src="assets/green-power-1-logo.png?v=20260729-official-logo" width="2055" height="550" alt="Green Power 1">
-            <div><span>DAILY OPERATIONS REPORT</span><div class="ps-title">RDF2 Production Summary</div></div>
+            <div><span>CONTROL REPORT</span><div class="ps-title">RDF2 Operations Summary</div></div>
           </div>
           <div class="ps-date-block"><span>REPORT DATE</span><div class="ps-date" id="psDate">-</div></div>
         </div>
@@ -775,10 +778,10 @@
 
   </section>
 
-  <!-- ===================== TAB: EXECUTIVE DAILY REPORT ===================== -->
+  <!-- ===================== TAB: DAILY REPORT ===================== -->
   <section id="tab-executive-report" class="tab-panel">
     <section class="executive-toolbar">
-      <div><span>SHAREABLE MANAGEMENT REPORT</span><h2>Executive Daily Report</h2></div>
+      <div><span>MANAGEMENT PERFORMANCE</span><h2>Daily Report</h2></div>
       <div class="executive-toolbar-actions">
         <button type="button" id="btnExecutivePrev" class="executive-step" title="วันก่อนหน้า" aria-label="วันก่อนหน้า">&#8249;</button>
         <label for="executiveReportDate"><span>วันที่รายงาน</span><input type="date" id="executiveReportDate"></label>
@@ -796,61 +799,38 @@
         <header class="executive-report-head">
           <div class="executive-brand">
             <img src="assets/green-power-1-logo.png?v=20260729-official-logo" width="2055" height="550" alt="Green Power 1">
-            <div><h2>Executive Daily Report</h2><p>GP1 CONNECT · NAKHONSAWAN FACTORY</p></div>
+            <div><span>DAILY PERFORMANCE REPORT</span><h2>สรุปผลดำเนินงานประจำวัน</h2><p>GP1 CONNECT · NAKHONSAWAN FACTORY</p></div>
           </div>
           <div class="executive-date"><span>REPORT DATE</span><strong id="executiveDateLabel">-</strong></div>
         </header>
 
         <div class="executive-report-body">
-          <section class="executive-daily-grid">
-            <article class="executive-metric incoming">
-              <header><span>MSW Incoming</span><b id="executiveIncomingStatus">RECORDED</b></header>
-              <div class="executive-metric-body">
-                <div><small>ACTUAL</small><strong id="executiveIncomingDaily">0.00</strong><em>ตัน</em></div>
-                <p>MTD <b id="executiveIncomingMTD">0.00 ตัน</b></p>
-              </div>
-            </article>
-            <article class="executive-metric production">
-              <header><span>MSW to Production</span><b id="executiveProductionPct">0%</b></header>
-              <div class="executive-metric-body split">
-                <div><small>ACTUAL</small><strong id="executiveProductionDaily">0.00</strong><em>ตัน</em></div>
-                <div><small>DAILY PLAN</small><strong id="executiveProductionPlan">285.71</strong><em>ตัน</em></div>
-              </div>
-            </article>
-            <article class="executive-metric output">
-              <header><span>RDF Output</span><b>ACTUAL</b></header>
-              <div class="executive-output-pair">
-                <div><small>RDF2</small><strong id="executiveRDF2Daily">0.00</strong><em>ตัน</em></div>
-                <div><small>RDF2 LG</small><strong id="executiveRDF2LGDaily">0.00</strong><em>ตัน</em></div>
-              </div>
-              <p id="executiveYieldNote">คำนวณจาก Yield ปัจจุบัน</p>
-            </article>
-            <article class="executive-metric diesel">
-              <header><span>Diesel</span><b>DAILY</b></header>
-              <div class="executive-metric-body">
-                <div><small>TOTAL</small><strong id="executiveDieselDaily">0.00</strong><em>ลิตร</em></div>
-                <div class="executive-machine-chips" id="executiveDieselDailyMachines"></div>
-              </div>
-            </article>
+          <section class="executive-overview" aria-label="ตัวเลขสรุปประจำวัน">
+            <article><span>MSW Incoming</span><strong><b id="executiveIncomingDaily">0.00</b> ตัน</strong><small id="executiveIncomingStatus">RECORDED</small></article>
+            <article><span>MSW to Production</span><strong><b id="executiveProductionDaily">0.00</b> ตัน</strong><small id="executiveProductionPct">0.0% ของแผน</small></article>
+            <article><span>RDF2 / RDF2 LG</span><strong><b id="executiveRDF2Daily">0.00</b> / <b id="executiveRDF2LGDaily">0.00</b> ตัน</strong><small id="executiveYieldNote">คำนวณจาก Yield</small></article>
+            <article class="fuel"><span>Diesel Usage</span><strong><b id="executiveDieselDaily">0.00</b> / <b id="executiveDieselDailyLimit">0.00</b> L</strong><small id="executiveDieselDailyPct">0.0% ของลิมิต</small></article>
+          </section>
+
+          <section class="executive-section executive-comparison-section">
+            <header class="executive-section-title"><div><span>DAILY PLAN / ACTUAL</span><h3>ผลการดำเนินงานเทียบแผน</h3></div><small id="executiveOutputPlanMeta">Plan RDF คำนวณจากค่าเฉลี่ยย้อนหลัง</small></header>
+            <div class="executive-comparison-list" id="executiveDailyComparisons"></div>
           </section>
 
           <section class="executive-section">
-            <header class="executive-section-title"><span>MONTHLY PERFORMANCE</span><small id="executiveMonthMeta">-</small></header>
-            <div class="executive-month-grid">
-              <article class="executive-month-target">
-                <div><span>MSW to Production</span><b id="executiveMTDPct">0%</b></div>
-                <strong id="executiveProductionMTD">0.00 <small>ตัน</small></strong>
-                <p>เป้ารายเดือน <b id="executiveMonthlyTarget">8,000.00 ตัน</b></p>
-                <div class="executive-progress"><i id="executiveMTDBar"></i></div>
-              </article>
-              <article class="executive-month-output">
-                <span>RDF OUTPUT · MTD</span>
-                <div><p>RDF2<strong id="executiveRDF2MTD">0.00 ตัน</strong></p><p>RDF2 LG<strong id="executiveRDF2LGMTD">0.00 ตัน</strong></p></div>
-              </article>
-              <article class="executive-month-diesel">
-                <span>DIESEL · MTD</span><strong id="executiveDieselMTD">0.00 <small>ลิตร</small></strong>
-                <div class="executive-machine-chips" id="executiveDieselMTDMachines"></div>
-              </article>
+            <header class="executive-section-title"><div><span>MONTH TO DATE</span><h3>ความคืบหน้าสะสมรายเดือน</h3></div><small id="executiveMonthMeta">-</small></header>
+            <div class="executive-month-progress-grid">
+              <article><div><span>MSW to Production</span><b id="executiveMTDPct">0%</b></div><strong id="executiveProductionMTD">0.00 ตัน</strong><small>แผน <b id="executiveMonthlyTarget">8,000.00 ตัน</b></small><div class="executive-progress"><i id="executiveMTDBar"></i></div></article>
+              <article><div><span>RDF2</span><b id="executiveRDF2MTDPct">0%</b></div><strong id="executiveRDF2MTD">0.00 ตัน</strong><small>แผนสะสม <b id="executiveRDF2MTDPlan">0.00 ตัน</b></small><div class="executive-progress"><i id="executiveRDF2MTDBar"></i></div></article>
+              <article><div><span>RDF2 LG</span><b id="executiveRDF2LGMTDPct">0%</b></div><strong id="executiveRDF2LGMTD">0.00 ตัน</strong><small>แผนสะสม <b id="executiveRDF2LGMTDPlan">0.00 ตัน</b></small><div class="executive-progress"><i id="executiveRDF2LGMTDBar"></i></div></article>
+            </div>
+          </section>
+
+          <section class="executive-section executive-fuel-section">
+            <header class="executive-section-title"><div><span>DIESEL CONTROL</span><h3>การใช้น้ำมันเทียบลิมิต</h3></div><small id="executiveDieselMTD">MTD 0.00 ลิตร</small></header>
+            <div class="executive-fuel-columns">
+              <div><h4>รายวัน</h4><div id="executiveDieselDailyMachines" class="fuel-limit-list"></div></div>
+              <div><h4>สะสมเดือน</h4><div id="executiveDieselMTDMachines" class="fuel-limit-list"></div></div>
             </div>
           </section>
 
@@ -875,7 +855,7 @@
             <div class="executive-incident-list" id="executiveIncidentList"></div>
           </section>
         </div>
-        <footer class="executive-report-footer"><span>GP1 Connect · Executive Daily Summary</span><span>Green Power 1 Co., Ltd.</span></footer>
+        <footer class="executive-report-footer"><span>GP1 Connect · Daily Performance Report</span><span>Green Power 1 Co., Ltd.</span></footer>
       </div>
     </div>
   </section>
@@ -926,6 +906,14 @@
           </div>
           <div class="weekly-production-grid" id="weeklyProductionGrid"></div>
           <div class="weekly-yield-warning" id="weeklyYieldWarning"></div>
+        </section>
+
+        <section class="weekly-report-section report-fuel-section">
+          <div class="weekly-section-head">
+            <div><div class="weekly-section-title">การใช้น้ำมันเทียบลิมิต</div><div class="weekly-section-summary" id="weeklyDieselSummary" style="text-align:left;">0.00 / 0.00 ลิตร</div></div>
+            <div class="report-fuel-total" id="weeklyDieselUtilization">0.0%</div>
+          </div>
+          <div class="fuel-limit-list report-fuel-list" id="weeklyDieselMachines"></div>
         </section>
 
         <section class="weekly-report-section">
@@ -1040,6 +1028,14 @@
             <div class="monthly-reason-list" id="monthlyDowntimeReasons"></div>
           </section>
         </div>
+
+        <section class="monthly-section monthly-fuel-section">
+          <div class="monthly-section-head">
+            <div><span>DIESEL CONTROL</span><h2>การใช้น้ำมันเทียบลิมิต</h2></div>
+            <div class="monthly-section-meta" id="monthlyDieselSummary">0.00 / 0.00 ลิตร</div>
+          </div>
+          <div class="fuel-limit-list report-fuel-list" id="monthlyDieselMachines"></div>
+        </section>
 
         <section class="monthly-section monthly-revenue-section">
           <div class="monthly-section-head">
@@ -1583,8 +1579,8 @@
       <button type="button" class="launcher-item" id="securityLauncherItem" data-min-role="admin"><span>ADMINISTRATION</span><b>Security &amp; Access</b><small>Users, Audit, Recovery &amp; Backup</small><em>&rarr;</em></button>
     </div>
     <div class="workspace-launch-panel" data-workspace-panel="insights" hidden>
-      <button type="button" class="launcher-item" data-open-tab="report"><span>DAILY</span><b>Daily Report</b><small>Operating Performance Summary</small><em>&rarr;</em></button>
-      <button type="button" class="launcher-item" data-open-tab="executive-report"><span>DAILY</span><b>Executive Daily Report</b><small>MSW, Output, Diesel &amp; Incidents</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" data-open-tab="report"><span>CONTROL</span><b>Control Report</b><small>Runtime, Downtime &amp; Grab Detail</small><em>&rarr;</em></button>
+      <button type="button" class="launcher-item" data-open-tab="executive-report"><span>DAILY</span><b>Daily Report</b><small>Plan, Actual, Diesel &amp; Incidents</small><em>&rarr;</em></button>
       <button type="button" class="launcher-item" data-open-tab="weekly-report"><span>WEEKLY</span><b>Weekly Report</b><small>Production &amp; Sales Summary</small><em>&rarr;</em></button>
       <button type="button" class="launcher-item" data-open-tab="monthly-report"><span>MONTHLY</span><b>Monthly Report</b><small>Operations, Production, Sales &amp; Revenue</small><em>&rarr;</em></button>
       <button type="button" class="launcher-item" data-open-tab="kpi"><span>MONTHLY</span><b>KPI Dashboard</b><small>Performance Against Targets</small><em>&rarr;</em></button>
@@ -1677,7 +1673,7 @@ function onClickGuarded(el, handler){
 
 // ---------------- Tabs ----------------
 const TAB_TITLES = {
-  home:'Home', today:'Control Room', diesel:'Diesel Usage', report:'Daily Report', 'executive-report':'Executive Daily Report',
+  home:'Home', today:'Control Room', diesel:'Diesel Usage', report:'Control Report', 'executive-report':'Daily Report',
   'weekly-report':'Weekly Report', 'monthly-report':'Monthly Report',
   stock:'Production & Yield', delivery:'Sales Plan',
   revenue:'Revenue Dashboard', kpi:'Monthly KPI',
@@ -2224,6 +2220,21 @@ const weeklyProductionClasses = {
   RDF2:'rdf2', RDF2LG:'rdf2lg', FineFraction:'fine', HeavyFraction:'heavy', Water:'water',
 };
 
+function reportFuelRowsHtml(summary){
+  const rows = summary?.byMachine || [];
+  if(!rows.length) return '<div class="diesel-empty">ยังไม่มีรายการเครื่องจักร</div>';
+  return rows.map(row => {
+    const utilization = row.utilizationPct === null ? 0 : Math.max(0, Number(row.utilizationPct) || 0);
+    const pct = row.utilizationPct === null ? 'ไม่ตั้งลิมิต' : `${revenueNumber(row.utilizationPct, 1)}%`;
+    const limit = Number(row.limitLiters) > 0 ? revenueNumber(row.limitLiters) : '-';
+    return `<div class="fuel-limit-row ${row.exceeded ? 'exceeded' : ''}">
+      <div><strong>${revenueEsc(row.machine)}</strong><span>${revenueNumber(row.liters)} / ${limit} ลิตร</span></div>
+      <div class="fuel-limit-track"><i style="--fuel-progress:${Math.min(100, utilization)}%"></i></div>
+      <b>${pct}</b>
+    </div>`;
+  }).join('');
+}
+
 async function loadWeeklyReport(){
   const input = document.getElementById('weeklyReportStart');
   const weekStart = deliveryMondayFor(input.value || todayStr());
@@ -2266,6 +2277,12 @@ async function loadWeeklyReport(){
     ? `ยังคำนวณผลผลิตไม่ครบ ${revenueNumber(data.production.uncalculatedIncomingTons)} ตัน เนื่องจากไม่มีค่า Yield ในวันที่ ${data.production.missingYieldDates.map(deliveryDateLabel).join(', ')}`
     : '';
   yieldWarning.classList.toggle('show', data.production.missingYieldDates.length > 0);
+
+  const weeklyDieselPct = data.diesel.utilizationPct === null ? '-' : `${revenueNumber(data.diesel.utilizationPct, 1)}%`;
+  document.getElementById('weeklyDieselSummary').textContent = `${revenueNumber(data.diesel.totalLiters)} / ${revenueNumber(data.diesel.totalLimitLiters)} ลิตร`;
+  document.getElementById('weeklyDieselUtilization').textContent = weeklyDieselPct;
+  document.getElementById('weeklyDieselUtilization').classList.toggle('danger', Number(data.diesel.totalLimitLiters) > 0 && Number(data.diesel.totalLiters) > Number(data.diesel.totalLimitLiters));
+  document.getElementById('weeklyDieselMachines').innerHTML = reportFuelRowsHtml(data.diesel);
 
   document.getElementById('weeklySalesSummary').textContent = `${data.sales.transactionCount} รายการ · ${revenueNumber(data.sales.totalTons)} ตัน`;
   document.getElementById('weeklySalesProductTotals').innerHTML = data.sales.byProduct.map(row =>
@@ -2838,9 +2855,9 @@ initializeAppTab(initialTab && TAB_TITLES[initialTab] ? initialTab : 'home').cat
 </script>
 <script src="security-ui.js?v=20260723-security"></script>
 <script src="kpi.js?v=20260723-yieldsplit"></script>
-<script src="monthly.js?v=20260804-runtime-history"></script>
-<script src="diesel.js?v=20260804-executive-report-3"></script>
-<script src="executive.js?v=20260804-gp1-theme"></script>
+<script src="monthly.js?v=20260805-fuel-limits"></script>
+<script src="diesel.js?v=20260805-fuel-limits"></script>
+<script src="executive.js?v=20260805-daily-report"></script>
 <script src="home.js?v=20260724-grab-runtime"></script>
 </body>
 </html>

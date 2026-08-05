@@ -57,14 +57,14 @@ async function startServer(t) {
   });
 
   const baseUrl = `http://127.0.0.1:${port}`;
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  for (let attempt = 0; attempt < 300; attempt += 1) {
     try {
       const response = await fetch(`${baseUrl}/login.html`);
       if (response.ok) return baseUrl;
     } catch (_) {
       // Server is still starting.
     }
-    if (attempt === 99) throw new Error(`server did not start: ${serverError}`);
+    if (attempt === 299) throw new Error(`server did not start: ${serverError}`);
     await delay(50);
   }
   throw new Error(`server did not start: ${serverError}`);
@@ -150,6 +150,14 @@ test('monthly report uses calendar boundaries and combines operations, productio
     { EntryDate: '2026-08-02', MSWTons: 999, Source: 'legacy-import' },
     { EntryDate: '2026-08-03', MSWTons: 40, Source: 'legacy-import' },
   ]);
+  await store.appendRows('DieselMachines', [
+    { Name: 'Wheel Loader', Active: true, DailyLimitLiters: 100 },
+    { Name: 'Excavator', Active: true, DailyLimitLiters: 50 },
+  ]);
+  await store.appendRows('DieselUsage', [
+    { EntryDate: '2026-08-01', Machine: 'Wheel Loader', Liters: 90, Note: '' },
+    { EntryDate: '2026-08-02', Machine: 'Excavator', Liters: 40, Note: '' },
+  ]);
 
   const baseUrl = await startServer(t);
   const response = await fetch(`${baseUrl}/api/monthly-report?month=2026-08`);
@@ -205,6 +213,13 @@ test('monthly report uses calendar boundaries and combines operations, productio
   assert.equal(august3.incomingSource, 'history');
   assert.equal(report.weeks.reduce((sum, row) => sum + row.incomingTons, 0), 90);
   assert.equal(report.weeks.reduce((sum, row) => sum + row.historicalDays, 0), 1);
+  assert.equal(report.diesel.totalLiters, 130);
+  assert.equal(report.diesel.totalLimitLiters, 4650);
+  assert.ok(Math.abs(report.diesel.utilizationPct - (130 / 4650 * 100)) < 0.0001);
+  assert.deepEqual(report.diesel.byMachine.map((row) => [row.machine, row.liters, row.limitLiters]), [
+    ['Wheel Loader', 90, 3100],
+    ['Excavator', 40, 1550],
+  ]);
 
   const invalidResponse = await fetch(`${baseUrl}/api/monthly-report?month=08-2026`);
   assert.equal(invalidResponse.status, 400);

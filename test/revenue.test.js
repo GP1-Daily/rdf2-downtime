@@ -127,6 +127,8 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   await post('/api/delivery-plans', { weekStart: '2026-07-06', customer: 'ลูกค้า B', product: 'RDF2', planTons: 2 });
   await post('/api/delivery-plans', { weekStart: '2026-07-06', customer: 'TPI', product: 'RDF2', planTons: 25 });
   await post('/api/delivery-plans', { weekStart: '2026-07-07', customer: 'ลูกค้า A', product: 'RDF2', planTons: 1 }, 400);
+  await post('/api/diesel/machines', { name: 'Wheel Loader', dailyLimitLiters: 100 });
+  await post('/api/diesel/usage', { entryDate: '2026-07-06', machine: 'Wheel Loader', liters: 120, note: '' });
 
   const response = await fetch(`${baseUrl}/api/revenue/dashboard?month=2026-07`);
   const dashboard = await response.json();
@@ -204,6 +206,12 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   assert.equal(weekly.sales.byCustomer.find((row) => row.customer === 'ลูกค้า A').totalTons, 6);
   assert.equal(weekly.sales.byCustomer.find((row) => row.customer === 'ยังไม่ Setup').totalTons, 1);
   assert.equal(weekly.sales.byCustomer.find((row) => row.customer === 'TPI').totalTons, 20);
+  assert.equal(weekly.diesel.totalLiters, 120);
+  assert.equal(weekly.diesel.totalLimitLiters, 700);
+  assert.ok(Math.abs(weekly.diesel.utilizationPct - (120 / 700 * 100)) < 0.0001);
+  assert.deepEqual(weekly.diesel.byMachine.map((row) => [row.machine, row.liters, row.limitLiters]), [
+    ['Wheel Loader', 120, 700],
+  ]);
 
   const salesResponse = await fetch(`${baseUrl}/api/sales`);
   const salesData = await salesResponse.json();

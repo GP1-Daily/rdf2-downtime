@@ -26,7 +26,7 @@ const SHEETS = {
   KPIDailyHistory: ['ID', 'EntryDate', 'RDF2Tons', 'RDF3Tons', 'FineFractionTons', 'MSWTons', 'Source', 'CreatedAt', 'RDF2LGTons'],
   KPIComplaints: ['ID', 'EntryDate', 'Customer', 'Detail', 'CreatedAt'],
   KPITargetSettings: ['ID', 'EffectiveDate', 'RDF2Target', 'RDF3Target', 'FineFractionTarget', 'MSWTarget', 'ComplaintLimit', 'CreatedAt', 'RDF2LGTarget'],
-  DieselMachines: ['ID', 'Name', 'Active', 'CreatedAt'],
+  DieselMachines: ['ID', 'Name', 'Active', 'CreatedAt', 'DailyLimitLiters'],
   DieselUsage: ['ID', 'EntryDate', 'Machine', 'Liters', 'Note', 'CreatedAt'],
   AppUsers: ['ID', 'AuthUserID', 'Email', 'DisplayName', 'Role', 'Active', 'CreatedAt', 'UpdatedAt'],
   AuditLog: ['ID', 'Action', 'Entity', 'RecordID', 'ActorUserID', 'ActorEmail', 'BeforeData', 'AfterData', 'RequestID', 'IPAddress', 'UserAgent', 'CreatedAt'],
