@@ -20,7 +20,9 @@ test('monthly revenue donut uses export-safe SVG arcs', () => {
 
   assert.match(html, /id="monthlyRevenueSalesArc"/);
   assert.match(html, /id="monthlyRevenueTippingArc"/);
-  assert.match(script, /salesArc\.style\.strokeDasharray/);
-  assert.match(script, /tippingArc\.style\.strokeDasharray/);
+  assert.match(html, /id="monthlyRevenueSalesArc"[^>]+fill="none"[^>]+stroke="#236bb0"/);
+  assert.match(html, /id="monthlyRevenueTippingArc"[^>]+fill="none"[^>]+stroke="#17a35d"/);
+  assert.match(script, /salesArc\.setAttribute\('stroke-dasharray'/);
+  assert.match(script, /tippingArc\.setAttribute\('stroke-dasharray'/);
   assert.doesNotMatch(css, /\.monthly-revenue-donut\s*{[^}]*conic-gradient/s);
 });

@@ -113,10 +113,10 @@
     donut.setAttribute('aria-label', `ขายสินค้า ${percentLabel(salesShare)} และ Tipping Fee ${percentLabel(tippingShare)}`);
     const salesArc = document.getElementById('monthlyRevenueSalesArc');
     const tippingArc = document.getElementById('monthlyRevenueTippingArc');
-    salesArc.style.strokeDasharray = `${safeSalesShare} ${100 - safeSalesShare}`;
-    salesArc.style.strokeDashoffset = '0';
-    tippingArc.style.strokeDasharray = `${safeTippingShare} ${100 - safeTippingShare}`;
-    tippingArc.style.strokeDashoffset = `${-safeSalesShare}`;
+    salesArc.setAttribute('stroke-dasharray', `${safeSalesShare} ${100 - safeSalesShare}`);
+    salesArc.setAttribute('stroke-dashoffset', '0');
+    tippingArc.setAttribute('stroke-dasharray', `${safeTippingShare} ${100 - safeTippingShare}`);
+    tippingArc.setAttribute('stroke-dashoffset', `${-safeSalesShare}`);
     document.getElementById('monthlyRevenueDonutValue').textContent = percentLabel(salesShare);
     document.getElementById('monthlyRevenueTotal').textContent = revenueMoney(revenue.company.central);
     document.getElementById('monthlyRevenueHeadline').textContent = revenueMoney(revenue.company.central);

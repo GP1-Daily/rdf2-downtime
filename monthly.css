@@ -361,28 +361,18 @@
   height: 100%;
 }
 
-.monthly-revenue-donut-arcs { transform: rotate(-90deg); transform-origin: center; }
-.monthly-revenue-donut circle { fill: none; stroke-width: 6; }
-.monthly-donut-bg { stroke: #dfe5e2; }
-.monthly-donut-sales { stroke: #236bb0; }
-.monthly-donut-tipping { stroke: #17a35d; }
-.monthly-donut-sales,
-.monthly-donut-tipping { stroke-dasharray: 0 100; }
-
-.monthly-revenue-donut.no-data .monthly-donut-sales,
-.monthly-revenue-donut.no-data .monthly-donut-tipping {
+.monthly-revenue-donut.no-data #monthlyRevenueSalesArc,
+.monthly-revenue-donut.no-data #monthlyRevenueTippingArc {
   display: none;
 }
 
 .monthly-revenue-donut > div {
   position: absolute;
-  inset: 30px;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: #fff;
-  border-radius: 50%;
   text-align: center;
 }
 
