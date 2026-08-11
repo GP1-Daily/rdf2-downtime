@@ -28,6 +28,8 @@ const SHEETS = {
   KPITargetSettings: ['ID', 'EffectiveDate', 'RDF2Target', 'RDF3Target', 'FineFractionTarget', 'MSWTarget', 'ComplaintLimit', 'CreatedAt', 'RDF2LGTarget'],
   DieselMachines: ['ID', 'Name', 'Active', 'CreatedAt', 'DailyLimitLiters'],
   DieselUsage: ['ID', 'EntryDate', 'Machine', 'Liters', 'Note', 'CreatedAt'],
+  DieselReceipts: ['ID', 'EntryDate', 'Liters', 'Reference', 'Note', 'CreatedAt'],
+  DieselStockBaselines: ['ID', 'EffectiveDate', 'OpeningLiters', 'Note', 'CreatedAt'],
   AppUsers: ['ID', 'AuthUserID', 'Email', 'DisplayName', 'Role', 'Active', 'CreatedAt', 'UpdatedAt'],
   AuditLog: ['ID', 'Action', 'Entity', 'RecordID', 'ActorUserID', 'ActorEmail', 'BeforeData', 'AfterData', 'RequestID', 'IPAddress', 'UserAgent', 'CreatedAt'],
   DeletedRecords: ['ID', 'Entity', 'OriginalID', 'Snapshot', 'DeletedBy', 'DeletedByEmail', 'DeletedAt', 'RestoredBy', 'RestoredByEmail', 'RestoredAt'],

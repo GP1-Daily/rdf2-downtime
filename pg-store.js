@@ -158,6 +158,20 @@ const TABLES = {
       Note: 'note', CreatedAt: 'created_at',
     },
   },
+  DieselReceipts: {
+    table: 'diesel_receipts',
+    columns: {
+      ID: 'id', EntryDate: 'entry_date', Liters: 'liters', Reference: 'reference',
+      Note: 'note', CreatedAt: 'created_at',
+    },
+  },
+  DieselStockBaselines: {
+    table: 'diesel_stock_baselines',
+    columns: {
+      ID: 'id', EffectiveDate: 'effective_date', OpeningLiters: 'opening_liters',
+      Note: 'note', CreatedAt: 'created_at',
+    },
+  },
   AppUsers: {
     table: 'app_users',
     columns: {
@@ -387,6 +401,25 @@ function ensureSchema() {
       );
       CREATE INDEX IF NOT EXISTS diesel_usage_date_idx
         ON diesel_usage (entry_date);
+      CREATE TABLE IF NOT EXISTS diesel_receipts (
+        id SERIAL PRIMARY KEY,
+        entry_date TEXT NOT NULL,
+        liters NUMERIC NOT NULL CHECK (liters > 0),
+        reference TEXT DEFAULT '',
+        note TEXT DEFAULT '',
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS diesel_receipts_date_idx
+        ON diesel_receipts (entry_date);
+      CREATE TABLE IF NOT EXISTS diesel_stock_baselines (
+        id SERIAL PRIMARY KEY,
+        effective_date TEXT NOT NULL,
+        opening_liters NUMERIC NOT NULL CHECK (opening_liters >= 0),
+        note TEXT DEFAULT '',
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS diesel_stock_baselines_date_idx
+        ON diesel_stock_baselines (effective_date);
 
       CREATE TABLE IF NOT EXISTS app_users (
         id SERIAL PRIMARY KEY,

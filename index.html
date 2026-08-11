@@ -14,7 +14,7 @@
 <link rel="stylesheet" href="monthly.css?v=20260805-monthly-donut-export-v4">
 <link rel="stylesheet" href="security-ui.css?v=20260723-security">
 <link rel="stylesheet" href="operations.css?v=20260729-transparent-logo">
-<link rel="stylesheet" href="diesel.css?v=20260805-fuel-limits">
+<link rel="stylesheet" href="diesel.css?v=20260811-stock-balance">
 <link rel="stylesheet" href="executive.css?v=20260805-daily-report">
 <style>
   :root{
@@ -636,11 +636,26 @@
     </section>
 
     <section class="diesel-summary-row" aria-live="polite">
-      <article><span>ใช้วันนี้</span><strong id="dieselDailyTotal">0.00</strong><small>ลิตร</small></article>
-      <article><span>ลิมิตรวมวันนี้</span><strong id="dieselDailyLimit">0.00</strong><small>ลิตร</small></article>
+      <article class="diesel-usage-limit"><span>ใช้ / ลิมิตวันนี้</span><strong><b id="dieselDailyTotal">0.00</b><em>/</em><b id="dieselDailyLimit">0.00</b></strong><small><b id="dieselDailyCount">0</b> รายการ · นับลิมิตเฉพาะเครื่องที่ใช้จริง</small></article>
       <article><span>ใช้ไป</span><strong id="dieselDailyUtilization">0.0%</strong><small id="dieselDailyStatus">อยู่ในลิมิต</small></article>
-      <article><span>จำนวนรายการ</span><strong id="dieselDailyCount">0</strong><small>รายการ</small></article>
-      <article class="diesel-summary-breakdown"><span>แยกตามเครื่องจักร</span><div id="dieselDailyBreakdown"><small>ยังไม่มีข้อมูล</small></div></article>
+      <article class="diesel-balance-card"><span>Balance คงเหลือ</span><strong id="dieselStockBalance">-</strong><small id="dieselStockStatus">ยังไม่ตั้งยอดตั้งต้น</small></article>
+      <article><span>รับเข้าวันนี้</span><strong id="dieselDailyReceived">0.00</strong><small>ลิตร</small></article>
+    </section>
+
+    <section class="diesel-stock-panel">
+      <header><div><span>FUEL STOCK</span><h3>บันทึกน้ำมันรับเข้า</h3></div><small>ยอดคงเหลือ = ยอดตั้งต้น + รับเข้า - ใช้</small></header>
+      <div class="diesel-stock-entry">
+        <label><span>จำนวนรับเข้า (ลิตร)</span><input type="number" id="dieselReceiptLiters" min="0.01" max="10000000" step="0.01" placeholder="0.00"></label>
+        <label><span>เลขอ้างอิง</span><input type="text" id="dieselReceiptReference" maxlength="100" placeholder="เลขใบส่งของ / PO (ถ้ามี)"></label>
+        <label><span>หมายเหตุ</span><input type="text" id="dieselReceiptNote" maxlength="500" placeholder="(ถ้ามี)"></label>
+        <button type="button" class="primary" id="btnAddDieselReceipt">บันทึกรับเข้า</button>
+      </div>
+      <div class="scroll-table">
+        <table class="diesel-table">
+          <thead><tr><th>รับเข้า (ลิตร)</th><th class="left">เลขอ้างอิง</th><th class="left">หมายเหตุ</th><th>จัดการ</th></tr></thead>
+          <tbody id="dieselReceiptTable"></tbody>
+        </table>
+      </div>
     </section>
 
     <section class="diesel-list-panel">
@@ -661,6 +676,17 @@
         <button type="button" id="btnAddDieselMachine">เพิ่มเครื่องจักร</button>
       </div>
       <div class="diesel-machine-list" id="dieselMachineList"></div>
+    </section>
+
+    <section class="diesel-baseline-panel" data-min-role="supervisor">
+      <header><div><span>STOCK SETUP</span><h3>ตั้งยอดสต๊อกเริ่มต้น</h3></div><small>ยอดนี้คือปริมาณก่อนเริ่มรับเข้าและใช้งานของวันที่กำหนด</small></header>
+      <div class="diesel-baseline-form">
+        <label><span>วันที่เริ่มคำนวณ</span><input type="date" id="dieselBaselineDate"></label>
+        <label><span>ยอดตั้งต้น (ลิตร)</span><input type="number" id="dieselBaselineLiters" min="0" max="10000000" step="0.01" placeholder="0.00"></label>
+        <label><span>หมายเหตุ</span><input type="text" id="dieselBaselineNote" maxlength="500" placeholder="เช่น ตรวจนับสต๊อกจริง"></label>
+        <button type="button" id="btnSaveDieselBaseline">บันทึกยอดตั้งต้น</button>
+      </div>
+      <div class="diesel-baseline-current" id="dieselBaselineCurrent">ยังไม่ตั้งยอดสต๊อกเริ่มต้น</div>
     </section>
   </section>
 
@@ -846,10 +872,11 @@
           </section>
 
           <section class="executive-section executive-fuel-section">
-            <header class="executive-section-title"><div><span>DIESEL CONTROL</span><h3>การใช้น้ำมันเทียบลิมิต</h3></div><small id="executiveDieselMTD">MTD 0.00 ลิตร</small></header>
+            <header class="executive-section-title"><div><span>DIESEL CONTROL</span><h3>การใช้ / ลิมิตและสต๊อกน้ำมัน</h3></div><small id="executiveDieselMTD">MTD 0.00 / 0.00 ลิตร</small></header>
             <div class="executive-fuel-columns">
-              <div><h4>รายวัน</h4><div id="executiveDieselDailyMachines" class="fuel-limit-list"></div></div>
-              <div><h4>สะสมเดือน</h4><div id="executiveDieselMTDMachines" class="fuel-limit-list"></div></div>
+              <div><h4>วันนี้</h4><strong id="executiveDieselDailySummary">0.00 / 0.00 ลิตร</strong><small id="executiveDieselDailyReceived">รับเข้า 0.00 ลิตร</small></div>
+              <div><h4>เดือนนี้</h4><strong id="executiveDieselMTDSummary">0.00 / 0.00 ลิตร</strong><small id="executiveDieselMTDReceived">รับเข้า 0.00 ลิตร</small></div>
+              <div class="stock"><h4>Balance</h4><strong id="executiveDieselBalance">-</strong><small id="executiveDieselBalanceNote">ยังไม่ตั้งยอดตั้งต้น</small></div>
             </div>
           </section>
 
@@ -929,7 +956,7 @@
 
         <section class="weekly-report-section report-fuel-section">
           <div class="weekly-section-head">
-            <div><div class="weekly-section-title">การใช้น้ำมันเทียบลิมิต</div><div class="weekly-section-summary" id="weeklyDieselSummary" style="text-align:left;">0.00 / 0.00 ลิตร</div></div>
+            <div><div class="weekly-section-title">การใช้ / ลิมิตและสต๊อกน้ำมัน</div><div class="weekly-section-summary" id="weeklyDieselSummary" style="text-align:left;">0.00 / 0.00 ลิตร</div></div>
             <div class="report-fuel-total" id="weeklyDieselUtilization">0.0%</div>
           </div>
           <div class="fuel-limit-list report-fuel-list" id="weeklyDieselMachines"></div>
@@ -1050,7 +1077,7 @@
 
         <section class="monthly-section monthly-fuel-section">
           <div class="monthly-section-head">
-            <div><span>DIESEL CONTROL</span><h2>การใช้น้ำมันเทียบลิมิต</h2></div>
+            <div><span>DIESEL CONTROL</span><h2>การใช้ / ลิมิตและสต๊อกน้ำมัน</h2></div>
             <div class="monthly-section-meta" id="monthlyDieselSummary">0.00 / 0.00 ลิตร</div>
           </div>
           <div class="fuel-limit-list report-fuel-list" id="monthlyDieselMachines"></div>
@@ -2358,18 +2385,16 @@ const weeklyProductionClasses = {
 };
 
 function reportFuelRowsHtml(summary){
-  const rows = summary?.byMachine || [];
-  if(!rows.length) return '<div class="diesel-empty">ยังไม่มีรายการเครื่องจักร</div>';
-  return rows.map(row => {
-    const utilization = row.utilizationPct === null ? 0 : Math.max(0, Number(row.utilizationPct) || 0);
-    const pct = row.utilizationPct === null ? 'ไม่ตั้งลิมิต' : `${revenueNumber(row.utilizationPct, 1)}%`;
-    const limit = Number(row.limitLiters) > 0 ? revenueNumber(row.limitLiters) : '-';
-    return `<div class="fuel-limit-row ${row.exceeded ? 'exceeded' : ''}">
-      <div><strong>${revenueEsc(row.machine)}</strong><span>${revenueNumber(row.liters)} / ${limit} ลิตร</span></div>
-      <div class="fuel-limit-track"><i style="--fuel-progress:${Math.min(100, utilization)}%"></i></div>
-      <b>${pct}</b>
-    </div>`;
-  }).join('');
+  const stock = summary?.stock || {};
+  const exceeded = Number(summary?.totalLimitLiters) > 0
+    && Number(summary?.totalLiters) > Number(summary?.totalLimitLiters);
+  const balance = stock.configured ? `${revenueNumber(stock.balanceLiters)} ลิตร` : '-';
+  const balanceNote = stock.configured ? `ยอดคงเหลือ ณ ${deliveryDateLabel(stock.asOfDate)}` : 'ยังไม่ตั้งยอดตั้งต้น';
+  return `<div class="fuel-overview-grid">
+    <article class="${exceeded ? 'danger' : ''}"><span>ใช้ / ลิมิต</span><strong>${revenueNumber(summary?.totalLiters)} / ${revenueNumber(summary?.totalLimitLiters)} ลิตร</strong><small>รวมเฉพาะวันที่เครื่องถูกใช้งานจริง</small></article>
+    <article><span>รับเข้าในช่วงนี้</span><strong>${revenueNumber(stock.periodReceivedLiters)} ลิตร</strong><small>รายการรับเข้าน้ำมัน</small></article>
+    <article class="stock ${Number(stock.balanceLiters) < 0 ? 'danger' : ''}"><span>Balance</span><strong>${balance}</strong><small>${balanceNote}</small></article>
+  </div>`;
 }
 
 async function loadWeeklyReport(){
@@ -3069,7 +3094,7 @@ initializeAppTab(initialTab && TAB_TITLES[initialTab] ? initialTab : 'home').cat
 <script src="security-ui.js?v=20260723-security"></script>
 <script src="kpi.js?v=20260723-yieldsplit"></script>
 <script src="monthly.js?v=20260805-monthly-donut-export-v4"></script>
-<script src="diesel.js?v=20260805-fuel-limits"></script>
+<script src="diesel.js?v=20260811-stock-balance"></script>
 <script src="executive.js?v=20260805-daily-report"></script>
 <script src="home.js?v=20260724-grab-runtime"></script>
 </body>

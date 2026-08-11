@@ -6,6 +6,7 @@
   const machineSelect = document.getElementById('dieselMachine');
   let machines = [];
   let latestUsageRows = [];
+  let latestReceiptRows = [];
   let initialized = false;
   let initPromise = null;
 
@@ -136,20 +137,9 @@
     document.getElementById('dieselDailyUtilization').textContent = percentLabel(summary.utilizationPct);
     const exceeded = Number(summary.totalLimitLiters) > 0 && Number(summary.totalLiters) > Number(summary.totalLimitLiters);
     const status = document.getElementById('dieselDailyStatus');
-    status.textContent = Number(summary.totalLimitLiters) > 0 ? (exceeded ? 'เกินลิมิต' : 'อยู่ในลิมิต') : 'ยังไม่ตั้งลิมิต';
+    status.textContent = Number(summary.totalLimitLiters) > 0 ? (exceeded ? 'เกินลิมิต' : 'อยู่ในลิมิต') : 'ยังไม่มีเครื่องที่ใช้ในวันนี้';
     status.classList.toggle('danger', exceeded);
     document.getElementById('dieselDailyCount').textContent = Number(count || 0).toLocaleString('th-TH');
-    const breakdown = document.getElementById('dieselDailyBreakdown');
-    breakdown.innerHTML = summary.byMachine.length
-      ? summary.byMachine.map((row) => {
-        const utilization = row.utilizationPct === null ? 0 : Math.max(0, Number(row.utilizationPct) || 0);
-        return `<div class="fuel-limit-row ${row.exceeded ? 'exceeded' : ''}">
-          <div><strong>${htmlEsc(row.machine)}</strong><span>${numberLabel(row.liters)} / ${row.limitLiters > 0 ? numberLabel(row.limitLiters) : '-'} ลิตร</span></div>
-          <div class="fuel-limit-track"><i style="--fuel-progress:${Math.min(100, utilization)}%"></i></div>
-          <b>${row.utilizationPct === null ? 'ไม่ตั้งลิมิต' : percentLabel(row.utilizationPct)}</b>
-        </div>`;
-      }).join('')
-      : '<small>ยังไม่มีข้อมูล</small>';
   }
 
   function renderUsageTable(rows) {
@@ -170,7 +160,7 @@
       button.addEventListener('click', async () => {
         try {
           await api(`/api/diesel/usage/${encodeURIComponent(button.dataset.dieselDelete)}`, { method: 'DELETE' });
-          await loadUsage();
+          await Promise.all([loadUsage(), loadStock()]);
           toast('ลบรายการน้ำมันแล้ว');
         } catch (error) {
           toast(error.message, true);
@@ -183,6 +173,70 @@
     const data = await api(`/api/diesel/usage?date=${encodeURIComponent(dateInput.value)}`);
     renderDailySummary(data.summary, data.rows.length);
     renderUsageTable(data.rows);
+  }
+
+  function renderReceiptTable(rows) {
+    latestReceiptRows = rows;
+    const tbody = document.getElementById('dieselReceiptTable');
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="diesel-empty">ยังไม่มีรายการรับเข้าน้ำมันในวันนี้</td></tr>';
+      return;
+    }
+    const allowDelete = canManage();
+    tbody.innerHTML = rows.map((row) => `<tr>
+      <td class="diesel-row-liters">${numberLabel(row.Liters)}</td>
+      <td class="left">${htmlEsc(row.Reference || '-')}</td>
+      <td class="left">${htmlEsc(row.Note || '-')}</td>
+      <td>${allowDelete ? `<button type="button" class="danger" data-receipt-delete="${htmlEsc(row.ID)}">ลบ</button>` : '-'}</td>
+    </tr>`).join('');
+    tbody.querySelectorAll('[data-receipt-delete]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        try {
+          await api(`/api/diesel/stock/receipt/${encodeURIComponent(button.dataset.receiptDelete)}`, { method: 'DELETE' });
+          await loadStock();
+          toast('ลบรายการรับเข้าน้ำมันแล้ว');
+        } catch (error) {
+          toast(error.message, true);
+        }
+      });
+    });
+  }
+
+  function renderStock(data) {
+    const summary = data.summary || {};
+    const balance = document.getElementById('dieselStockBalance');
+    const status = document.getElementById('dieselStockStatus');
+    document.getElementById('dieselDailyReceived').textContent = numberLabel(summary.periodReceivedLiters);
+    balance.textContent = summary.configured ? numberLabel(summary.balanceLiters) : '-';
+    balance.classList.toggle('danger', summary.configured && Number(summary.balanceLiters) < 0);
+    status.textContent = summary.configured
+      ? `ลิตร · ตั้งต้น ${numberLabel(summary.openingLiters)} ลิตร วันที่ ${summary.openingDate}`
+      : 'ยังไม่ตั้งยอดตั้งต้น';
+    status.classList.toggle('danger', summary.configured && Number(summary.balanceLiters) < 0);
+
+    const baselineTarget = document.getElementById('dieselBaselineCurrent');
+    if (data.baseline) {
+      baselineTarget.innerHTML = `<div><span>ยอดที่ใช้คำนวณปัจจุบัน</span><strong>${numberLabel(data.baseline.OpeningLiters)} ลิตร</strong><small>${htmlEsc(data.baseline.EffectiveDate)}${data.baseline.Note ? ` · ${htmlEsc(data.baseline.Note)}` : ''}</small></div>
+        <button type="button" class="danger" data-baseline-delete="${htmlEsc(data.baseline.ID)}">ลบยอดนี้</button>`;
+      baselineTarget.querySelector('[data-baseline-delete]')?.addEventListener('click', async (event) => {
+        if (!window.confirm('ลบยอดตั้งต้นสต๊อกนี้ใช่หรือไม่')) return;
+        try {
+          await api(`/api/diesel/stock/baseline/${encodeURIComponent(event.currentTarget.dataset.baselineDelete)}`, { method: 'DELETE' });
+          await loadStock();
+          toast('ลบยอดตั้งต้นแล้ว');
+        } catch (error) {
+          toast(error.message, true);
+        }
+      });
+    } else {
+      baselineTarget.textContent = 'ยังไม่ตั้งยอดสต๊อกเริ่มต้นสำหรับวันที่เลือก';
+    }
+    renderReceiptTable(data.rows || []);
+  }
+
+  async function loadStock() {
+    const data = await api(`/api/diesel/stock?date=${encodeURIComponent(dateInput.value)}`);
+    renderStock(data);
   }
 
   onClickGuarded(document.getElementById('btnAddDiesel'), async () => {
@@ -203,8 +257,58 @@
       });
       document.getElementById('dieselLiters').value = '';
       document.getElementById('dieselNote').value = '';
-      await loadUsage();
+      await Promise.all([loadUsage(), loadStock()]);
       toast('บันทึกการใช้น้ำมันแล้ว');
+    } catch (error) {
+      toast(error.message, true);
+    }
+  });
+
+  onClickGuarded(document.getElementById('btnAddDieselReceipt'), async () => {
+    try {
+      const litersInput = document.getElementById('dieselReceiptLiters');
+      const liters = Number(litersInput.value);
+      if (!Number.isFinite(liters) || liters <= 0) throw new Error('กรุณาระบุจำนวนน้ำมันรับเข้า');
+      await api('/api/diesel/stock/receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entryDate: dateInput.value,
+          liters,
+          reference: document.getElementById('dieselReceiptReference').value,
+          note: document.getElementById('dieselReceiptNote').value,
+        }),
+      });
+      litersInput.value = '';
+      document.getElementById('dieselReceiptReference').value = '';
+      document.getElementById('dieselReceiptNote').value = '';
+      await loadStock();
+      toast('บันทึกน้ำมันรับเข้าแล้ว');
+    } catch (error) {
+      toast(error.message, true);
+    }
+  });
+
+  onClickGuarded(document.getElementById('btnSaveDieselBaseline'), async () => {
+    try {
+      const effectiveDate = document.getElementById('dieselBaselineDate').value;
+      const openingLiters = Number(document.getElementById('dieselBaselineLiters').value);
+      if (!effectiveDate || !Number.isFinite(openingLiters) || openingLiters < 0) {
+        throw new Error('กรุณาระบุวันที่และยอดตั้งต้นให้ถูกต้อง');
+      }
+      await api('/api/diesel/stock/baseline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          effectiveDate,
+          openingLiters,
+          note: document.getElementById('dieselBaselineNote').value,
+        }),
+      });
+      document.getElementById('dieselBaselineLiters').value = '';
+      document.getElementById('dieselBaselineNote').value = '';
+      await loadStock();
+      toast('บันทึกยอดตั้งต้นสต๊อกแล้ว');
     } catch (error) {
       toast(error.message, true);
     }
@@ -234,15 +338,22 @@
   });
 
   dateInput.addEventListener('change', () => {
-    loadUsage().catch((error) => toast(error.message, true));
+    document.getElementById('dieselBaselineDate').value = dateInput.value;
+    Promise.all([loadUsage(), loadStock()]).catch((error) => toast(error.message, true));
   });
-  document.addEventListener('gp1:sessionready', () => renderUsageTable(latestUsageRows));
+  document.addEventListener('gp1:sessionready', () => {
+    renderUsageTable(latestUsageRows);
+    renderReceiptTable(latestReceiptRows);
+  });
 
   window.initDieselUsage = function initDieselUsage(force = false) {
     if (initPromise) return initPromise;
-    if (initialized && !force) return loadUsage();
+    if (initialized && !force) return Promise.all([loadUsage(), loadStock()]);
     if (!dateInput.value) dateInput.value = todayStr();
-    initPromise = Promise.all([loadMachines(), loadUsage()])
+    if (!document.getElementById('dieselBaselineDate').value) {
+      document.getElementById('dieselBaselineDate').value = dateInput.value;
+    }
+    initPromise = Promise.all([loadMachines(), loadUsage(), loadStock()])
       .then(() => { initialized = true; })
       .finally(() => { initPromise = null; });
     return initPromise;

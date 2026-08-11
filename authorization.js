@@ -13,6 +13,7 @@ function requiredRole(pathname, method) {
     || pathname.startsWith('/api/revenue/tipping-settings')
     || pathname.startsWith('/api/kpi/targets')
     || pathname.startsWith('/api/diesel/machines')
+    || pathname.startsWith('/api/diesel/stock/baseline')
   ) return 'supervisor';
   return 'operator';
 }

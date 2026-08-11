@@ -140,6 +140,7 @@ test('diesel entry and executive daily report combine source systems without dou
   assert.equal(inactive.response.status, 400);
 
   for (const entry of [
+    { machine: 'Wheel Loader 1', liters: 1, note: 'Second fill' },
     { machine: 'Wheel Loader 1', liters: 120, note: 'กะเช้า' },
     { machine: 'Excavator 1', liters: 80, note: 'กะบ่าย' },
   ]) {
@@ -148,20 +149,33 @@ test('diesel entry and executive daily report combine source systems without dou
     });
     assert.equal(saved.response.status, 200);
   }
+  const baseline = await jsonRequest(baseUrl, '/api/diesel/stock/baseline', 'POST', {
+    effectiveDate: '2026-08-01', openingLiters: 1000, note: 'ตรวจนับต้นเดือน',
+  });
+  assert.equal(baseline.response.status, 200);
+  const receipt = await jsonRequest(baseUrl, '/api/diesel/stock/receipt', 'POST', {
+    entryDate: '2026-08-04', liters: 500, reference: 'PO-001', note: '',
+  });
+  assert.equal(receipt.response.status, 200);
 
   const usage = await fetch(`${baseUrl}/api/diesel/usage?date=2026-08-04`).then((response) => response.json());
-  assert.equal(usage.rows.length, 2);
-  assert.equal(usage.summary.totalLiters, 200);
+  assert.equal(usage.rows.length, 3);
+  assert.equal(usage.summary.totalLiters, 201);
   assert.equal(usage.summary.totalLimitLiters, 250);
-  assert.equal(usage.summary.utilizationPct, 80);
+  assert.equal(usage.summary.utilizationPct, 80.4);
   assert.deepEqual(usage.summary.byMachine.map((row) => [row.machine, row.liters]), [
-    ['Wheel Loader 1', 120],
+    ['Wheel Loader 1', 121],
     ['Excavator 1', 80],
   ]);
   assert.deepEqual(usage.summary.byMachine.map((row) => [row.machine, row.limitLiters]), [
     ['Wheel Loader 1', 150],
     ['Excavator 1', 100],
   ]);
+  const stock = await fetch(`${baseUrl}/api/diesel/stock?date=2026-08-04`).then((response) => response.json());
+  assert.equal(stock.rows.length, 1);
+  assert.equal(stock.summary.openingLiters, 1000);
+  assert.equal(stock.summary.periodReceivedLiters, 500);
+  assert.equal(stock.summary.balanceLiters, 1299);
 
   const response = await fetch(`${baseUrl}/api/executive-report?date=2026-08-04`);
   assert.equal(response.status, 200);
@@ -181,12 +195,15 @@ test('diesel entry and executive daily report combine source systems without dou
   assert.ok(Math.abs(report.output.plan.rdf2LGTons - (80 / 3)) < 0.0001);
   assert.ok(Math.abs(report.output.plan.mtdRDF2Tons - (640 / 3)) < 0.0001);
   assert.ok(Math.abs(report.output.plan.mtdRDF2LGTons - (320 / 3)) < 0.0001);
-  assert.equal(report.diesel.daily.totalLiters, 200);
+  assert.equal(report.diesel.daily.totalLiters, 201);
   assert.equal(report.diesel.daily.totalLimitLiters, 250);
-  assert.equal(report.diesel.daily.utilizationPct, 80);
-  assert.equal(report.diesel.mtd.totalLiters, 200);
-  assert.equal(report.diesel.mtd.totalLimitLiters, 1000);
-  assert.equal(report.diesel.mtd.utilizationPct, 20);
+  assert.equal(report.diesel.daily.utilizationPct, 80.4);
+  assert.equal(report.diesel.mtd.totalLiters, 201);
+  assert.equal(report.diesel.mtd.totalLimitLiters, 250);
+  assert.equal(report.diesel.mtd.utilizationPct, 80.4);
+  assert.equal(report.diesel.daily.stock.periodReceivedLiters, 500);
+  assert.equal(report.diesel.mtd.stock.periodReceivedLiters, 500);
+  assert.equal(report.diesel.daily.stock.balanceLiters, 1299);
   assert.equal(report.recovery.daysRemaining, 27);
   assert.equal(report.recovery.shortfallTons, 6950);
   assert.equal(report.trend.length, 4);

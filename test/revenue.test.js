@@ -225,10 +225,10 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   assert.equal(weekly.sales.byCustomer.find((row) => row.customer === 'ยังไม่ Setup').totalTons, 1);
   assert.equal(weekly.sales.byCustomer.find((row) => row.customer === 'TPI').totalTons, 20);
   assert.equal(weekly.diesel.totalLiters, 120);
-  assert.equal(weekly.diesel.totalLimitLiters, 700);
-  assert.ok(Math.abs(weekly.diesel.utilizationPct - (120 / 700 * 100)) < 0.0001);
+  assert.equal(weekly.diesel.totalLimitLiters, 100);
+  assert.ok(Math.abs(weekly.diesel.utilizationPct - 120) < 0.0001);
   assert.deepEqual(weekly.diesel.byMachine.map((row) => [row.machine, row.liters, row.limitLiters]), [
-    ['Wheel Loader', 120, 700],
+    ['Wheel Loader', 120, 100],
   ]);
 
   const salesResponse = await fetch(`${baseUrl}/api/sales`);

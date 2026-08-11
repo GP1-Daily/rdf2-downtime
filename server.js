@@ -1584,8 +1584,7 @@ function recordIsActive(value) {
   return value !== false && value !== 0 && String(value).toLowerCase() !== 'false';
 }
 
-function dieselUsageSummary(rows, machines = [], periodDays = 1) {
-  const days = Math.max(1, Math.min(366, Math.floor(Number(periodDays) || 1)));
+function dieselUsageSummary(rows, machines = []) {
   const byMachineMap = new Map();
   for (const row of machines) {
     const machine = cleanText(row.Name);
@@ -1595,29 +1594,35 @@ function dieselUsageSummary(rows, machines = [], periodDays = 1) {
       liters: 0,
       dailyLimitLiters: Math.max(0, Number(row.DailyLimitLiters) || 0),
       active: recordIsActive(row.Active),
+      usageDates: new Set(),
     });
   }
   for (const row of rows) {
     const machine = cleanText(row.Machine) || 'ไม่ระบุเครื่องจักร';
     const liters = Math.max(0, Number(row.Liters) || 0);
+    if (liters <= 0) continue;
     const key = machine.toLocaleLowerCase('th-TH');
     const current = byMachineMap.get(key) || {
       machine,
       liters: 0,
       dailyLimitLiters: 0,
       active: false,
+      usageDates: new Set(),
     };
     current.liters += liters;
+    if (validIsoDate(row.EntryDate)) current.usageDates.add(row.EntryDate);
     byMachineMap.set(key, current);
   }
   const byMachine = [...byMachineMap.values()]
-    .filter((row) => row.active || row.liters > 0)
+    .filter((row) => row.liters > 0)
     .map((row) => {
-      const limitLiters = row.dailyLimitLiters * days;
+      const activeDays = row.usageDates.size || 1;
+      const limitLiters = row.dailyLimitLiters * activeDays;
       return {
         machine: row.machine,
         liters: row.liters,
         dailyLimitLiters: row.dailyLimitLiters,
+        activeDays,
         limitLiters,
         remainingLiters: limitLiters > 0 ? Math.max(0, limitLiters - row.liters) : null,
         utilizationPct: limitLiters > 0 ? row.liters / limitLiters * 100 : null,
@@ -1627,12 +1632,71 @@ function dieselUsageSummary(rows, machines = [], periodDays = 1) {
     .sort((a, b) => b.liters - a.liters || a.machine.localeCompare(b.machine, 'th'));
   const totalLimitLiters = byMachine.reduce((sum, row) => sum + row.limitLiters, 0);
   const totalLiters = rows.reduce((sum, row) => sum + Math.max(0, Number(row.Liters) || 0), 0);
+  const usageDates = new Set(rows
+    .filter((row) => Math.max(0, Number(row.Liters) || 0) > 0 && validIsoDate(row.EntryDate))
+    .map((row) => row.EntryDate));
   return {
-    periodDays: days,
+    periodDays: usageDates.size,
+    activeMachineDays: byMachine.reduce((sum, row) => sum + row.activeDays, 0),
     totalLiters,
     totalLimitLiters,
     utilizationPct: totalLimitLiters > 0 ? totalLiters / totalLimitLiters * 100 : null,
     byMachine,
+  };
+}
+
+function dieselStockSummary(asOfDate, usageRows, receiptRows, baselineRows, periodStart = asOfDate) {
+  const baseline = baselineRows
+    .filter((row) => validIsoDate(row.EffectiveDate) && row.EffectiveDate <= asOfDate)
+    .sort((a, b) => String(b.EffectiveDate).localeCompare(String(a.EffectiveDate)) || Number(b.ID) - Number(a.ID))[0] || null;
+  const rangeStart = validIsoDate(periodStart) ? periodStart : asOfDate;
+  const periodUsageLiters = usageRows
+    .filter((row) => row.EntryDate >= rangeStart && row.EntryDate <= asOfDate)
+    .reduce((sum, row) => sum + Math.max(0, Number(row.Liters) || 0), 0);
+  const periodReceivedLiters = receiptRows
+    .filter((row) => row.EntryDate >= rangeStart && row.EntryDate <= asOfDate)
+    .reduce((sum, row) => sum + Math.max(0, Number(row.Liters) || 0), 0);
+  if (!baseline) {
+    return {
+      configured: false,
+      asOfDate,
+      openingDate: null,
+      openingLiters: null,
+      receivedLiters: null,
+      usedLiters: null,
+      balanceLiters: null,
+      periodStart: rangeStart,
+      periodReceivedLiters,
+      periodUsageLiters,
+    };
+  }
+  const openingDate = baseline.EffectiveDate;
+  const receivedLiters = receiptRows
+    .filter((row) => row.EntryDate >= openingDate && row.EntryDate <= asOfDate)
+    .reduce((sum, row) => sum + Math.max(0, Number(row.Liters) || 0), 0);
+  const usedLiters = usageRows
+    .filter((row) => row.EntryDate >= openingDate && row.EntryDate <= asOfDate)
+    .reduce((sum, row) => sum + Math.max(0, Number(row.Liters) || 0), 0);
+  const openingLiters = Math.max(0, Number(baseline.OpeningLiters) || 0);
+  return {
+    configured: true,
+    asOfDate,
+    baselineId: baseline.ID,
+    openingDate,
+    openingLiters,
+    receivedLiters,
+    usedLiters,
+    balanceLiters: openingLiters + receivedLiters - usedLiters,
+    periodStart: rangeStart,
+    periodReceivedLiters,
+    periodUsageLiters,
+  };
+}
+
+function dieselReportSummary(periodRows, machines, usageRows, receiptRows, baselineRows, startDate, endDate) {
+  return {
+    ...dieselUsageSummary(periodRows, machines),
+    stock: dieselStockSummary(endDate, usageRows, receiptRows, baselineRows, startDate),
   };
 }
 
@@ -1719,8 +1783,7 @@ async function handleDieselUsage(req, res, parts, query) {
     if (date) rows = rows.filter((row) => row.EntryDate === date);
     if (month) rows = rows.filter((row) => String(row.EntryDate).startsWith(`${month}-`));
     rows.sort((a, b) => String(b.EntryDate).localeCompare(String(a.EntryDate)) || Number(b.ID) - Number(a.ID));
-    const periodDays = month ? monthBounds(month).days : 1;
-    return sendJson(res, 200, { ok: true, rows, summary: dieselUsageSummary(rows, machines, periodDays) });
+    return sendJson(res, 200, { ok: true, rows, summary: dieselUsageSummary(rows, machines) });
   }
   if (req.method === 'POST' && parts.length === 0) {
     const body = await readBody(req);
@@ -1753,11 +1816,85 @@ async function handleDieselUsage(req, res, parts, query) {
   return sendJson(res, 404, { ok: false, error: 'unknown diesel usage route' });
 }
 
+async function handleDieselStock(req, res, parts, query) {
+  if (req.method === 'GET' && parts.length === 0) {
+    const date = cleanText(query.date) || lib.todayStr();
+    if (!validIsoDate(date)) {
+      return sendJson(res, 400, { ok: false, error: 'รูปแบบวันที่ต้องเป็น YYYY-MM-DD' });
+    }
+    const [usageRows, receiptRows, baselineRows] = await Promise.all([
+      store.readSheet('DieselUsage'),
+      store.readSheet('DieselReceipts'),
+      store.readSheet('DieselStockBaselines'),
+    ]);
+    const rows = receiptRows
+      .filter((row) => row.EntryDate === date)
+      .sort((a, b) => Number(b.ID) - Number(a.ID));
+    const summary = dieselStockSummary(date, usageRows, receiptRows, baselineRows, date);
+    const baseline = summary.baselineId
+      ? baselineRows.find((row) => String(row.ID) === String(summary.baselineId)) || null
+      : null;
+    return sendJson(res, 200, { ok: true, rows, baseline, summary });
+  }
+
+  if (req.method === 'POST' && parts[0] === 'receipt' && parts.length === 1) {
+    const body = await readBody(req);
+    const entryDate = cleanText(body.entryDate);
+    const liters = Number(body.liters);
+    const reference = cleanText(body.reference);
+    const note = cleanText(body.note);
+    if (!validIsoDate(entryDate) || !Number.isFinite(liters) || liters <= 0 || liters > 10000000) {
+      return sendJson(res, 400, { ok: false, error: 'กรุณาระบุวันที่และจำนวนน้ำมันรับเข้าให้ถูกต้อง' });
+    }
+    if (!textWithin(reference, 100) || !textWithin(note, 500)) {
+      return sendJson(res, 400, { ok: false, error: 'เลขอ้างอิงหรือหมายเหตุยาวเกินกำหนด' });
+    }
+    const row = await store.appendRow('DieselReceipts', {
+      EntryDate: entryDate,
+      Liters: liters,
+      Reference: reference,
+      Note: note,
+    });
+    return sendJson(res, 200, { ok: true, row });
+  }
+
+  if (req.method === 'DELETE' && parts[0] === 'receipt' && parts.length === 2) {
+    const deleted = await store.deleteRow('DieselReceipts', parts[1]);
+    return sendJson(res, 200, { ok: deleted });
+  }
+
+  if (req.method === 'POST' && parts[0] === 'baseline' && parts.length === 1) {
+    const body = await readBody(req);
+    const effectiveDate = cleanText(body.effectiveDate);
+    const openingLiters = Number(body.openingLiters);
+    const note = cleanText(body.note);
+    if (!validIsoDate(effectiveDate) || !Number.isFinite(openingLiters)
+      || openingLiters < 0 || openingLiters > 10000000 || !textWithin(note, 500)) {
+      return sendJson(res, 400, { ok: false, error: 'กรุณาระบุวันที่และยอดตั้งต้นน้ำมันให้ถูกต้อง' });
+    }
+    const baselineRows = await store.readSheet('DieselStockBaselines');
+    const existing = baselineRows.find((row) => row.EffectiveDate === effectiveDate);
+    const data = { EffectiveDate: effectiveDate, OpeningLiters: openingLiters, Note: note };
+    const row = existing
+      ? await store.updateRow('DieselStockBaselines', existing.ID, data)
+      : await store.appendRow('DieselStockBaselines', data);
+    return sendJson(res, 200, { ok: true, row, updated: !!existing });
+  }
+
+  if (req.method === 'DELETE' && parts[0] === 'baseline' && parts.length === 2) {
+    const deleted = await store.deleteRow('DieselStockBaselines', parts[1]);
+    return sendJson(res, 200, { ok: deleted });
+  }
+
+  return sendJson(res, 404, { ok: false, error: 'unknown diesel stock route' });
+}
+
 async function handleDiesel(req, res, parts, query) {
   const section = parts[0];
   const rest = parts.slice(1);
   if (section === 'machines') return handleDieselMachines(req, res, rest);
   if (section === 'usage') return handleDieselUsage(req, res, rest, query);
+  if (section === 'stock') return handleDieselStock(req, res, rest, query);
   return sendJson(res, 404, { ok: false, error: 'unknown diesel route' });
 }
 
@@ -1781,7 +1918,10 @@ async function handleWeeklyReport(req, res, query) {
   const weekEndExclusive = lib.addDays(weekStart, 7);
   const weekEnd = lib.addDays(weekStart, 6);
   const dates = Array.from({ length: 7 }, (_, index) => lib.addDays(weekStart, index));
-  const [grabRows, yieldRows, stockSales, rdf3Sales, kpiTargetRows, dieselRows, dieselMachines] = await Promise.all([
+  const [
+    grabRows, yieldRows, stockSales, rdf3Sales, kpiTargetRows,
+    dieselRows, dieselMachines, dieselReceipts, dieselBaselines,
+  ] = await Promise.all([
     store.readSheet('GrabCrane'),
     store.readSheet('YieldSettings'),
     store.readSheet('Sales'),
@@ -1789,6 +1929,8 @@ async function handleWeeklyReport(req, res, query) {
     store.readSheet('KPITargetSettings'),
     store.readSheet('DieselUsage'),
     store.readSheet('DieselMachines'),
+    store.readSheet('DieselReceipts'),
+    store.readSheet('DieselStockBaselines'),
   ]);
 
   const productionTons = Object.fromEntries(WEEKLY_PRODUCTION_PRODUCTS.map((item) => [item.tonsKey, 0]));
@@ -1907,7 +2049,9 @@ async function handleWeeklyReport(req, res, query) {
       byProduct: REVENUE_PRODUCTS.map((product) => ({ product, tons: salesProductMap[product] })),
       byCustomer: salesByCustomer,
     },
-    diesel: dieselUsageSummary(weekDieselRows, dieselMachines, 7),
+    diesel: dieselReportSummary(
+      weekDieselRows, dieselMachines, dieselRows, dieselReceipts, dieselBaselines, weekStart, weekEnd,
+    ),
     daily,
   });
 }
@@ -2068,7 +2212,7 @@ async function handleMonthlyReport(req, res, query) {
   const [
     grabRows, yieldRows, stockSales, rdf3Sales, prices,
     tippingRows, tippingSettings, downtimeRows, lineRows, historyRows,
-    dieselRows, dieselMachines,
+    dieselRows, dieselMachines, dieselReceipts, dieselBaselines,
   ] = await Promise.all([
     store.readSheet('GrabCrane'),
     store.readSheet('YieldSettings'),
@@ -2082,6 +2226,8 @@ async function handleMonthlyReport(req, res, query) {
     store.readSheet('KPIDailyHistory'),
     store.readSheet('DieselUsage'),
     store.readSheet('DieselMachines'),
+    store.readSheet('DieselReceipts'),
+    store.readSheet('DieselStockBaselines'),
   ]);
 
   const revenue = buildRevenueDashboardData(
@@ -2244,7 +2390,9 @@ async function handleMonthlyReport(req, res, query) {
       byProduct: sales.byProduct,
       byCustomer: sales.byCustomer,
     },
-    diesel: dieselUsageSummary(monthDieselRows, dieselMachines, bounds.days),
+    diesel: dieselReportSummary(
+      monthDieselRows, dieselMachines, dieselRows, dieselReceipts, dieselBaselines, bounds.start, bounds.end,
+    ),
     revenue,
     daily,
     weeks: [...weekMap.values()],
@@ -2371,7 +2519,7 @@ async function handleExecutiveReport(req, res, query) {
   const datesToReport = Array.from({ length: elapsedDays }, (_, index) => lib.addDays(bounds.start, index));
   const [
     tippingRows, grabRows, historyRows, yieldRows, targetRows,
-    dieselRows, dieselMachines, downtimeRows,
+    dieselRows, dieselMachines, dieselReceipts, dieselBaselines, downtimeRows,
   ] = await Promise.all([
     store.readSheet('RevenueTippingDaily'),
     store.readSheet('GrabCrane'),
@@ -2380,6 +2528,8 @@ async function handleExecutiveReport(req, res, query) {
     store.readSheet('KPITargetSettings'),
     store.readSheet('DieselUsage'),
     store.readSheet('DieselMachines'),
+    store.readSheet('DieselReceipts'),
+    store.readSheet('DieselStockBaselines'),
     store.readSheet('Downtime'),
   ]);
 
@@ -2424,8 +2574,12 @@ async function handleExecutiveReport(req, res, query) {
 
   const dayDieselRows = dieselRows.filter((row) => row.EntryDate === date);
   const monthDieselRows = dieselRows.filter((row) => row.EntryDate >= bounds.start && row.EntryDate <= date);
-  const dayDiesel = dieselUsageSummary(dayDieselRows, dieselMachines, 1);
-  const monthDiesel = dieselUsageSummary(monthDieselRows, dieselMachines, elapsedDays);
+  const dayDiesel = dieselReportSummary(
+    dayDieselRows, dieselMachines, dieselRows, dieselReceipts, dieselBaselines, date, date,
+  );
+  const monthDiesel = dieselReportSummary(
+    monthDieselRows, dieselMachines, dieselRows, dieselReceipts, dieselBaselines, bounds.start, date,
+  );
 
   const shortfallTons = Math.max(0, monthlyTargetTons - productionMTDTons);
   const currentAverageTons = elapsedDays > 0 ? productionMTDTons / elapsedDays : 0;

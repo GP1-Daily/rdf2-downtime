@@ -158,6 +158,12 @@ test('monthly report uses calendar boundaries and combines operations, productio
     { EntryDate: '2026-08-01', Machine: 'Wheel Loader', Liters: 90, Note: '' },
     { EntryDate: '2026-08-02', Machine: 'Excavator', Liters: 40, Note: '' },
   ]);
+  await store.appendRows('DieselStockBaselines', [
+    { EffectiveDate: '2026-08-01', OpeningLiters: 1000, Note: '' },
+  ]);
+  await store.appendRows('DieselReceipts', [
+    { EntryDate: '2026-08-02', Liters: 200, Reference: 'PO-001', Note: '' },
+  ]);
 
   const baseUrl = await startServer(t);
   const response = await fetch(`${baseUrl}/api/monthly-report?month=2026-08`);
@@ -214,12 +220,14 @@ test('monthly report uses calendar boundaries and combines operations, productio
   assert.equal(report.weeks.reduce((sum, row) => sum + row.incomingTons, 0), 90);
   assert.equal(report.weeks.reduce((sum, row) => sum + row.historicalDays, 0), 1);
   assert.equal(report.diesel.totalLiters, 130);
-  assert.equal(report.diesel.totalLimitLiters, 4650);
-  assert.ok(Math.abs(report.diesel.utilizationPct - (130 / 4650 * 100)) < 0.0001);
+  assert.equal(report.diesel.totalLimitLiters, 150);
+  assert.ok(Math.abs(report.diesel.utilizationPct - (130 / 150 * 100)) < 0.0001);
   assert.deepEqual(report.diesel.byMachine.map((row) => [row.machine, row.liters, row.limitLiters]), [
-    ['Wheel Loader', 90, 3100],
-    ['Excavator', 40, 1550],
+    ['Wheel Loader', 90, 100],
+    ['Excavator', 40, 50],
   ]);
+  assert.equal(report.diesel.stock.periodReceivedLiters, 200);
+  assert.equal(report.diesel.stock.balanceLiters, 1070);
 
   const invalidResponse = await fetch(`${baseUrl}/api/monthly-report?month=08-2026`);
   assert.equal(invalidResponse.status, 400);

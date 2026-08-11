@@ -111,10 +111,13 @@
 .executive-progress i{display:block; width:0; height:100%; background:var(--exec-green); transition:width .65s ease;}
 .executive-month-progress-grid article:nth-child(3) .executive-progress i{background:var(--exec-blue);}
 
-.executive-fuel-columns{display:grid; grid-template-columns:1fr 1fr;}
+.executive-fuel-columns{display:grid; grid-template-columns:repeat(3,1fr);}
 .executive-fuel-columns > div{min-height:126px; padding:16px 18px; border-right:1px solid #e1e8e4;}
 .executive-fuel-columns > div:last-child{border-right:0;}
 .executive-fuel-columns h4{margin:0 0 12px; color:#516275; font-size:11px; letter-spacing:0;}
+.executive-fuel-columns strong{display:block; color:#193149; font-size:18px; line-height:1.25;}
+.executive-fuel-columns small{display:block; margin-top:7px; color:#758596; font-size:10px;}
+.executive-fuel-columns .stock strong{color:#0b8058; font-size:22px;}
 .executive-empty-row{padding:18px; color:#778596; font-size:10px; text-align:center; background:#f7faf8;}
 
 .executive-recovery-grid{display:grid; grid-template-columns:repeat(3,1fr);}
