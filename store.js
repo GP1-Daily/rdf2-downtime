@@ -381,7 +381,7 @@ async function syncGrabRows(sourceSystem, rows, options = {}) {
     const cols = SHEETS.GrabCrane;
     const source = String(sourceSystem);
     const sourceRow = new Map();
-    const timestampRow = new Map();
+    const legacyTimestampRow = new Map();
     let maxId = 0;
 
     ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
@@ -391,7 +391,9 @@ async function syncGrabRows(sourceSystem, rows, options = {}) {
       if (record.SourceSystem && record.SourceID !== '') {
         sourceRow.set(`${record.SourceSystem}|${record.SourceID}`, rowNumber);
       }
-      timestampRow.set(`${record.ReportDate}|${record.DateTime}`, rowNumber);
+      if (!record.SourceSystem || record.SourceID === '') {
+        legacyTimestampRow.set(`${record.ReportDate}|${record.DateTime}`, rowNumber);
+      }
     });
 
     let created = 0;
@@ -401,7 +403,7 @@ async function syncGrabRows(sourceSystem, rows, options = {}) {
     for (const data of rows) {
       const sourceKey = `${source}|${data.SourceID}`;
       const timestampKey = `${data.ReportDate}|${data.DateTime}`;
-      let rowNumber = sourceRow.get(sourceKey) || timestampRow.get(timestampKey);
+      let rowNumber = sourceRow.get(sourceKey) || legacyTimestampRow.get(timestampKey);
       let target;
       let record;
       if (rowNumber) {
@@ -437,7 +439,7 @@ async function syncGrabRows(sourceSystem, rows, options = {}) {
         created += 1;
       }
       sourceRow.set(sourceKey, rowNumber);
-      timestampRow.set(timestampKey, rowNumber);
+      legacyTimestampRow.delete(timestampKey);
       syncedRows.push(record);
     }
 

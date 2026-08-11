@@ -332,7 +332,7 @@ async function handleGrabDeviceSync(req, res) {
   }
 
   const seenIds = new Set();
-  const rows = [];
+  const receivedRows = [];
   for (const input of body.rows) {
     const sourceId = Number(input?.id);
     const dateTime = normalizeGrabLocalDateTime(input?.createDate);
@@ -348,7 +348,7 @@ async function handleGrabDeviceSync(req, res) {
       return sendJson(res, 400, { ok: false, error: 'Invalid Grab record' });
     }
     seenIds.add(sourceId);
-    rows.push({
+    receivedRows.push({
       ReportDate: dateTime.slice(0, 10),
       DateTime: dateTime,
       Weight: weight,
@@ -357,6 +357,9 @@ async function handleGrabDeviceSync(req, res) {
       SourceStatus: sourceStatus,
     });
   }
+  // The local Grab application only counts confirmed rows (status 10).
+  // Keep null for compatibility with device payloads created before status was sent.
+  const rows = receivedRows.filter((row) => row.SourceStatus === null || row.SourceStatus === 10);
 
   const mode = String(body.mode || 'upsert');
   if (!['upsert', 'snapshot'].includes(mode)) {
@@ -368,7 +371,7 @@ async function handleGrabDeviceSync(req, res) {
     snapshotStart = normalizeGrabLocalDateTime(body.windowStart);
     snapshotEnd = normalizeGrabLocalDateTime(body.windowEnd);
     if (!snapshotStart || !snapshotEnd || snapshotEnd <= snapshotStart
-      || rows.some((row) => row.DateTime < snapshotStart || row.DateTime >= snapshotEnd)) {
+      || receivedRows.some((row) => row.DateTime < snapshotStart || row.DateTime >= snapshotEnd)) {
       return sendJson(res, 400, { ok: false, error: 'Invalid or incomplete snapshot window' });
     }
   }
@@ -386,11 +389,12 @@ async function handleGrabDeviceSync(req, res) {
   return sendJson(res, 200, {
     ok: true,
     deviceId,
+    received: receivedRows.length,
     processed: rows.length,
     created: result.created,
     updated: result.updated,
     deleted: result.deleted,
-    maxSourceId: rows.reduce((max, row) => Math.max(max, row.SourceID), 0),
+    maxSourceId: receivedRows.reduce((max, row) => Math.max(max, row.SourceID), 0),
     serverTime: new Date().toISOString(),
   });
 }

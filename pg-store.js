@@ -227,7 +227,8 @@ function ensureSchema() {
       ALTER TABLE grab_crane ADD COLUMN IF NOT EXISTS amp NUMERIC;
       ALTER TABLE grab_crane ADD COLUMN IF NOT EXISTS source_status INTEGER;
       ALTER TABLE grab_crane ADD COLUMN IF NOT EXISTS synced_at TIMESTAMPTZ;
-      CREATE UNIQUE INDEX IF NOT EXISTS grab_crane_report_datetime_idx
+      DROP INDEX IF EXISTS grab_crane_report_datetime_idx;
+      CREATE INDEX IF NOT EXISTS grab_crane_report_datetime_lookup_idx
         ON grab_crane (report_date, date_time);
       CREATE UNIQUE INDEX IF NOT EXISTS grab_crane_source_idx
         ON grab_crane (source_system, source_id)
@@ -554,9 +555,6 @@ async function insertRecord(client, sheetName, data, includeId = false) {
   const values = jsKeys.map((key) => data[key]);
   const placeholders = values.map((_, index) => `$${index + 1}`);
   let sql = `INSERT INTO ${table} (${dbCols.join(',')}) VALUES (${placeholders.join(',')})`;
-  if (sheetName === 'GrabCrane' && !includeId) {
-    sql += ` ON CONFLICT (report_date, date_time) DO UPDATE SET weight = EXCLUDED.weight, source_file = EXCLUDED.source_file`;
-  }
   sql += ' RETURNING *';
   const result = await client.query(sql, values);
   return rowToObj(columns, result.rows[0]);
@@ -711,7 +709,12 @@ async function syncGrabRows(sourceSystem, rows, options = {}) {
 
       if (!found.rows[0]) {
         found = await client.query(
-          'SELECT * FROM grab_crane WHERE report_date = $1 AND date_time = $2 FOR UPDATE',
+          `SELECT * FROM grab_crane
+           WHERE report_date = $1 AND date_time = $2
+             AND source_system IS NULL AND source_id IS NULL
+           ORDER BY id
+           LIMIT 1
+           FOR UPDATE`,
           [row.ReportDate, row.DateTime],
         );
       }

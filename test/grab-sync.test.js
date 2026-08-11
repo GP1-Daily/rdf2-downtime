@@ -77,6 +77,21 @@ test('Grab device sync is idempotent and reconciles a complete time window', asy
   assert.equal(repeated.updated, 1);
   assert.equal(Number(rows.find((row) => Number(row.SourceID) === 101).Weight), 5.1);
 
+  const sameSecond = await runWithRequestContext(context, () => store.syncGrabRows('grab-pi-1', [
+    sourceRow(103, '2026-07-24 08:30:00', 4.5, 93.3),
+    sourceRow(104, '2026-07-24 08:30:00', 4.6, 94.3),
+  ]));
+  rows = await store.readSheet('GrabCrane');
+  assert.equal(sameSecond.created, 2);
+  assert.equal(rows.filter((row) => row.DateTime === '2026-07-24 08:30:00').length, 2);
+  assert.deepEqual(
+    rows
+      .filter((row) => row.DateTime === '2026-07-24 08:30:00')
+      .map((row) => Number(row.SourceID))
+      .sort((a, b) => a - b),
+    [103, 104],
+  );
+
   const reconciled = await runWithRequestContext(context, () => store.syncGrabRows('grab-pi-1', [
     sourceRow(101, '2026-07-24 08:16:58', 5.1, 96.2),
   ], {
@@ -85,8 +100,8 @@ test('Grab device sync is idempotent and reconciles a complete time window', asy
   }));
   rows = await store.readSheet('GrabCrane');
   assert.equal(rows.length, 1);
-  assert.equal(reconciled.deleted, 1);
-  assert.equal((await store.readSheet('DeletedRecords')).length, 1);
+  assert.equal(reconciled.deleted, 3);
+  assert.equal((await store.readSheet('DeletedRecords')).length, 3);
 });
 
 test('Grab device API requires its token and assigns the calendar date from source time', async (t) => {
@@ -131,7 +146,10 @@ test('Grab device API requires its token and assigns the calendar date from sour
   const payload = {
     deviceId: 'grab-pi-1',
     mode: 'upsert',
-    rows: [{ id: 500, amp: 95.3, weight: 4.93, status: 10, createDate: '2026-07-25 00:05:00' }],
+    rows: [
+      { id: 500, amp: 95.3, weight: 4.93, status: 10, createDate: '2026-07-25 00:05:00' },
+      { id: 501, amp: 95.3, weight: 4.93, status: 20, createDate: '2026-07-25 00:05:00' },
+    ],
   };
   const rejected = await fetch(`${baseUrl}/api/device/grab-sync`, {
     method: 'POST',
@@ -145,7 +163,11 @@ test('Grab device API requires its token and assigns the calendar date from sour
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(payload),
   });
-  assert.equal(accepted.status, 200, await accepted.text());
+  const acceptedBody = await accepted.json();
+  assert.equal(accepted.status, 200, JSON.stringify(acceptedBody));
+  assert.equal(acceptedBody.received, 2);
+  assert.equal(acceptedBody.processed, 1);
+  assert.equal(acceptedBody.maxSourceId, 501);
 
   const reportDay = await fetch(`${baseUrl}/api/grab?date=2026-07-25`).then((response) => response.json());
   const previousDay = await fetch(`${baseUrl}/api/grab?date=2026-07-24`).then((response) => response.json());
