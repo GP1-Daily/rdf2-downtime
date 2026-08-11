@@ -198,6 +198,10 @@ test('diesel entry and executive daily report combine source systems without dou
   assert.equal(report.diesel.daily.totalLiters, 201);
   assert.equal(report.diesel.daily.totalLimitLiters, 250);
   assert.equal(report.diesel.daily.utilizationPct, 80.4);
+  assert.deepEqual(report.diesel.daily.byMachine.map((row) => [row.machine, row.liters, row.dailyLimitLiters]), [
+    ['Wheel Loader 1', 121, 150],
+    ['Excavator 1', 80, 100],
+  ]);
   assert.equal(report.diesel.mtd.totalLiters, 201);
   assert.equal(report.diesel.mtd.totalLimitLiters, 250);
   assert.equal(report.diesel.mtd.utilizationPct, 80.4);
@@ -253,8 +257,12 @@ test('diesel entry and executive daily report combine source systems without dou
     /\.executive-skeleton\[hidden\],\.executive-content\[hidden\]\{display:none !important;\}/,
   );
   const page = await fetch(`${baseUrl}/`).then((pageResponse) => pageResponse.text());
-  assert.match(page, /executive\.js\?v=20260811-diesel-balance/);
-  assert.match(page, /executive\.css\?v=20260811-diesel-balance/);
+  assert.match(page, /executive\.js\?v=20260811-diesel-machine-progress/);
+  assert.match(page, /executive\.css\?v=20260811-diesel-machine-progress/);
+  assert.match(page, /id="executiveDieselMachines"/);
+  assert.match(page, /id="executiveDieselDailyMeta"/);
+  assert.doesNotMatch(page, /id="executiveDieselDailyLimit"/);
+  assert.doesNotMatch(page, /id="executiveDieselMTDReceived"/);
   assert.match(page, /id="tab-diesel"/);
   assert.match(page, /id="tab-executive-report"/);
   assert.match(page, /<h2>Control Report<\/h2>/);

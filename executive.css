@@ -118,6 +118,17 @@
 .executive-fuel-columns strong{display:block; color:#193149; font-size:18px; line-height:1.25;}
 .executive-fuel-columns small{display:block; margin-top:7px; color:#758596; font-size:10px;}
 .executive-fuel-columns .stock strong{color:#0b8058; font-size:22px;}
+.executive-fuel-machine-list{display:grid; border-top:1px solid #dfe8e3;}
+.executive-fuel-machine{min-height:58px; padding:11px 18px; display:grid; grid-template-columns:minmax(170px,1fr) minmax(220px,2fr) 58px; align-items:center; gap:14px; border-bottom:1px solid #e3ebe7;}
+.executive-fuel-machine:last-child{border-bottom:0;}
+.executive-fuel-machine-head{display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0;}
+.executive-fuel-machine-head strong{overflow:hidden; color:#263a4d; font-size:11px; text-overflow:ellipsis; white-space:nowrap;}
+.executive-fuel-machine-head span{color:#65778a; font-size:10px; font-weight:700; white-space:nowrap;}
+.executive-fuel-machine-progress{height:9px; overflow:hidden; background:#e4ece8; border-radius:3px;}
+.executive-fuel-machine-progress i{display:block; height:100%; background:var(--exec-green); transition:width .55s ease;}
+.executive-fuel-machine > b{color:var(--exec-green); font-size:10px; text-align:right; white-space:nowrap;}
+.executive-fuel-machine.danger .executive-fuel-machine-progress i{background:var(--exec-red);}
+.executive-fuel-machine.danger > b{color:var(--exec-red);}
 .executive-empty-row{padding:18px; color:#778596; font-size:10px; text-align:center; background:#f7faf8;}
 
 .executive-recovery-grid{display:grid; grid-template-columns:repeat(3,1fr);}
@@ -163,7 +174,7 @@
 @keyframes executivePulse{to{opacity:.48;}}
 
 @media (prefers-reduced-motion:reduce){
-  .executive-progress i,.executive-chart-bar i,.executive-comparison-bars i b{transition:none;}
+  .executive-progress i,.executive-chart-bar i,.executive-comparison-bars i b,.executive-fuel-machine-progress i{transition:none;}
   .executive-skeleton i{animation:none;}
 }
 
@@ -180,6 +191,7 @@
   .executive-fuel-columns{grid-template-columns:1fr;}
   .executive-fuel-columns > div{border-right:0; border-bottom:1px solid #e1e8e4;}
   .executive-fuel-columns > div:last-child{border-bottom:0;}
+  .executive-fuel-machine{grid-template-columns:minmax(160px,1fr) minmax(180px,1.5fr) 56px;}
 }
 
 @media (max-width:680px){
@@ -204,6 +216,10 @@
   .executive-month-progress-grid{grid-template-columns:1fr;}
   .executive-month-progress-grid article,.executive-month-progress-grid article:nth-child(2){border-right:0; border-bottom:1px solid #e1e8e4;}
   .executive-month-progress-grid article:last-child{grid-column:auto; border-top:0; border-bottom:0;}
+  .executive-fuel-machine{padding:12px 14px; grid-template-columns:1fr 48px; gap:8px 10px;}
+  .executive-fuel-machine-head{grid-column:1 / -1;}
+  .executive-fuel-machine-progress{grid-column:1;}
+  .executive-fuel-machine > b{grid-column:2;}
   .executive-recovery-grid{grid-template-columns:1fr;}
   .executive-recovery-grid > div{min-height:82px; border-right:0; border-bottom:1px solid #e1e8e4;}
   .executive-recovery-grid > div:last-child{border-bottom:0;}

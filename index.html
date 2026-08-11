@@ -15,7 +15,7 @@
 <link rel="stylesheet" href="security-ui.css?v=20260723-security">
 <link rel="stylesheet" href="operations.css?v=20260729-transparent-logo">
 <link rel="stylesheet" href="diesel.css?v=20260811-stock-balance">
-<link rel="stylesheet" href="executive.css?v=20260811-diesel-balance">
+<link rel="stylesheet" href="executive.css?v=20260811-diesel-machine-progress">
 <style>
   :root{
     --brand:#0f8a5f; --brand-dark:#086342; --brand-bright:#22b573;
@@ -854,7 +854,7 @@
             <article><span>MSW Incoming</span><strong><b id="executiveIncomingDaily">0.00</b> ตัน</strong><small id="executiveIncomingStatus">RECORDED</small></article>
             <article><span>MSW to Production</span><strong><b id="executiveProductionDaily">0.00</b> ตัน</strong><small id="executiveProductionPct">0.0% ของแผน</small></article>
             <article><span>RDF2 / RDF2 LG</span><strong><b id="executiveRDF2Daily">0.00</b> / <b id="executiveRDF2LGDaily">0.00</b> ตัน</strong><small id="executiveYieldNote">คำนวณจาก Yield</small></article>
-            <article class="fuel"><span>Diesel Usage</span><strong><b id="executiveDieselDaily">0.00</b> / <b id="executiveDieselDailyLimit">0.00</b> L</strong><small id="executiveDieselDailyPct">0.0% ของลิมิต</small></article>
+            <article class="fuel"><span>Diesel Usage</span><strong><b id="executiveDieselDaily">0.00</b> L</strong><small id="executiveDieselDailyMeta">0 เครื่องจักรที่ใช้วันนี้</small></article>
           </section>
 
           <section class="executive-section executive-comparison-section">
@@ -872,12 +872,13 @@
           </section>
 
           <section class="executive-section executive-fuel-section">
-            <header class="executive-section-title"><div><span>DIESEL CONTROL</span><h3>การใช้ / ลิมิตและสต๊อกน้ำมัน</h3></div><small id="executiveDieselMTD">MTD 0.00 / 0.00 ลิตร</small></header>
+            <header class="executive-section-title"><div><span>DIESEL CONTROL</span><h3>การใช้น้ำมันและสต๊อกคงเหลือ</h3></div><small id="executiveDieselMTD">MTD ใช้ไป 0.00 ลิตร</small></header>
             <div class="executive-fuel-columns">
-              <div><h4>วันนี้</h4><strong id="executiveDieselDailySummary">0.00 / 0.00 ลิตร</strong><small id="executiveDieselDailyReceived">รับเข้า 0.00 ลิตร</small></div>
-              <div><h4>เดือนนี้</h4><strong id="executiveDieselMTDSummary">0.00 / 0.00 ลิตร</strong><small id="executiveDieselMTDReceived">รับเข้า 0.00 ลิตร</small></div>
+              <div><h4>ใช้รวมวันนี้</h4><strong id="executiveDieselDailySummary">0.00 ลิตร</strong><small id="executiveDieselDailyReceived">รับเข้า 0.00 ลิตร</small></div>
+              <div><h4>ใช้สะสมเดือนนี้ (MTD)</h4><strong id="executiveDieselMTDSummary">0.00 ลิตร</strong><small>ยอดใช้จริงตั้งแต่ต้นเดือนถึงวันที่รายงาน</small></div>
               <div class="stock"><h4>Balance</h4><strong id="executiveDieselBalance">-</strong><small id="executiveDieselBalanceNote">ยังไม่ตั้งยอดตั้งต้น</small></div>
             </div>
+            <div class="executive-fuel-machine-list" id="executiveDieselMachines" aria-label="การใช้น้ำมันแยกตามเครื่องจักร"></div>
           </section>
 
           <section class="executive-section">
@@ -3095,7 +3096,7 @@ initializeAppTab(initialTab && TAB_TITLES[initialTab] ? initialTab : 'home').cat
 <script src="kpi.js?v=20260723-yieldsplit"></script>
 <script src="monthly.js?v=20260805-monthly-donut-export-v4"></script>
 <script src="diesel.js?v=20260811-stock-balance"></script>
-<script src="executive.js?v=20260811-diesel-balance"></script>
+<script src="executive.js?v=20260811-diesel-machine-progress"></script>
 <script src="home.js?v=20260724-grab-runtime"></script>
 </body>
 </html>

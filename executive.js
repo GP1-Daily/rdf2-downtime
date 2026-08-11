@@ -124,6 +124,32 @@
     </article>`).join('');
   }
 
+  function renderDieselMachines(data) {
+    const target = document.getElementById('executiveDieselMachines');
+    if (!target) return;
+    const rows = (Array.isArray(data.diesel?.daily?.byMachine) ? data.diesel.daily.byMachine : [])
+      .filter((row) => Math.max(0, Number(row.liters) || 0) > 0);
+    if (!rows.length) {
+      target.innerHTML = '<div class="executive-empty-row">ไม่มีการใช้น้ำมันในวันที่เลือกรายงาน</div>';
+      return;
+    }
+    target.innerHTML = rows.map((row) => {
+      const liters = Math.max(0, Number(row.liters) || 0);
+      const limit = Math.max(0, Number(row.dailyLimitLiters) || 0);
+      const pct = limit > 0 ? liters / limit * 100 : null;
+      const exceeded = pct !== null && pct > 100;
+      const width = Math.min(100, Math.max(0, pct || 0));
+      return `<article class="executive-fuel-machine${exceeded ? ' danger' : ''}">
+        <div class="executive-fuel-machine-head">
+          <strong>${htmlEsc(row.machine)}</strong>
+          <span>${numberLabel(liters)} / ${limit > 0 ? numberLabel(limit) : '-'} ลิตร</span>
+        </div>
+        <div class="executive-fuel-machine-progress"><i style="width:${width}%"></i></div>
+        <b>${pct === null ? '-' : percentLabel(pct)}</b>
+      </article>`;
+    }).join('');
+  }
+
   function renderExecutive(data) {
     setText('executiveDateLabel', thaiDate(data.date));
     setText('executiveIncomingDaily', numberLabel(data.incoming.dailyTons));
@@ -136,11 +162,12 @@
     setText('executiveRDF2LGDaily', numberLabel(data.output.daily.rdf2LGTons));
     setText('executiveYieldNote', data.output.hasYieldSetting ? 'คำนวณจาก Yield ที่มีผล' : 'ยังไม่มีค่า Yield');
 
+    const dailyDieselMachines = Array.isArray(data.diesel.daily.byMachine) ? data.diesel.daily.byMachine : [];
     setText('executiveDieselDaily', numberLabel(data.diesel.daily.totalLiters));
-    setText('executiveDieselDailyLimit', numberLabel(data.diesel.daily.totalLimitLiters));
-    setText('executiveDieselDailyPct', `${percentLabel(data.diesel.daily.utilizationPct)} ของลิมิต`);
-    setText('executiveDieselDailySummary', `${numberLabel(data.diesel.daily.totalLiters)} / ${numberLabel(data.diesel.daily.totalLimitLiters)} ลิตร`);
+    setText('executiveDieselDailyMeta', `${dailyDieselMachines.length.toLocaleString('th-TH')} เครื่องจักรที่ใช้วันนี้`);
+    setText('executiveDieselDailySummary', `${numberLabel(data.diesel.daily.totalLiters)} ลิตร`);
     setText('executiveDieselDailyReceived', `รับเข้า ${numberLabel(data.diesel.daily.stock.periodReceivedLiters)} ลิตร`);
+    renderDieselMachines(data);
 
     renderDailyComparisons(data);
     const plan = data.output.plan;
@@ -164,9 +191,8 @@
     setText('executiveRDF2LGMTDPlan', `${numberLabel(plan.mtdRDF2LGTons)} ตัน`);
     setText('executiveRDF2LGMTDPct', percentLabel(rdf2LGMTDPct));
     setProgress('executiveRDF2LGMTDBar', rdf2LGMTDPct);
-    setText('executiveDieselMTD', `MTD ${numberLabel(data.diesel.mtd.totalLiters)} / ${numberLabel(data.diesel.mtd.totalLimitLiters)} ลิตร · ${percentLabel(data.diesel.mtd.utilizationPct)}`);
-    setText('executiveDieselMTDSummary', `${numberLabel(data.diesel.mtd.totalLiters)} / ${numberLabel(data.diesel.mtd.totalLimitLiters)} ลิตร`);
-    setText('executiveDieselMTDReceived', `รับเข้า ${numberLabel(data.diesel.mtd.stock.periodReceivedLiters)} ลิตร`);
+    setText('executiveDieselMTD', `MTD ใช้ไป ${numberLabel(data.diesel.mtd.totalLiters)} ลิตร`);
+    setText('executiveDieselMTDSummary', `${numberLabel(data.diesel.mtd.totalLiters)} ลิตร`);
     setText('executiveDieselBalance', data.diesel.daily.stock.configured
       ? `${numberLabel(data.diesel.daily.stock.balanceLiters)} ลิตร`
       : '-');
