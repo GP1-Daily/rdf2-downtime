@@ -253,6 +253,8 @@ test('diesel entry and executive daily report combine source systems without dou
     /\.executive-skeleton\[hidden\],\.executive-content\[hidden\]\{display:none !important;\}/,
   );
   const page = await fetch(`${baseUrl}/`).then((pageResponse) => pageResponse.text());
+  assert.match(page, /executive\.js\?v=20260811-diesel-balance/);
+  assert.match(page, /executive\.css\?v=20260811-diesel-balance/);
   assert.match(page, /id="tab-diesel"/);
   assert.match(page, /id="tab-executive-report"/);
   assert.match(page, /<h2>Control Report<\/h2>/);
