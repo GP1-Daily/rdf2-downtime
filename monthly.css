@@ -95,7 +95,7 @@
   height: auto;
   max-height: 48px;
   object-fit: contain;
-  filter: drop-shadow(0 4px 9px rgba(0, 0, 0, 0.16));
+  filter: brightness(1.08) saturate(1.1) drop-shadow(0 0 1.2px rgba(239, 255, 247, 0.96)) drop-shadow(0 0 6px rgba(110, 231, 183, 0.22)) drop-shadow(0 4px 9px rgba(0, 0, 0, 0.16));
 }
 
 .monthly-report-brand span {

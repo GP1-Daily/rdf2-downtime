@@ -58,7 +58,7 @@
   border-top:5px solid var(--exec-bright);
 }
 .executive-brand{display:flex; align-items:center; gap:19px; min-width:0;}
-.executive-brand img{width:176px; height:auto; object-fit:contain; filter:brightness(1.12) saturate(1.05) drop-shadow(0 6px 13px rgba(0,0,0,.22));}
+.executive-brand img{width:176px; height:auto; object-fit:contain; filter:brightness(1.08) saturate(1.1) drop-shadow(0 0 1.2px rgba(239,255,247,.96)) drop-shadow(0 0 6px rgba(110,231,183,.22)) drop-shadow(0 6px 13px rgba(0,0,0,.22));}
 .executive-brand > div > span{display:block; margin-bottom:3px; color:#69d1a4; font-size:9px; font-weight:800;}
 .executive-brand h2{margin:0; font-size:25px; line-height:1.25; letter-spacing:0;}
 .executive-brand p{margin:5px 0 0; color:#a9c8bd; font-size:10px; font-weight:600;}

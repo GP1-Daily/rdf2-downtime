@@ -470,7 +470,7 @@ section.panel .ops-section-head h2{
   height:auto;
   flex:0 0 auto;
   background:transparent;
-  filter:brightness(1.12) saturate(1.08) drop-shadow(0 0 1px rgba(235,255,246,.88)) drop-shadow(0 5px 11px rgba(0,0,0,.28));
+  filter:brightness(1.08) saturate(1.1) drop-shadow(0 0 1.2px rgba(239,255,247,.96)) drop-shadow(0 0 6px rgba(110,231,183,.22)) drop-shadow(0 5px 11px rgba(0,0,0,.28));
 }
 .ps-brand>div{
   min-width:0;
