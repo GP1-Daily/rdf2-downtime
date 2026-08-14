@@ -16,6 +16,7 @@
 <link rel="stylesheet" href="operations.css?v=20260729-transparent-logo">
 <link rel="stylesheet" href="diesel.css?v=20260811-stock-balance">
 <link rel="stylesheet" href="executive.css?v=20260814-rdf3-stock">
+<link rel="stylesheet" href="machines.css?v=20260814-machine-bottleneck">
 <style>
   :root{
     --brand:#0f8a5f; --brand-dark:#086342; --brand-bright:#22b573;
@@ -834,7 +835,11 @@
       <div class="rdf3-production-summary">
         <div><span>จำนวน Grab</span><strong id="rRDF3GrabCount">-</strong></div>
         <div><span>RDF2 เข้าเครื่อง RDF3</span><strong id="rRDF3Feed">-</strong></div>
-        <div><span>Yield แปลง RDF2 เป็น RDF3</span><strong id="rRDF3Yield">82.35%</strong></div>
+        <div><span>เวลาเดินจาก Grab แรก-สุดท้าย</span><strong id="rRDF3Runtime">-</strong></div>
+        <div><span>เครื่องที่เดิน</span><strong id="rRDF3ActiveMachines">-</strong></div>
+        <div><span>Active Capacity</span><strong id="rRDF3ActiveCapacity">-</strong></div>
+        <div><span>Yield / Efficiency</span><strong id="rRDF3Yield">-</strong></div>
+        <div><span>กำลังผลิตตาม Capacity</span><strong id="rRDF3CapacityOutput">-</strong></div>
         <div><span>RDF3 ที่ผลิตได้</span><strong id="rRDF3Output">-</strong></div>
       </div>
     </section>
@@ -1255,6 +1260,68 @@
       <div class="hint" id="stockBaselineHint"></div>
     </section>
 
+    <section class="panel machine-process-panel" aria-labelledby="machineProcessTitle">
+      <header class="machine-section-head">
+        <div><span>PRODUCTION FLOW</span><h2 id="machineProcessTitle">ภาพรวมเครื่องจักร RDF2 และ RDF3</h2></div>
+        <p>น้ำหนักจริงจาก Grab Crane เชื่อมกับ Yield และกำลังผลิตของเครื่องที่เปิดใช้งาน</p>
+      </header>
+      <div class="production-flow" aria-label="RDF production process">
+        <article class="process-line rdf2-line">
+          <div class="process-copy"><span>PRIMARY LINE</span><h3>RDF2 Production</h3><p>MSW จาก RDF2 Grab Crane ผ่านกระบวนการคัดแยกตาม Yield</p></div>
+          <div class="machine-visual rdf2-machine" aria-hidden="true">
+            <i class="machine-hopper"></i><i class="machine-body"></i><i class="machine-spinner"></i><i class="machine-belt"></i><i class="machine-output"></i>
+          </div>
+          <div class="process-output-list"><span>RDF2</span><span>RDF2 LG</span><span>Fine Fraction</span><span>Heavy Fraction</span><span>Metal</span></div>
+        </article>
+        <div class="process-connector" aria-hidden="true"><i></i><span>RDF2 Feed</span><b>›</b></div>
+        <article class="process-line rdf3-line">
+          <div class="process-copy"><span>SECONDARY LINE</span><h3>RDF3 Production</h3><p>คำนวณจากเครื่อง MC ที่ ON โดยใช้ Capacity × เวลา × Efficiency</p></div>
+          <div class="machine-visual rdf3-machine" aria-hidden="true">
+            <div class="mini-machine-bank"><i data-label="MC1"></i><i data-label="MC2"></i><i data-label="MC3"></i><i data-label="MC4"></i><i data-label="MC5"></i></div><i class="machine-belt"></i><i class="machine-output"></i>
+          </div>
+          <div class="process-output-list"><span>RDF3</span><span>RDF2 In Process</span></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel rdf3-machine-panel" id="rdf3MachineControl">
+      <header class="machine-section-head">
+        <div><span>MACHINE CONTROL</span><h2>RDF3 Capacity Setup</h2></div>
+        <p>ระบบใช้ค่าที่มีผลล่าสุด และเลือกผลผลิตต่ำกว่าระหว่าง Material กับ Capacity</p>
+      </header>
+      <div class="machine-config-bar">
+        <label><span>มีผลตั้งแต่วันที่</span><input type="date" id="rdf3SettingDate"></label>
+        <label><span>Yield รวม 5 เครื่อง (%)</span><input type="number" id="rdf3MachineYield" min="0" max="100" step="0.01"></label>
+        <label><span>Efficiency (%)</span><input type="number" id="rdf3MachineEfficiency" min="0" max="100" step="0.01"></label>
+        <button class="primary" id="btnSaveRDF3MachineSettings">บันทึกค่ากำลังผลิต</button>
+      </div>
+      <div class="machine-daily-bar">
+        <div><span>สถานะการเดินเครื่องรายวัน</span><strong id="rdf3MachineDailyLabel">-</strong></div>
+        <label><span>วันที่ใช้งาน</span><input type="date" id="rdf3MachineDailyDate"></label>
+        <button id="btnSaveRDF3MachineDaily">บันทึก ON / OFF วันนี้</button>
+      </div>
+      <div class="machine-bank-controls" id="rdf3MachineBank">
+        <article class="machine-control" data-machine="MC1"><div class="machine-control-top"><span class="machine-index">01</span><div><strong>MC1</strong><small>RDF3 Machine</small></div><label class="machine-switch" title="เปิดหรือปิดเครื่องสำหรับวันที่เลือก"><input type="checkbox" id="rdf3MC1On"><span aria-hidden="true"></span><b>ON</b></label></div><div class="machine-control-graphic" aria-hidden="true"><i></i><i></i><i></i><i></i></div><label class="machine-capacity-field"><span>Capacity</span><div><input type="number" id="rdf3MC1Cap" min="0" step="0.01"><b>ตัน/ชม.</b></div></label></article>
+        <article class="machine-control" data-machine="MC2"><div class="machine-control-top"><span class="machine-index">02</span><div><strong>MC2</strong><small>RDF3 Machine</small></div><label class="machine-switch" title="เปิดหรือปิดเครื่องสำหรับวันที่เลือก"><input type="checkbox" id="rdf3MC2On"><span aria-hidden="true"></span><b>ON</b></label></div><div class="machine-control-graphic" aria-hidden="true"><i></i><i></i><i></i><i></i></div><label class="machine-capacity-field"><span>Capacity</span><div><input type="number" id="rdf3MC2Cap" min="0" step="0.01"><b>ตัน/ชม.</b></div></label></article>
+        <article class="machine-control" data-machine="MC3"><div class="machine-control-top"><span class="machine-index">03</span><div><strong>MC3</strong><small>RDF3 Machine</small></div><label class="machine-switch" title="เปิดหรือปิดเครื่องสำหรับวันที่เลือก"><input type="checkbox" id="rdf3MC3On"><span aria-hidden="true"></span><b>ON</b></label></div><div class="machine-control-graphic" aria-hidden="true"><i></i><i></i><i></i><i></i></div><label class="machine-capacity-field"><span>Capacity</span><div><input type="number" id="rdf3MC3Cap" min="0" step="0.01"><b>ตัน/ชม.</b></div></label></article>
+        <article class="machine-control" data-machine="MC4"><div class="machine-control-top"><span class="machine-index">04</span><div><strong>MC4</strong><small>RDF3 Machine</small></div><label class="machine-switch" title="เปิดหรือปิดเครื่องสำหรับวันที่เลือก"><input type="checkbox" id="rdf3MC4On"><span aria-hidden="true"></span><b>ON</b></label></div><div class="machine-control-graphic" aria-hidden="true"><i></i><i></i><i></i><i></i></div><label class="machine-capacity-field"><span>Capacity</span><div><input type="number" id="rdf3MC4Cap" min="0" step="0.01"><b>ตัน/ชม.</b></div></label></article>
+        <article class="machine-control" data-machine="MC5"><div class="machine-control-top"><span class="machine-index">05</span><div><strong>MC5</strong><small>RDF3 Machine</small></div><label class="machine-switch" title="เปิดหรือปิดเครื่องสำหรับวันที่เลือก"><input type="checkbox" id="rdf3MC5On"><span aria-hidden="true"></span><b>ON</b></label></div><div class="machine-control-graphic" aria-hidden="true"><i></i><i></i><i></i><i></i></div><label class="machine-capacity-field"><span>Capacity</span><div><input type="number" id="rdf3MC5Cap" min="0" step="0.01"><b>ตัน/ชม.</b></div></label></article>
+      </div>
+      <div class="machine-calculation" id="rdf3MachineCalculation">
+        <div><span>เครื่องที่เดิน</span><strong id="rdf3MachineActive">0 / 5</strong></div>
+        <div><span>Active Capacity</span><strong id="rdf3MachineActiveCap">0.00 ตัน/ชม.</strong></div>
+        <div><span>เวลาเดิน</span><strong id="rdf3MachineRuntime">0 ชม. 0 น.</strong></div>
+        <div><span>ตามวัตถุดิบ</span><strong id="rdf3MachineMaterialOutput">0.00 ตัน</strong></div>
+        <div><span>ตาม Capacity</span><strong id="rdf3MachineCapacityOutput">0.00 ตัน</strong></div>
+        <div class="result"><span>RDF3 ประมาณการ</span><strong id="rdf3MachineEstimatedOutput">0.00 ตัน</strong></div>
+        <div class="wip"><span>RDF2 In Process</span><strong id="rdf3MachineWIP">0.00 ตัน</strong></div>
+      </div>
+      <div class="machine-status-line" id="rdf3MachineStatus" role="status"></div>
+      <div class="scroll-table machine-history-wrap">
+        <table><thead><tr><th>มีผลตั้งแต่</th><th>MC1</th><th>MC2</th><th>MC3</th><th>MC4</th><th>MC5</th><th>Yield</th><th>Efficiency</th><th>จัดการ</th></tr></thead><tbody id="rdf3MachineHistory"></tbody></table>
+      </div>
+    </section>
+
     <section class="panel">
       <h2>ตั้งค่า Yield % (ใช้ต่อเนื่องจนกว่าจะตั้งใหม่)</h2>
       <div class="entry-form">
@@ -1315,6 +1382,10 @@
           <input type="number" id="baselineRDF3" min="0" step="0.01">
         </div>
         <div>
+          <label>RDF2 In Process (ตัน)</label>
+          <input type="number" id="baselineRDF2InProcess" min="0" step="0.01">
+        </div>
+        <div>
           <label>Fine Fraction (ตัน)</label>
           <input type="number" id="baselineFine" min="0" step="0.01">
         </div>
@@ -1326,7 +1397,7 @@
           <button class="primary" id="btnSaveBaseline">บันทึกสต็อกเริ่มต้น</button>
         </div>
       </div>
-      <div class="hint">ระบุยอดยกมาต้นวัน ระบบจะบวกผลผลิต RDF2/RDF2 LG/Fine Fraction/Metal จาก Yield, หัก RDF2 ที่ส่งเข้า RDF3 Grab Crane, บวก RDF3 ที่ผลิตได้ 82.35% และลบยอดขายอัตโนมัติ</div>
+      <div class="hint">ระบุยอดยกมาต้นวัน ระบบจะบวกผลผลิต RDF2/RDF2 LG/Fine Fraction/Metal, แยก RDF2 ที่ RDF3 Grab Crane ป้อนเข้าเป็น In Process และผลิต RDF3 ตามคอขวดของ Yield กับ Capacity ก่อนลบยอดขายอัตโนมัติ</div>
     </section>
 
   </section>
@@ -1773,6 +1844,7 @@
 </footer>
 <div class="toast" id="toast"></div>
 
+<script src="machines.js?v=20260814-machine-bottleneck"></script>
 <script>
 const PERIOD_LABEL = { 'เช้า':'morning', 'บ่าย':'afternoon', 'ดึก':'night' };
 let html2CanvasPromise = null;
@@ -2106,6 +2178,7 @@ const MATERIAL_STOCK_ITEMS = [
   { key:'rdf2', label:'RDF2', cls:'rdf2' },
   { key:'rdf2LG', label:'RDF2 LG', cls:'rdf2lg' },
   { key:'rdf3', label:'RDF3', cls:'rdf3' },
+  { key:'rdf2InProcess', label:'RDF2 In Process', cls:'wip' },
   { key:'fineFraction', label:'Fine Fraction', cls:'fine' },
   { key:'metal', label:'Metal', cls:'metal' },
 ];
@@ -2138,7 +2211,19 @@ async function loadProduction(date){
   const rdf3Grab = Math.max(0, Number(data.rdf3Grab?.totalGrabs) || 0);
   document.getElementById('rRDF3GrabCount').textContent = rdf3Grab.toLocaleString('th-TH');
   document.getElementById('rRDF3Feed').textContent = `${revenueNumber(rdf3.feedTons)} ตัน`;
-  document.getElementById('rRDF3Yield').textContent = `${revenueNumber(rdf3.yieldPct)}%`;
+  document.getElementById('rRDF3Runtime').textContent = fmtMin(rdf3.runtimeMinutes || 0);
+  document.getElementById('rRDF3ActiveMachines').textContent = rdf3.configured
+    ? `${Number(rdf3.activeMachineCount) || 0} / 5 เครื่อง`
+    : 'สูตรย้อนหลัง';
+  document.getElementById('rRDF3ActiveCapacity').textContent = rdf3.activeCapacityTPH === null || rdf3.activeCapacityTPH === undefined
+    ? '-'
+    : `${revenueNumber(rdf3.activeCapacityTPH)} ตัน/ชม.`;
+  document.getElementById('rRDF3Yield').textContent = rdf3.efficiencyPct === null || rdf3.efficiencyPct === undefined
+    ? `${revenueNumber(rdf3.yieldPct)}%`
+    : `${revenueNumber(rdf3.yieldPct)}% / ${revenueNumber(rdf3.efficiencyPct)}%`;
+  document.getElementById('rRDF3CapacityOutput').textContent = rdf3.capacityOutputTons === null || rdf3.capacityOutputTons === undefined
+    ? '-'
+    : `${revenueNumber(rdf3.capacityOutputTons)} ตัน`;
   document.getElementById('rRDF3Output').textContent = `${revenueNumber(rdf3.outputTons)} ตัน`;
   renderMaterialStock('controlStockGrid', 'controlStockStatus', data.stock);
   document.getElementById('psRDF3GrabCount').textContent = `${rdf3Grab.toLocaleString('th-TH')} Grab`;
@@ -2302,6 +2387,7 @@ async function loadBaseline(){
     document.getElementById('baselineRDF2').value = data.row.RDF2Tons;
     document.getElementById('baselineRDF2LG').value = data.row.RDF2LGTons || 0;
     document.getElementById('baselineRDF3').value = data.row.RDF3Tons || 0;
+    document.getElementById('baselineRDF2InProcess').value = data.row.RDF2InProcessTons || 0;
     document.getElementById('baselineFine').value = data.row.FineFractionTons;
     document.getElementById('baselineMetal').value = data.row.MetalTons;
   }
@@ -2317,6 +2403,7 @@ onClickGuarded(document.getElementById('btnSaveBaseline'), async ()=>{
         rdf2Tons: document.getElementById('baselineRDF2').value || 0,
         rdf2LGTons: document.getElementById('baselineRDF2LG').value || 0,
         rdf3Tons: document.getElementById('baselineRDF3').value || 0,
+        rdf2InProcessTons: document.getElementById('baselineRDF2InProcess').value || 0,
         fineFractionTons: document.getElementById('baselineFine').value || 0,
         metalTons: document.getElementById('baselineMetal').value || 0,
       }) });
@@ -2451,7 +2538,7 @@ async function loadStock(){
   const data = await api('/api/stock');
   document.getElementById('currentStockGrid').innerHTML = materialStockHtml(data);
   document.getElementById('stockBaselineHint').textContent = data.baseline
-    ? `ณ ${data.asOfDate} · ตั้งต้น ${data.baselineDate} · RDF2 ส่งเข้า RDF3 สะสม ${revenueNumber(data.rdf2TransferredToRDF3Tons)} ตัน · RDF3 Yield ${revenueNumber(data.rdf3ConversionYieldPct)}%`
+    ? `ณ ${data.asOfDate} · ตั้งต้น ${data.baselineDate} · RDF2 ส่งเข้า RDF3 สะสม ${revenueNumber(data.rdf2TransferredToRDF3Tons)} ตัน · RDF3 ${data.rdf3MachineConfigured ? 'คำนวณตาม Machine Bottleneck' : `Yield ย้อนหลัง ${revenueNumber(data.rdf3ConversionYieldPct)}%`}`
     : 'ยังไม่ได้ตั้งค่าสต๊อกตั้งต้น';
 }
 
@@ -3204,6 +3291,7 @@ function initializeAppTab(tab, force=false){
       case 'stock':
         await loadRevenueCustomers();
         await Promise.all([loadYieldTable(), loadSalesTable(), loadBaseline(), loadStock()]);
+        if (window.initProductionMachines) await window.initProductionMachines();
         break;
       case 'delivery':
         await loadRevenueCustomers();

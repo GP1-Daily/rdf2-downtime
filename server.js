@@ -26,7 +26,7 @@ const BODY_LIMIT_BYTES = Math.min(
 );
 const PUBLIC_FILES = new Set([
   'index.html', 'login.html', 'accept-invite.html', 'security.html',
-  'home.css', 'home.js', 'kpi.css', 'kpi.js', 'monthly.css', 'monthly.js', 'html2canvas.min.js',
+  'home.css', 'home.js', 'kpi.css', 'kpi.js', 'monthly.css', 'monthly.js', 'machines.css', 'machines.js', 'html2canvas.min.js',
   'operations.css', 'diesel.css', 'diesel.js', 'executive.css', 'executive.js',
   'login.css', 'login.js', 'invite.js', 'security.css', 'security-admin.js',
   'security-ui.css', 'security-ui.js',
@@ -617,7 +617,7 @@ async function handleReport(req, res, query) {
 
   const [
     downtimeRows, lineRows, grabRows, rdf3GrabRows, yieldRows,
-    baselineRows, salesRows, rdf3SalesRows,
+    baselineRows, salesRows, rdf3SalesRows, rdf3MachineSettingRows, rdf3MachineDailyRows,
   ] = await Promise.all([
     store.readSheet('Downtime'),
     store.readSheet('LineTime'),
@@ -627,6 +627,8 @@ async function handleReport(req, res, query) {
     store.readSheet('StockBaseline'),
     store.readSheet('Sales'),
     store.readSheet('RevenueRDF3Sales'),
+    store.readSheet('RDF3MachineSettings'),
+    store.readSheet('RDF3MachineDaily'),
   ]);
 
   // ---- Line sessions ----
@@ -779,11 +781,19 @@ async function handleReport(req, res, query) {
     g.avgWeight = g.count > 0 ? g.totalWeight / g.count : null;
   }
 
-  const rdf3Production = computeRDF3Production(rdf3FeedTonsForDate(rdf3GrabRows, date));
   const rdf3Grab = summarizeRDF3Grab(rdf3GrabRows, date);
   const stock = buildMaterialStockData({
     asOfDate: date, grabRows, rdf3GrabRows, yieldRows, baselineRows, salesRows, rdf3SalesRows,
+    rdf3MachineSettingRows, rdf3MachineDailyRows,
   });
+  const rdf3Production = stock.daily.find((row) => row.date === date)?.rdf3Production
+    || computeRDF3Production(rdf3FeedTonsForDate(rdf3GrabRows, date), {
+      date,
+      grabRows: rdf3GrabRows,
+      setting: getApplicableRDF3MachineSetting(rdf3MachineSettingRows, date),
+      dailyStatus: rdf3MachineDailyRows.find((row) => row.EntryDate === date),
+      availableFeedTons: stock.stock.rdf2InProcess,
+    });
 
   return sendJson(res, 200, {
     ok: true,
@@ -872,13 +882,107 @@ function computeProduction(incomingWaste, yieldSetting) {
 }
 
 const RDF3_CONVERSION_YIELD_PCT = 82.35;
+const RDF3_MACHINE_CODES = Object.freeze(['MC1', 'MC2', 'MC3', 'MC4', 'MC5']);
 
-function computeRDF3Production(feedTons) {
+function getApplicableRDF3MachineSetting(rows, date) {
+  return applicableRow(rows, date, 'EffectiveDate');
+}
+
+function normalizedBoolean(value, fallback = false) {
+  if (value === '' || value === null || value === undefined) return fallback;
+  if (typeof value === 'string') return !['false', '0', 'off', 'no'].includes(value.toLowerCase());
+  return Boolean(value);
+}
+
+function rdf3RuntimeMinutesForDate(rows, date) {
+  const selected = rows
+    .filter((row) => row.ReportDate === date)
+    .sort((a, b) => String(a.DateTime).localeCompare(String(b.DateTime)));
+  if (selected.length < 2) return 0;
+  const secondsOfDay = (value) => {
+    const match = String(value || '').match(/[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+    return match ? Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3] || 0) : 0;
+  };
+  return Math.max(0, (secondsOfDay(selected[selected.length - 1].DateTime)
+    - secondsOfDay(selected[0].DateTime)) / 60);
+}
+
+function rdf3DailyMachineState(setting, dailyRow) {
+  return RDF3_MACHINE_CODES.map((code) => {
+    const capTPH = Math.max(0, Number(setting?.[`${code}CapTPH`]) || 0);
+    const on = dailyRow
+      ? normalizedBoolean(dailyRow[`${code}On`], capTPH > 0)
+      : capTPH > 0;
+    return { code, capTPH, on, active: on && capTPH > 0 };
+  });
+}
+
+function computeRDF3Production(feedTons, options = {}) {
   const normalizedFeedTons = Math.max(0, Number(feedTons) || 0);
+  const setting = options.setting || null;
+  const availableFeedTons = Math.max(
+    normalizedFeedTons,
+    Number(options.availableFeedTons) || 0,
+  );
+
+  // Preserve historical reports until the first machine setting takes effect.
+  if (!setting) {
+    const previousWipTons = Math.max(0, availableFeedTons - normalizedFeedTons);
+    return {
+      mode: 'legacy-yield',
+      configured: false,
+      feedTons: normalizedFeedTons,
+      availableFeedTons,
+      inputConsumedTons: normalizedFeedTons,
+      wipTons: previousWipTons,
+      yieldPct: RDF3_CONVERSION_YIELD_PCT,
+      efficiencyPct: null,
+      runtimeMinutes: rdf3RuntimeMinutesForDate(options.grabRows || [], options.date || ''),
+      runtimeHours: rdf3RuntimeMinutesForDate(options.grabRows || [], options.date || '') / 60,
+      totalCapacityTPH: null,
+      activeCapacityTPH: null,
+      activeMachineCount: null,
+      materialOutputTons: normalizedFeedTons * RDF3_CONVERSION_YIELD_PCT / 100,
+      capacityOutputTons: null,
+      outputTons: normalizedFeedTons * RDF3_CONVERSION_YIELD_PCT / 100,
+      machines: [],
+      configEffectiveDate: null,
+    };
+  }
+
+  const yieldPct = Math.max(0, Math.min(100, Number(setting.YieldPct) || 0));
+  const efficiencyPct = Math.max(0, Math.min(100, Number(setting.EfficiencyPct) || 0));
+  const machines = rdf3DailyMachineState(setting, options.dailyStatus || null);
+  const totalCapacityTPH = machines.reduce((sum, machine) => sum + machine.capTPH, 0);
+  const activeCapacityTPH = machines
+    .filter((machine) => machine.active)
+    .reduce((sum, machine) => sum + machine.capTPH, 0);
+  const runtimeMinutes = rdf3RuntimeMinutesForDate(options.grabRows || [], options.date || '');
+  const runtimeHours = runtimeMinutes / 60;
+  const materialOutputTons = availableFeedTons * yieldPct / 100;
+  const capacityOutputTons = activeCapacityTPH * runtimeHours * efficiencyPct / 100;
+  const outputTons = Math.max(0, Math.min(materialOutputTons, capacityOutputTons));
+  const inputConsumedTons = yieldPct > 0 ? Math.min(availableFeedTons, outputTons / (yieldPct / 100)) : 0;
+
   return {
+    mode: 'machine-bottleneck',
+    configured: true,
     feedTons: normalizedFeedTons,
-    yieldPct: RDF3_CONVERSION_YIELD_PCT,
-    outputTons: normalizedFeedTons * RDF3_CONVERSION_YIELD_PCT / 100,
+    availableFeedTons,
+    inputConsumedTons,
+    wipTons: Math.max(0, availableFeedTons - inputConsumedTons),
+    yieldPct,
+    efficiencyPct,
+    runtimeMinutes,
+    runtimeHours,
+    totalCapacityTPH,
+    activeCapacityTPH,
+    activeMachineCount: machines.filter((machine) => machine.active).length,
+    materialOutputTons,
+    capacityOutputTons,
+    outputTons,
+    machines,
+    configEffectiveDate: setting.EffectiveDate,
   };
 }
 
@@ -890,6 +994,7 @@ function rdf3FeedTonsForDate(rows, date) {
 
 function buildMaterialStockData({
   asOfDate, grabRows, rdf3GrabRows, yieldRows, baselineRows, salesRows, rdf3SalesRows,
+  rdf3MachineSettingRows = [], rdf3MachineDailyRows = [],
 }) {
   const baseline = baselineRows[0] || null;
   const baselineDate = baseline?.BaselineDate || '';
@@ -898,6 +1003,7 @@ function buildMaterialStockData({
     rdf2: configured ? Number(baseline.RDF2Tons) || 0 : 0,
     rdf2LG: configured ? Number(baseline.RDF2LGTons) || 0 : 0,
     rdf3: configured ? Number(baseline.RDF3Tons) || 0 : 0,
+    rdf2InProcess: configured ? Number(baseline.RDF2InProcessTons) || 0 : 0,
     fineFraction: configured ? Number(baseline.FineFractionTons) || 0 : 0,
     metal: configured ? Number(baseline.MetalTons) || 0 : 0,
   };
@@ -926,7 +1032,16 @@ function buildMaterialStockData({
       .filter((row) => row.ReportDate === date)
       .reduce((sum, row) => sum + Math.max(0, Number(row.Weight) || 0), 0);
     const rdf2Production = computeProduction(incomingTons, getApplicableYield(yieldRows, date));
-    const rdf3Production = computeRDF3Production(rdf3FeedTonsForDate(rdf3GrabRows, date));
+    const rdf3FeedTons = rdf3FeedTonsForDate(rdf3GrabRows, date);
+    const machineSetting = getApplicableRDF3MachineSetting(rdf3MachineSettingRows, date);
+    const machineDaily = rdf3MachineDailyRows.find((row) => row.EntryDate === date) || null;
+    const rdf3Production = computeRDF3Production(rdf3FeedTons, {
+      date,
+      grabRows: rdf3GrabRows,
+      setting: machineSetting,
+      dailyStatus: machineDaily,
+      availableFeedTons: stock.rdf2InProcess + rdf3FeedTons,
+    });
     const dayProduction = {
       rdf2: rdf2Production?.tons.rdf2 || 0,
       rdf2LG: rdf2Production?.tons.rdf2LG || 0,
@@ -953,6 +1068,7 @@ function buildMaterialStockData({
     rdf2TransferredToRDF3Tons += rdf3Production.feedTons;
     stock.rdf2 += dayProduction.rdf2 - rdf3Production.feedTons - daySales.rdf2;
     stock.rdf2LG += dayProduction.rdf2LG - daySales.rdf2LG;
+    stock.rdf2InProcess = rdf3Production.wipTons;
     stock.rdf3 += dayProduction.rdf3 - daySales.rdf3;
     stock.fineFraction += dayProduction.fineFraction - daySales.fineFraction;
     stock.metal += dayProduction.metal - daySales.metal;
@@ -962,6 +1078,7 @@ function buildMaterialStockData({
       production: dayProduction,
       rdf2TransferredToRDF3Tons: rdf3Production.feedTons,
       rdf3ConversionYieldPct: rdf3Production.yieldPct,
+      rdf3Production,
       sales: daySales,
       closingStock: { ...stock },
     });
@@ -969,28 +1086,45 @@ function buildMaterialStockData({
 
   return {
     configured, baseline, baselineDate, asOfDate, stock, productionTotals, salesTotals,
-    rdf2TransferredToRDF3Tons, rdf3ConversionYieldPct: RDF3_CONVERSION_YIELD_PCT, daily,
+    rdf2TransferredToRDF3Tons,
+    rdf3ConversionYieldPct: getApplicableRDF3MachineSetting(rdf3MachineSettingRows, asOfDate)?.YieldPct
+      || RDF3_CONVERSION_YIELD_PCT,
+    rdf3MachineConfigured: Boolean(getApplicableRDF3MachineSetting(rdf3MachineSettingRows, asOfDate)),
+    daily,
   };
 }
 
 async function handleProduction(req, res, query) {
   const date = query.date || lib.todayStr();
-  const [grabRows, rdf3GrabRows, yieldRows, baselineRows, salesRows, rdf3SalesRows] = await Promise.all([
+  const [
+    grabRows, rdf3GrabRows, yieldRows, baselineRows, salesRows, rdf3SalesRows,
+    rdf3MachineSettingRows, rdf3MachineDailyRows,
+  ] = await Promise.all([
     store.readSheet('GrabCrane'),
     store.readSheet('RDF3GrabCrane'),
     store.readSheet('YieldSettings'),
     store.readSheet('StockBaseline'),
     store.readSheet('Sales'),
     store.readSheet('RevenueRDF3Sales'),
+    store.readSheet('RDF3MachineSettings'),
+    store.readSheet('RDF3MachineDaily'),
   ]);
   const incomingWaste = grabRows.filter((r) => r.ReportDate === date).reduce((s, r) => s + (Number(r.Weight) || 0), 0);
   const yieldSetting = getApplicableYield(yieldRows, date);
   const production = computeProduction(incomingWaste, yieldSetting);
-  const rdf3Production = computeRDF3Production(rdf3FeedTonsForDate(rdf3GrabRows, date));
   const rdf3Grab = summarizeRDF3Grab(rdf3GrabRows, date);
   const stock = buildMaterialStockData({
     asOfDate: date, grabRows, rdf3GrabRows, yieldRows, baselineRows, salesRows, rdf3SalesRows,
+    rdf3MachineSettingRows, rdf3MachineDailyRows,
   });
+  const rdf3Production = stock.daily.find((row) => row.date === date)?.rdf3Production
+    || computeRDF3Production(rdf3FeedTonsForDate(rdf3GrabRows, date), {
+      date,
+      grabRows: rdf3GrabRows,
+      setting: getApplicableRDF3MachineSetting(rdf3MachineSettingRows, date),
+      dailyStatus: rdf3MachineDailyRows.find((row) => row.EntryDate === date),
+      availableFeedTons: stock.stock.rdf2InProcess,
+    });
   return sendJson(res, 200, {
     ok: true, date, incomingWaste, hasYieldSetting: !!yieldSetting, production,
     rdf3Grab, rdf3Production, stock,
@@ -1036,6 +1170,112 @@ async function handleYield(req, res, parts) {
   return sendJson(res, 404, { ok: false, error: 'not found' });
 }
 
+const DEFAULT_RDF3_MACHINE_SETTING = Object.freeze({
+  EffectiveDate: '',
+  MC1CapTPH: 0,
+  MC2CapTPH: 0.30,
+  MC3CapTPH: 0.30,
+  MC4CapTPH: 0.58,
+  MC5CapTPH: 0.58,
+  YieldPct: RDF3_CONVERSION_YIELD_PCT,
+  EfficiencyPct: 65,
+});
+
+function validateRDF3MachineSetting(body) {
+  const effectiveDate = cleanText(body.effectiveDate);
+  const values = RDF3_MACHINE_CODES.map((code) => Number(body[`${code.toLowerCase()}CapTPH`]));
+  const yieldPct = Number(body.yieldPct);
+  const efficiencyPct = Number(body.efficiencyPct);
+  if (!validIsoDate(effectiveDate) || values.some((value) => !Number.isFinite(value) || value < 0)) {
+    return { error: 'กรุณาระบุวันที่และ Capacity ของ MC1-MC5 ให้ถูกต้อง' };
+  }
+  if (![yieldPct, efficiencyPct].every((value) => Number.isFinite(value) && value >= 0 && value <= 100)) {
+    return { error: 'Yield และ Efficiency ต้องอยู่ระหว่าง 0-100%' };
+  }
+  return {
+    data: {
+      EffectiveDate: effectiveDate,
+      ...Object.fromEntries(RDF3_MACHINE_CODES.map((code, index) => [`${code}CapTPH`, values[index]])),
+      YieldPct: yieldPct,
+      EfficiencyPct: efficiencyPct,
+    },
+  };
+}
+
+async function handleRDF3Machines(req, res, parts, query) {
+  if (req.method === 'GET' && parts.length === 0) {
+    const date = validIsoDate(query.date) ? query.date : lib.todayStr();
+    const [settings, dailyRows, grabRows] = await Promise.all([
+      store.readSheet('RDF3MachineSettings'),
+      store.readSheet('RDF3MachineDaily'),
+      store.readSheet('RDF3GrabCrane'),
+    ]);
+    settings.sort((a, b) => String(b.EffectiveDate).localeCompare(String(a.EffectiveDate)));
+    const applicable = getApplicableRDF3MachineSetting(settings, date);
+    const daily = dailyRows.find((row) => row.EntryDate === date) || null;
+    const formSetting = applicable || { ...DEFAULT_RDF3_MACHINE_SETTING, EffectiveDate: date };
+    const preview = computeRDF3Production(rdf3FeedTonsForDate(grabRows, date), {
+      date,
+      grabRows,
+      setting: applicable,
+      dailyStatus: daily,
+    });
+    return sendJson(res, 200, {
+      ok: true,
+      date,
+      configured: Boolean(applicable),
+      applicable,
+      formSetting,
+      daily,
+      machines: rdf3DailyMachineState(formSetting, daily),
+      preview,
+      history: settings,
+    });
+  }
+
+  if (req.method === 'PUT' && parts[0] === 'settings') {
+    const body = await readBody(req);
+    const validated = validateRDF3MachineSetting(body);
+    if (validated.error) return sendJson(res, 400, { ok: false, error: validated.error });
+    const rows = await store.readSheet('RDF3MachineSettings');
+    const existing = rows.find((row) => row.EffectiveDate === validated.data.EffectiveDate);
+    const row = existing
+      ? await store.updateRow('RDF3MachineSettings', existing.ID, validated.data)
+      : await store.appendRow('RDF3MachineSettings', validated.data);
+    return sendJson(res, 200, { ok: true, row, updated: Boolean(existing) });
+  }
+
+  if (req.method === 'DELETE' && parts[0] === 'settings' && parts[1]) {
+    const deleted = await store.deleteRow('RDF3MachineSettings', parts[1]);
+    return sendJson(res, 200, { ok: deleted });
+  }
+
+  if (req.method === 'PUT' && parts[0] === 'daily') {
+    const body = await readBody(req);
+    const entryDate = cleanText(body.entryDate);
+    if (!validIsoDate(entryDate)) return sendJson(res, 400, { ok: false, error: 'วันที่เดินเครื่องไม่ถูกต้อง' });
+    const data = {
+      EntryDate: entryDate,
+      ...Object.fromEntries(RDF3_MACHINE_CODES.map((code) => [
+        `${code}On`, normalizedBoolean(body[`${code.toLowerCase()}On`], true),
+      ])),
+    };
+    const rows = await store.readSheet('RDF3MachineDaily');
+    const existing = rows.find((row) => row.EntryDate === entryDate);
+    const row = existing
+      ? await store.updateRow('RDF3MachineDaily', existing.ID, data)
+      : await store.appendRow('RDF3MachineDaily', data);
+    return sendJson(res, 200, { ok: true, row, updated: Boolean(existing) });
+  }
+
+  if (req.method === 'DELETE' && parts[0] === 'daily' && parts[1]) {
+    const deleted = await store.deleteRow('RDF3MachineDaily', parts[1]);
+    return sendJson(res, 200, { ok: deleted });
+  }
+
+  return sendJson(res, 404, { ok: false, error: 'unknown RDF3 machine route' });
+}
+
 async function handleStockBaseline(req, res) {
   if (req.method === 'GET') {
     const rows = await store.readSheet('StockBaseline');
@@ -1043,7 +1283,10 @@ async function handleStockBaseline(req, res) {
   }
   if (req.method === 'PUT') {
     const body = await readBody(req);
-    const { baselineDate, rdf2Tons, rdf2LGTons, rdf3Tons, fineFractionTons, metalTons } = body;
+    const {
+      baselineDate, rdf2Tons, rdf2LGTons, rdf3Tons, rdf2InProcessTons,
+      fineFractionTons, metalTons,
+    } = body;
     if (!baselineDate) return sendJson(res, 400, { ok: false, error: 'ต้องระบุ baselineDate' });
     const rows = await store.readSheet('StockBaseline');
     const patch = {
@@ -1051,6 +1294,7 @@ async function handleStockBaseline(req, res) {
       RDF2Tons: Number(rdf2Tons) || 0,
       RDF2LGTons: Number(rdf2LGTons) || 0,
       RDF3Tons: Number(rdf3Tons) || 0,
+      RDF2InProcessTons: Number(rdf2InProcessTons) || 0,
       FineFractionTons: Number(fineFractionTons) || 0,
       MetalTons: Number(metalTons) || 0,
     };
@@ -1144,16 +1388,22 @@ async function handleSales(req, res, parts, query = {}) {
 
 async function handleStock(req, res, query = {}) {
   const asOfDate = validIsoDate(query.date) ? query.date : lib.todayStr();
-  const [grabRows, rdf3GrabRows, yieldRows, baselineRows, salesRows, rdf3SalesRows] = await Promise.all([
+  const [
+    grabRows, rdf3GrabRows, yieldRows, baselineRows, salesRows, rdf3SalesRows,
+    rdf3MachineSettingRows, rdf3MachineDailyRows,
+  ] = await Promise.all([
     store.readSheet('GrabCrane'),
     store.readSheet('RDF3GrabCrane'),
     store.readSheet('YieldSettings'),
     store.readSheet('StockBaseline'),
     store.readSheet('Sales'),
     store.readSheet('RevenueRDF3Sales'),
+    store.readSheet('RDF3MachineSettings'),
+    store.readSheet('RDF3MachineDaily'),
   ]);
   const result = buildMaterialStockData({
     asOfDate, grabRows, rdf3GrabRows, yieldRows, baselineRows, salesRows, rdf3SalesRows,
+    rdf3MachineSettingRows, rdf3MachineDailyRows,
   });
   return sendJson(res, 200, { ok: true, ...result });
 }
@@ -2146,6 +2396,7 @@ async function handleWeeklyReport(req, res, query) {
   const [
     grabRows, rdf3GrabRows, yieldRows, stockBaselineRows, stockSales, rdf3Sales, kpiTargetRows,
     dieselRows, dieselMachines, dieselReceipts, dieselBaselines,
+    rdf3MachineSettingRows, rdf3MachineDailyRows,
   ] = await Promise.all([
     store.readSheet('GrabCrane'),
     store.readSheet('RDF3GrabCrane'),
@@ -2158,19 +2409,43 @@ async function handleWeeklyReport(req, res, query) {
     store.readSheet('DieselMachines'),
     store.readSheet('DieselReceipts'),
     store.readSheet('DieselStockBaselines'),
+    store.readSheet('RDF3MachineSettings'),
+    store.readSheet('RDF3MachineDaily'),
   ]);
 
+  const stock = buildMaterialStockData({
+    asOfDate: weekEnd,
+    grabRows,
+    rdf3GrabRows,
+    yieldRows,
+    baselineRows: stockBaselineRows,
+    salesRows: stockSales,
+    rdf3SalesRows: rdf3Sales,
+    rdf3MachineSettingRows,
+    rdf3MachineDailyRows,
+  });
+  const rdf3DailyMap = new Map(stock.daily.map((row) => [row.date, row.rdf3Production]));
   const productionTons = Object.fromEntries(WEEKLY_PRODUCTION_PRODUCTS.map((item) => [item.tonsKey, 0]));
   let incomingWaste = 0;
   let calculatedIncomingWaste = 0;
   let totalGrabs = 0;
+  let rdf3FeedTons = 0;
+  let rdf3InputConsumedTons = 0;
+  let rdf3RuntimeMinutes = 0;
   const missingYieldDates = [];
   const daily = dates.map((date) => {
     const rows = grabRows.filter((row) => row.ReportDate === date);
     const dayIncomingWaste = rows.reduce((sum, row) => sum + (Number(row.Weight) || 0), 0);
     const yieldSetting = getApplicableYield(yieldRows, date);
     const production = computeProduction(dayIncomingWaste, yieldSetting);
-    const rdf3Production = computeRDF3Production(rdf3FeedTonsForDate(rdf3GrabRows, date));
+    const dayRDF3FeedTons = rdf3FeedTonsForDate(rdf3GrabRows, date);
+    const rdf3Production = rdf3DailyMap.get(date) || computeRDF3Production(dayRDF3FeedTons, {
+      date,
+      grabRows: rdf3GrabRows,
+      setting: getApplicableRDF3MachineSetting(rdf3MachineSettingRows, date),
+      dailyStatus: rdf3MachineDailyRows.find((row) => row.EntryDate === date),
+      availableFeedTons: dayRDF3FeedTons,
+    });
     incomingWaste += dayIncomingWaste;
     totalGrabs += rows.length;
     if (dayIncomingWaste > 0 && !yieldSetting) missingYieldDates.push(date);
@@ -2182,6 +2457,9 @@ async function handleWeeklyReport(req, res, query) {
       }
     }
     productionTons.rdf3 += rdf3Production.outputTons;
+    rdf3FeedTons += rdf3Production.feedTons;
+    rdf3InputConsumedTons += rdf3Production.inputConsumedTons;
+    rdf3RuntimeMinutes += rdf3Production.runtimeMinutes;
     return {
       date,
       grabCount: rows.length,
@@ -2189,6 +2467,7 @@ async function handleWeeklyReport(req, res, query) {
       hasYieldSetting: !!yieldSetting,
       rdf3FeedTons: rdf3Production.feedTons,
       rdf3OutputTons: rdf3Production.outputTons,
+      rdf3Production,
     };
   });
 
@@ -2196,7 +2475,7 @@ async function handleWeeklyReport(req, res, query) {
     product: item.product,
     tons: productionTons[item.tonsKey],
     effectiveYieldPct: item.tonsKey === 'rdf3'
-      ? RDF3_CONVERSION_YIELD_PCT
+      ? (rdf3InputConsumedTons > 0 ? productionTons.rdf3 / rdf3InputConsumedTons * 100 : 0)
       : calculatedIncomingWaste > 0
         ? productionTons[item.tonsKey] / calculatedIncomingWaste * 100
         : 0,
@@ -2249,16 +2528,6 @@ async function handleWeeklyReport(req, res, query) {
     .sort((a, b) => b.totalTons - a.totalTons || a.customer.localeCompare(b.customer, 'th'));
   const weekDieselRows = dieselRows
     .filter((row) => row.EntryDate >= weekStart && row.EntryDate < weekEndExclusive);
-  const stock = buildMaterialStockData({
-    asOfDate: weekEnd,
-    grabRows,
-    rdf3GrabRows,
-    yieldRows,
-    baselineRows: stockBaselineRows,
-    salesRows: stockSales,
-    rdf3SalesRows: rdf3Sales,
-  });
-
   return sendJson(res, 200, {
     ok: true,
     weekStart,
@@ -2285,6 +2554,13 @@ async function handleWeeklyReport(req, res, query) {
       uncalculatedIncomingTons: incomingWaste - calculatedIncomingWaste,
       missingYieldDates,
       products: productionProducts,
+      rdf3Machine: {
+        feedTons: rdf3FeedTons,
+        inputConsumedTons: rdf3InputConsumedTons,
+        outputTons: productionTons.rdf3,
+        runtimeMinutes: rdf3RuntimeMinutes,
+        closingWipTons: stock.stock.rdf2InProcess,
+      },
     },
     sales: {
       transactionCount: salesRows.length,
@@ -2458,6 +2734,7 @@ async function handleMonthlyReport(req, res, query) {
     grabRows, rdf3GrabRows, yieldRows, stockBaselineRows, stockSales, rdf3Sales, prices,
     tippingRows, tippingSettings, downtimeRows, lineRows, historyRows,
     dieselRows, dieselMachines, dieselReceipts, dieselBaselines,
+    rdf3MachineSettingRows, rdf3MachineDailyRows,
   ] = await Promise.all([
     store.readSheet('GrabCrane'),
     store.readSheet('RDF3GrabCrane'),
@@ -2475,6 +2752,8 @@ async function handleMonthlyReport(req, res, query) {
     store.readSheet('DieselMachines'),
     store.readSheet('DieselReceipts'),
     store.readSheet('DieselStockBaselines'),
+    store.readSheet('RDF3MachineSettings'),
+    store.readSheet('RDF3MachineDaily'),
   ]);
 
   const revenue = buildRevenueDashboardData(
@@ -2483,6 +2762,19 @@ async function handleMonthlyReport(req, res, query) {
   const sales = monthlySalesSummary(stockSales, rdf3Sales, bounds, revenue);
   const sessionRanges = reportSessionRanges(lineRows, nowBkk);
   const historyByDate = new Map(historyRows.map((row) => [row.EntryDate, row]));
+  const stockAsOfDate = month === nowBkk.date.slice(0, 7) ? nowBkk.date : bounds.end;
+  const stock = buildMaterialStockData({
+    asOfDate: stockAsOfDate,
+    grabRows,
+    rdf3GrabRows,
+    yieldRows,
+    baselineRows: stockBaselineRows,
+    salesRows: stockSales,
+    rdf3SalesRows: rdf3Sales,
+    rdf3MachineSettingRows,
+    rdf3MachineDailyRows,
+  });
+  const rdf3DailyMap = new Map(stock.daily.map((row) => [row.date, row.rdf3Production]));
   const productionTotals = Object.fromEntries(MONTHLY_PRODUCTION_PRODUCTS.map((item) => [item.tonsKey, 0]));
   const reasonMap = new Map();
   let incomingTons = 0;
@@ -2491,6 +2783,9 @@ async function handleMonthlyReport(req, res, query) {
   let historicalDays = 0;
   let calculatedIncomingTons = 0;
   let totalGrabs = 0;
+  let rdf3FeedTons = 0;
+  let rdf3InputConsumedTons = 0;
+  let rdf3RuntimeMinutes = 0;
   let lineMinutes = 0;
   let productionMinutes = 0;
   let downtimeMinutes = 0;
@@ -2515,7 +2810,14 @@ async function handleMonthlyReport(req, res, query) {
           : 'csv';
     const yieldSetting = getApplicableYield(yieldRows, date);
     const production = computeProduction(dayIncomingTons, yieldSetting);
-    const rdf3Production = computeRDF3Production(rdf3FeedTonsForDate(rdf3GrabRows, date));
+    const dayRDF3FeedTons = rdf3FeedTonsForDate(rdf3GrabRows, date);
+    const rdf3Production = rdf3DailyMap.get(date) || computeRDF3Production(dayRDF3FeedTons, {
+      date,
+      grabRows: rdf3GrabRows,
+      setting: getApplicableRDF3MachineSetting(rdf3MachineSettingRows, date),
+      dailyStatus: rdf3MachineDailyRows.find((row) => row.EntryDate === date),
+      availableFeedTons: dayRDF3FeedTons,
+    });
     const operations = monthlyDailyOperations(date, sessionRanges, downtimeRows, grabRows);
     const daySales = sales.rows.filter((row) => row.date === date);
     const dayRevenue = revenueDailyMap.get(date) || { salesRevenue: 0, tippingRevenue: 0, mswTons: 0 };
@@ -2542,6 +2844,9 @@ async function handleMonthlyReport(req, res, query) {
     }
     productionTons.rdf3 = rdf3Production.outputTons;
     productionTotals.rdf3 += rdf3Production.outputTons;
+    rdf3FeedTons += rdf3Production.feedTons;
+    rdf3InputConsumedTons += rdf3Production.inputConsumedTons;
+    rdf3RuntimeMinutes += rdf3Production.runtimeMinutes;
     for (const reasonRow of operations.reasons) {
       if (!reasonMap.has(reasonRow.reason)) {
         reasonMap.set(reasonRow.reason, { reason: reasonRow.reason, minutes: 0, eventIds: new Set() });
@@ -2559,6 +2864,7 @@ async function handleMonthlyReport(req, res, query) {
       hasYieldSetting: !!yieldSetting,
       productionTons,
       rdf3FeedTons: rdf3Production.feedTons,
+      rdf3Production,
       lineMinutes: operations.lineMinutes,
       productionMinutes: operations.productionMinutes,
       downtimeMinutes: operations.downtimeMinutes,
@@ -2600,17 +2906,6 @@ async function handleMonthlyReport(req, res, query) {
   }
   const monthDieselRows = dieselRows
     .filter((row) => row.EntryDate >= bounds.start && row.EntryDate <= bounds.end);
-  const stockAsOfDate = month === nowBkk.date.slice(0, 7) ? nowBkk.date : bounds.end;
-  const stock = buildMaterialStockData({
-    asOfDate: stockAsOfDate,
-    grabRows,
-    rdf3GrabRows,
-    yieldRows,
-    baselineRows: stockBaselineRows,
-    salesRows: stockSales,
-    rdf3SalesRows: rdf3Sales,
-  });
-
   return sendJson(res, 200, {
     ok: true,
     month,
@@ -2632,11 +2927,18 @@ async function handleMonthlyReport(req, res, query) {
         product: item.product,
         tons: productionTotals[item.tonsKey],
         effectiveYieldPct: item.tonsKey === 'rdf3'
-          ? RDF3_CONVERSION_YIELD_PCT
+          ? (rdf3InputConsumedTons > 0 ? productionTotals.rdf3 / rdf3InputConsumedTons * 100 : 0)
           : calculatedIncomingTons > 0
             ? productionTotals[item.tonsKey] / calculatedIncomingTons * 100
             : 0,
       })),
+      rdf3Machine: {
+        feedTons: rdf3FeedTons,
+        inputConsumedTons: rdf3InputConsumedTons,
+        outputTons: productionTotals.rdf3,
+        runtimeMinutes: rdf3RuntimeMinutes,
+        closingWipTons: stock.stock.rdf2InProcess,
+      },
     },
     operations: {
       lineMinutes,
@@ -2786,6 +3088,7 @@ async function handleExecutiveReport(req, res, query) {
     tippingRows, grabRows, rdf3GrabRows, historyRows, yieldRows, stockBaselineRows,
     stockSales, rdf3Sales, targetRows,
     dieselRows, dieselMachines, dieselReceipts, dieselBaselines, downtimeRows,
+    rdf3MachineSettingRows, rdf3MachineDailyRows,
   ] = await Promise.all([
     store.readSheet('RevenueTippingDaily'),
     store.readSheet('GrabCrane'),
@@ -2801,6 +3104,8 @@ async function handleExecutiveReport(req, res, query) {
     store.readSheet('DieselReceipts'),
     store.readSheet('DieselStockBaselines'),
     store.readSheet('Downtime'),
+    store.readSheet('RDF3MachineSettings'),
+    store.readSheet('RDF3MachineDaily'),
   ]);
 
   const historyByDate = new Map(historyRows.map((row) => [row.EntryDate, row]));
@@ -2809,11 +3114,26 @@ async function handleExecutiveReport(req, res, query) {
   const weeklyTargetTons = monthlyTargetTons / 4;
   const dailyTargetTons = weeklyTargetTons / 7;
   const weekStart = mondayForDate(date);
+  const stock = buildMaterialStockData({
+    asOfDate: date,
+    grabRows,
+    rdf3GrabRows,
+    yieldRows,
+    baselineRows: stockBaselineRows,
+    salesRows: stockSales,
+    rdf3SalesRows: rdf3Sales,
+    rdf3MachineSettingRows,
+    rdf3MachineDailyRows,
+  });
+  const rdf3DailyMap = new Map(stock.daily.map((row) => [row.date, row.rdf3Production]));
 
   let productionMTDTons = 0;
   let rdf2MTDTons = 0;
   let rdf2LGMTDTons = 0;
   let rdf3MTDTons = 0;
+  let rdf3MTDFeedTons = 0;
+  let rdf3MTDInputConsumedTons = 0;
+  let rdf3MTDRuntimeMinutes = 0;
   let weekActualTons = 0;
   const daily = datesToReport.map((entryDate) => {
     const intake = reportIntakeForDate(entryDate, grabRows, historyByDate);
@@ -2823,7 +3143,18 @@ async function handleExecutiveReport(req, res, query) {
       rdf2MTDTons += production.tons.rdf2;
       rdf2LGMTDTons += production.tons.rdf2LG;
     }
-    rdf3MTDTons += computeRDF3Production(rdf3FeedTonsForDate(rdf3GrabRows, entryDate)).outputTons;
+    const dayRDF3FeedTons = rdf3FeedTonsForDate(rdf3GrabRows, entryDate);
+    const rdf3Production = rdf3DailyMap.get(entryDate) || computeRDF3Production(dayRDF3FeedTons, {
+      date: entryDate,
+      grabRows: rdf3GrabRows,
+      setting: getApplicableRDF3MachineSetting(rdf3MachineSettingRows, entryDate),
+      dailyStatus: rdf3MachineDailyRows.find((row) => row.EntryDate === entryDate),
+      availableFeedTons: dayRDF3FeedTons,
+    });
+    rdf3MTDTons += rdf3Production.outputTons;
+    rdf3MTDFeedTons += rdf3Production.feedTons;
+    rdf3MTDInputConsumedTons += rdf3Production.inputConsumedTons;
+    rdf3MTDRuntimeMinutes += rdf3Production.runtimeMinutes;
     if (entryDate >= weekStart) weekActualTons += intake.tons;
     return {
       date: entryDate,
@@ -2838,7 +3169,14 @@ async function handleExecutiveReport(req, res, query) {
   const selectedProduction = computeProduction(selectedIntake.tons, selectedYield);
   const dailyRDF2Tons = selectedProduction?.tons.rdf2 || 0;
   const dailyRDF2LGTons = selectedProduction?.tons.rdf2LG || 0;
-  const selectedRDF3Production = computeRDF3Production(rdf3FeedTonsForDate(rdf3GrabRows, date));
+  const selectedRDF3FeedTons = rdf3FeedTonsForDate(rdf3GrabRows, date);
+  const selectedRDF3Production = rdf3DailyMap.get(date) || computeRDF3Production(selectedRDF3FeedTons, {
+    date,
+    grabRows: rdf3GrabRows,
+    setting: getApplicableRDF3MachineSetting(rdf3MachineSettingRows, date),
+    dailyStatus: rdf3MachineDailyRows.find((row) => row.EntryDate === date),
+    availableFeedTons: selectedRDF3FeedTons,
+  });
   const outputPlan = historicalRDFOutputPlan(date, grabRows, historyRows, yieldRows);
 
   const incomingRow = tippingRows.find((row) => row.EntryDate === date);
@@ -2862,16 +3200,6 @@ async function handleExecutiveReport(req, res, query) {
       ? null
       : 0;
   const incidents = dailyDowntimeIncidents(date, downtimeRows);
-  const stock = buildMaterialStockData({
-    asOfDate: date,
-    grabRows,
-    rdf3GrabRows,
-    yieldRows,
-    baselineRows: stockBaselineRows,
-    salesRows: stockSales,
-    rdf3SalesRows: rdf3Sales,
-  });
-
   return sendJson(res, 200, {
     ok: true,
     date,
@@ -2910,7 +3238,20 @@ async function handleExecutiveReport(req, res, query) {
         rdf3Tons: selectedRDF3Production.outputTons,
       },
       mtd: { rdf2Tons: rdf2MTDTons, rdf2LGTons: rdf2LGMTDTons, rdf3Tons: rdf3MTDTons },
-      rdf3ConversionYieldPct: RDF3_CONVERSION_YIELD_PCT,
+      rdf3ConversionYieldPct: selectedRDF3Production.yieldPct,
+      rdf3Machine: {
+        daily: selectedRDF3Production,
+        mtd: {
+          feedTons: rdf3MTDFeedTons,
+          inputConsumedTons: rdf3MTDInputConsumedTons,
+          outputTons: rdf3MTDTons,
+          runtimeMinutes: rdf3MTDRuntimeMinutes,
+          effectiveYieldPct: rdf3MTDInputConsumedTons > 0
+            ? rdf3MTDTons / rdf3MTDInputConsumedTons * 100
+            : 0,
+          closingWipTons: stock.stock.rdf2InProcess,
+        },
+      },
       plan: {
         ...outputPlan,
         mtdRDF2Tons: outputPlan.rdf2Tons * elapsedDays,
@@ -3418,6 +3759,7 @@ async function dispatchBusinessApi(req, res, pathname, query) {
   if (resource === 'monthly-report' && req.method === 'GET') return handleMonthlyReport(req, res, query);
   if (resource === 'executive-report' && req.method === 'GET') return handleExecutiveReport(req, res, query);
   if (resource === 'yield') return handleYield(req, res, rest);
+  if (resource === 'rdf3-machines') return handleRDF3Machines(req, res, rest, query);
   if (resource === 'sales') return handleSales(req, res, rest, query);
   if (resource === 'delivery-plans') return handleDeliveryPlans(req, res, rest, query);
   if (resource === 'stock') {

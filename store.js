@@ -18,10 +18,17 @@ const SHEETS = {
     'ID', 'ReportDate', 'DateTime', 'WeightKg', 'DeviceID', 'SourceKey',
     'SyncedAt', 'CreatedAt',
   ],
+  RDF3MachineSettings: [
+    'ID', 'EffectiveDate', 'MC1CapTPH', 'MC2CapTPH', 'MC3CapTPH',
+    'MC4CapTPH', 'MC5CapTPH', 'YieldPct', 'EfficiencyPct', 'CreatedAt',
+  ],
+  RDF3MachineDaily: [
+    'ID', 'EntryDate', 'MC1On', 'MC2On', 'MC3On', 'MC4On', 'MC5On', 'CreatedAt',
+  ],
   YieldSettings: ['ID', 'EffectiveDate', 'RDF2Pct', 'FineFractionPct', 'HeavyFractionPct', 'MetalPct', 'CreatedAt', 'RDF2LGPct'],
   StockBaseline: [
     'ID', 'BaselineDate', 'RDF2Tons', 'FineFractionTons', 'MetalTons', 'CreatedAt',
-    'RDF2LGTons', 'RDF3Tons',
+    'RDF2LGTons', 'RDF3Tons', 'RDF2InProcessTons',
   ],
   Sales: ['ID', 'SaleDate', 'Material', 'Customer', 'Tons', 'Note', 'CreatedAt'],
   RevenueCustomers: ['ID', 'Name', 'Active', 'CreatedAt'],

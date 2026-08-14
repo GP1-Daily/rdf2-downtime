@@ -64,6 +64,22 @@ const TABLES = {
       DeviceID: 'device_id', SourceKey: 'source_key', SyncedAt: 'synced_at', CreatedAt: 'created_at',
     },
   },
+  RDF3MachineSettings: {
+    table: 'rdf3_machine_settings',
+    columns: {
+      ID: 'id', EffectiveDate: 'effective_date', MC1CapTPH: 'mc1_cap_tph',
+      MC2CapTPH: 'mc2_cap_tph', MC3CapTPH: 'mc3_cap_tph', MC4CapTPH: 'mc4_cap_tph',
+      MC5CapTPH: 'mc5_cap_tph', YieldPct: 'yield_pct', EfficiencyPct: 'efficiency_pct',
+      CreatedAt: 'created_at',
+    },
+  },
+  RDF3MachineDaily: {
+    table: 'rdf3_machine_daily',
+    columns: {
+      ID: 'id', EntryDate: 'entry_date', MC1On: 'mc1_on', MC2On: 'mc2_on',
+      MC3On: 'mc3_on', MC4On: 'mc4_on', MC5On: 'mc5_on', CreatedAt: 'created_at',
+    },
+  },
   YieldSettings: {
     table: 'yield_settings',
     columns: {
@@ -77,7 +93,8 @@ const TABLES = {
     columns: {
       ID: 'id', BaselineDate: 'baseline_date', RDF2Tons: 'rdf2_tons',
       RDF2LGTons: 'rdf2_lg_tons', RDF3Tons: 'rdf3_tons',
-      FineFractionTons: 'fine_fraction_tons', MetalTons: 'metal_tons', CreatedAt: 'created_at',
+      RDF2InProcessTons: 'rdf2_in_process_tons', FineFractionTons: 'fine_fraction_tons',
+      MetalTons: 'metal_tons', CreatedAt: 'created_at',
     },
   },
   Sales: {
@@ -269,6 +286,32 @@ function ensureSchema() {
         ON rdf3_grab_crane (report_date, date_time);
       CREATE UNIQUE INDEX IF NOT EXISTS rdf3_grab_crane_source_idx
         ON rdf3_grab_crane (device_id, source_key);
+      CREATE TABLE IF NOT EXISTS rdf3_machine_settings (
+        id SERIAL PRIMARY KEY,
+        effective_date TEXT NOT NULL,
+        mc1_cap_tph NUMERIC NOT NULL DEFAULT 0,
+        mc2_cap_tph NUMERIC NOT NULL DEFAULT 0,
+        mc3_cap_tph NUMERIC NOT NULL DEFAULT 0,
+        mc4_cap_tph NUMERIC NOT NULL DEFAULT 0,
+        mc5_cap_tph NUMERIC NOT NULL DEFAULT 0,
+        yield_pct NUMERIC NOT NULL DEFAULT 82.35,
+        efficiency_pct NUMERIC NOT NULL DEFAULT 65,
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS rdf3_machine_settings_date_idx
+        ON rdf3_machine_settings (effective_date);
+      CREATE TABLE IF NOT EXISTS rdf3_machine_daily (
+        id SERIAL PRIMARY KEY,
+        entry_date TEXT NOT NULL,
+        mc1_on BOOLEAN NOT NULL DEFAULT true,
+        mc2_on BOOLEAN NOT NULL DEFAULT true,
+        mc3_on BOOLEAN NOT NULL DEFAULT true,
+        mc4_on BOOLEAN NOT NULL DEFAULT true,
+        mc5_on BOOLEAN NOT NULL DEFAULT true,
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS rdf3_machine_daily_date_idx
+        ON rdf3_machine_daily (entry_date);
       CREATE TABLE IF NOT EXISTS yield_settings (
         id SERIAL PRIMARY KEY,
         effective_date TEXT NOT NULL,
@@ -299,10 +342,12 @@ function ensureSchema() {
         rdf3_tons NUMERIC NOT NULL DEFAULT 0,
         fine_fraction_tons NUMERIC NOT NULL DEFAULT 0,
         metal_tons NUMERIC NOT NULL DEFAULT 0,
+        rdf2_in_process_tons NUMERIC NOT NULL DEFAULT 0,
         created_at TIMESTAMPTZ DEFAULT now()
       );
       ALTER TABLE stock_baseline ADD COLUMN IF NOT EXISTS rdf2_lg_tons NUMERIC NOT NULL DEFAULT 0;
       ALTER TABLE stock_baseline ADD COLUMN IF NOT EXISTS rdf3_tons NUMERIC NOT NULL DEFAULT 0;
+      ALTER TABLE stock_baseline ADD COLUMN IF NOT EXISTS rdf2_in_process_tons NUMERIC NOT NULL DEFAULT 0;
       CREATE TABLE IF NOT EXISTS sales (
         id SERIAL PRIMARY KEY,
         sale_date TEXT NOT NULL,
@@ -529,7 +574,8 @@ function ensureSchema() {
       -- Remove default API-role grants so the public anon key cannot read or
       -- mutate GP1 data even when a project was created with broad defaults.
       REVOKE ALL PRIVILEGES ON TABLE
-        downtime, line_time, grab_crane, rdf3_grab_crane, yield_settings, stock_baseline, sales,
+        downtime, line_time, grab_crane, rdf3_grab_crane, rdf3_machine_settings, rdf3_machine_daily,
+        yield_settings, stock_baseline, sales,
         revenue_customers, revenue_prices, revenue_rdf3_sales,
         revenue_tipping_settings, revenue_tipping_daily, weekly_delivery_plans,
         kpi_daily_history, kpi_complaints, kpi_target_settings,
@@ -539,10 +585,10 @@ function ensureSchema() {
       DO $gp1_security$
       BEGIN
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-          EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE downtime, line_time, grab_crane, rdf3_grab_crane, yield_settings, stock_baseline, sales, revenue_customers, revenue_prices, revenue_rdf3_sales, revenue_tipping_settings, revenue_tipping_daily, weekly_delivery_plans, kpi_daily_history, kpi_complaints, kpi_target_settings, diesel_machines, diesel_usage, diesel_receipts, diesel_stock_baselines, app_users, audit_log, deleted_records FROM anon';
+          EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE downtime, line_time, grab_crane, rdf3_grab_crane, rdf3_machine_settings, rdf3_machine_daily, yield_settings, stock_baseline, sales, revenue_customers, revenue_prices, revenue_rdf3_sales, revenue_tipping_settings, revenue_tipping_daily, weekly_delivery_plans, kpi_daily_history, kpi_complaints, kpi_target_settings, diesel_machines, diesel_usage, diesel_receipts, diesel_stock_baselines, app_users, audit_log, deleted_records FROM anon';
         END IF;
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-          EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE downtime, line_time, grab_crane, rdf3_grab_crane, yield_settings, stock_baseline, sales, revenue_customers, revenue_prices, revenue_rdf3_sales, revenue_tipping_settings, revenue_tipping_daily, weekly_delivery_plans, kpi_daily_history, kpi_complaints, kpi_target_settings, diesel_machines, diesel_usage, diesel_receipts, diesel_stock_baselines, app_users, audit_log, deleted_records FROM authenticated';
+          EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE downtime, line_time, grab_crane, rdf3_grab_crane, rdf3_machine_settings, rdf3_machine_daily, yield_settings, stock_baseline, sales, revenue_customers, revenue_prices, revenue_rdf3_sales, revenue_tipping_settings, revenue_tipping_daily, weekly_delivery_plans, kpi_daily_history, kpi_complaints, kpi_target_settings, diesel_machines, diesel_usage, diesel_receipts, diesel_stock_baselines, app_users, audit_log, deleted_records FROM authenticated';
         END IF;
       END
       $gp1_security$;

@@ -6,6 +6,7 @@ function requiredRole(pathname, method) {
   if (method === 'DELETE') return 'supervisor';
   if (
     pathname.startsWith('/api/yield')
+    || pathname.startsWith('/api/rdf3-machines')
     || pathname.startsWith('/api/stock')
     || pathname.startsWith('/api/delivery-plans')
     || pathname.startsWith('/api/revenue/customers')
