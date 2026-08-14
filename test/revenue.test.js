@@ -208,6 +208,7 @@ test('company revenue dashboard combines sales and tipping estimates', async (t)
   assert.deepEqual(Object.fromEntries(weekly.production.products.map((row) => [row.product, row.tons])), {
     RDF2: 22.4,
     RDF2LG: 9.6,
+    RDF3: 0,
     FineFraction: 10,
     HeavyFraction: 12.5,
     Water: 12,

@@ -33,6 +33,13 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function assertNear(actual, expected, tolerance = 1e-8) {
+  assert.ok(
+    Math.abs(Number(actual) - Number(expected)) <= tolerance,
+    `expected ${actual} to be within ${tolerance} of ${expected}`,
+  );
+}
+
 async function freePort() {
   const probe = net.createServer();
   await new Promise((resolve, reject) => {
@@ -102,6 +109,32 @@ test('Grab device sync is idempotent and reconciles a complete time window', asy
   assert.equal(rows.length, 1);
   assert.equal(reconciled.deleted, 3);
   assert.equal((await store.readSheet('DeletedRecords')).length, 3);
+});
+
+test('RDF3 Grab storage keeps kilograms and de-duplicates an offline queue retry', async () => {
+  const context = {
+    requestId: 'rdf3-grab-device-test',
+    ip: '127.0.0.1',
+    userAgent: 'test',
+    user: { id: 'device:grabcrane-01', email: 'grabcrane-01@device.local', role: 'operator' },
+  };
+  const payload = {
+    ReportDate: '2026-08-11',
+    DateTime: '2026-08-11 08:15:00',
+    WeightKg: 485,
+    SourceKey: '1786410900:485',
+  };
+  const first = await runWithRequestContext(context, () => (
+    store.syncRDF3GrabRow('grabcrane-01', payload)
+  ));
+  const repeated = await runWithRequestContext(context, () => (
+    store.syncRDF3GrabRow('grabcrane-01', payload)
+  ));
+  const rows = await store.readSheet('RDF3GrabCrane');
+  assert.equal(first.created, true);
+  assert.equal(repeated.created, false);
+  assert.equal(rows.length, 1);
+  assert.equal(Number(rows[0].WeightKg), 485);
 });
 
 test('Grab device API requires its token and assigns the calendar date from source time', async (t) => {
@@ -174,4 +207,148 @@ test('Grab device API requires its token and assigns the calendar date from sour
   assert.equal(reportDay.rows.length, 1);
   assert.equal(reportDay.rows[0].DateTime, '2026-07-25 00:05:00');
   assert.equal(previousDay.rows.length, 0);
+});
+
+test('RDF3 Grab device API accepts ESP32 form data and reports tons on the dashboard', async (t) => {
+  const port = await freePort();
+  const workbookPath = path.join(tempDir, 'rdf3-grab-api.xlsx');
+  const token = 'r'.repeat(64);
+  let serverError = '';
+  const child = spawn(process.execPath, ['server.js'], {
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      PORT: String(port),
+      DATABASE_URL: '',
+      RDF2_XLSX_PATH: workbookPath,
+      NODE_ENV: 'test',
+      AUTH_DISABLED: 'true',
+      RDF3_GRAB_DEVICE_ID: 'grabcrane-01',
+      RDF3_GRAB_SYNC_TOKEN: token,
+    },
+    stdio: ['ignore', 'ignore', 'pipe'],
+  });
+  child.stderr.on('data', (chunk) => { serverError += chunk.toString(); });
+  t.after(async () => {
+    if (child.exitCode === null) {
+      child.kill();
+      await Promise.race([once(child, 'exit'), delay(2000)]);
+    }
+  });
+
+  const baseUrl = `http://127.0.0.1:${port}`;
+  for (let attempt = 0; attempt < 300; attempt += 1) {
+    try {
+      const response = await fetch(`${baseUrl}/login.html`);
+      if (response.ok) break;
+    } catch (_) {
+      // Server is still starting.
+    }
+    if (attempt === 299) throw new Error(`server did not start: ${serverError}`);
+    await delay(50);
+  }
+
+  const epoch = Math.floor(Date.parse('2026-08-11T01:15:00Z') / 1000);
+  const invalid = await fetch(`${baseUrl}/api/device/rdf3-grab-sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ device: 'grabcrane-01', key: 'wrong', weight: '485', ts: String(epoch) }),
+  });
+  assert.equal(invalid.status, 401);
+
+  const send = () => fetch(`${baseUrl}/api/device/rdf3-grab-sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ device: 'grabcrane-01', key: token, weight: '485', ts: String(epoch) }),
+  });
+  const accepted = await send();
+  const acceptedBody = await accepted.json();
+  assert.equal(accepted.status, 200, JSON.stringify(acceptedBody));
+  assert.equal(acceptedBody.duplicate, false);
+  assert.equal(acceptedBody.weighedAt, '2026-08-11 08:15:00');
+  assert.equal(acceptedBody.weightTons, 0.485);
+
+  const retryBody = await (await send()).json();
+  assert.equal(retryBody.duplicate, true);
+
+  const concurrentEpoch = epoch + 60;
+  const sendConcurrent = async () => {
+    const response = await fetch(`${baseUrl}/api/device/rdf3-grab-sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        device: 'grabcrane-01', key: token, weight: '510', ts: String(concurrentEpoch),
+      }),
+    });
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  const concurrentBodies = await Promise.all(Array.from({ length: 5 }, sendConcurrent));
+  assert.equal(concurrentBodies.filter((body) => body.duplicate === false).length, 1);
+  assert.equal(concurrentBodies.filter((body) => body.duplicate === true).length, 4);
+
+  const dashboard = await fetch(`${baseUrl}/api/rdf3-grab?date=2026-08-11`).then((response) => response.json());
+  assert.equal(dashboard.summary.totalGrabs, 2);
+  assert.equal(dashboard.summary.totalWeightKg, 995);
+  assert.equal(dashboard.summary.totalWeight, 0.995);
+  assert.equal(dashboard.summary.firstGrabTime, '08:15');
+
+  const baselineResponse = await fetch(`${baseUrl}/api/stock/baseline`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      baselineDate: '2026-08-11',
+      rdf2Tons: 10,
+      rdf2LGTons: 2,
+      rdf3Tons: 1,
+      fineFractionTons: 3,
+      metalTons: 0.5,
+    }),
+  });
+  assert.equal(baselineResponse.status, 200, await baselineResponse.text());
+
+  const report = await fetch(`${baseUrl}/api/report?date=2026-08-11`).then((response) => response.json());
+  assert.equal(report.rdf3Grab.totalGrabs, 2);
+  assert.equal(report.rdf3Grab.avgWeight, 0.4975);
+  assertNear(report.rdf3Production.feedTons, 0.995);
+  assertNear(report.rdf3Production.outputTons, 0.995 * 0.8235);
+  assertNear(report.stock.stock.rdf2, 10 - 0.995);
+  assertNear(report.stock.stock.rdf2LG, 2);
+  assertNear(report.stock.stock.rdf3, 1 + 0.995 * 0.8235);
+
+  const production = await fetch(`${baseUrl}/api/production?date=2026-08-11`).then((response) => response.json());
+  assert.equal(production.rdf3Grab.totalGrabs, 2);
+  assertNear(production.rdf3Production.feedTons, 0.995);
+  assertNear(production.rdf3Production.outputTons, 0.995 * 0.8235);
+
+  const stock = await fetch(`${baseUrl}/api/stock?date=2026-08-11`).then((response) => response.json());
+  assert.equal(stock.configured, true);
+  assertNear(stock.rdf2TransferredToRDF3Tons, 0.995);
+  assertNear(stock.stock.rdf2, 9.005);
+  assertNear(stock.stock.rdf2LG, 2);
+  assertNear(stock.stock.rdf3, 1.8193825);
+  assertNear(stock.stock.fineFraction, 3);
+  assertNear(stock.stock.metal, 0.5);
+
+  const weekly = await fetch(`${baseUrl}/api/weekly-report?weekStart=2026-08-10`).then((response) => response.json());
+  const weeklyRDF3 = weekly.production.products.find((row) => row.product === 'RDF3');
+  assertNear(weeklyRDF3.tons, 0.8193825);
+  assertNear(weekly.stock.stock.rdf2, 9.005);
+  assertNear(weekly.stock.stock.rdf2LG, 2);
+  assertNear(weekly.stock.stock.rdf3, 1.8193825);
+
+  const monthly = await fetch(`${baseUrl}/api/monthly-report?month=2026-08`).then((response) => response.json());
+  const monthlyRDF3 = monthly.production.products.find((row) => row.product === 'RDF3');
+  assertNear(monthlyRDF3.tons, 0.8193825);
+  assertNear(monthly.stock.stock.rdf2, 9.005);
+  assertNear(monthly.stock.stock.rdf2LG, 2);
+  assertNear(monthly.stock.stock.rdf3, 1.8193825);
+
+  const executive = await fetch(`${baseUrl}/api/executive-report?date=2026-08-11`).then((response) => response.json());
+  assertNear(executive.output.daily.rdf3FeedTons, 0.995);
+  assertNear(executive.output.daily.rdf3Tons, 0.8193825);
+  assertNear(executive.output.mtd.rdf3Tons, 0.8193825);
+  assertNear(executive.stock.stock.rdf2, 9.005);
+  assertNear(executive.stock.stock.rdf2LG, 2);
+  assertNear(executive.stock.stock.rdf3, 1.8193825);
 });

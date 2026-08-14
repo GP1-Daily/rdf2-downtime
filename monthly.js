@@ -62,8 +62,8 @@
   }
 
   function renderProduction(data) {
-    const labels = { RDF2: 'RDF2', RDF2LG: 'RDF2 LG', FineFraction: 'Fine Fraction' };
-    const classes = { RDF2: 'rdf2', RDF2LG: 'rdf2lg', FineFraction: 'fine' };
+    const labels = { RDF2: 'RDF2', RDF2LG: 'RDF2 LG', RDF3: 'RDF3', FineFraction: 'Fine Fraction' };
+    const classes = { RDF2: 'rdf2', RDF2LG: 'rdf2lg', RDF3: 'rdf3', FineFraction: 'fine' };
     document.getElementById('monthlyProductionGrid').innerHTML = data.production.products.map((row) => `
       <article class="monthly-production-item ${revenueEsc(classes[row.product] || '')}">
         <span>${revenueEsc(labels[row.product] || row.product)}</span>
@@ -186,6 +186,7 @@
     document.getElementById('monthlySalesMeta').textContent = `${data.sales.transactionCount.toLocaleString('th-TH')} รายการ`;
     renderDailyChart(data);
     renderProduction(data);
+    renderMaterialStock('monthlyStockGrid', 'monthlyStockStatus', data.stock, 'สิ้นเดือน');
     renderOperations(data);
     renderDiesel(data);
     renderRevenue(data);

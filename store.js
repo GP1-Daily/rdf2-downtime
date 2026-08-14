@@ -14,8 +14,15 @@ const SHEETS = {
     'ID', 'ReportDate', 'DateTime', 'Weight', 'SourceFile', 'CreatedAt',
     'SourceSystem', 'SourceID', 'Amp', 'SourceStatus', 'SyncedAt',
   ],
+  RDF3GrabCrane: [
+    'ID', 'ReportDate', 'DateTime', 'WeightKg', 'DeviceID', 'SourceKey',
+    'SyncedAt', 'CreatedAt',
+  ],
   YieldSettings: ['ID', 'EffectiveDate', 'RDF2Pct', 'FineFractionPct', 'HeavyFractionPct', 'MetalPct', 'CreatedAt', 'RDF2LGPct'],
-  StockBaseline: ['ID', 'BaselineDate', 'RDF2Tons', 'FineFractionTons', 'MetalTons', 'CreatedAt'],
+  StockBaseline: [
+    'ID', 'BaselineDate', 'RDF2Tons', 'FineFractionTons', 'MetalTons', 'CreatedAt',
+    'RDF2LGTons', 'RDF3Tons',
+  ],
   Sales: ['ID', 'SaleDate', 'Material', 'Customer', 'Tons', 'Note', 'CreatedAt'],
   RevenueCustomers: ['ID', 'Name', 'Active', 'CreatedAt'],
   RevenuePrices: ['ID', 'EffectiveDate', 'Customer', 'Product', 'PricePerTon', 'CreatedAt'],
@@ -477,6 +484,57 @@ async function syncGrabRows(sourceSystem, rows, options = {}) {
   });
 }
 
+async function syncRDF3GrabRow(deviceId, data) {
+  return serialize(async () => {
+    const wb = await loadWorkbook();
+    const ws = wb.getWorksheet('RDF3GrabCrane');
+    const cols = SHEETS.RDF3GrabCrane;
+    const device = String(deviceId);
+    const sourceKey = String(data.SourceKey);
+    let rowNumber = null;
+    let maxId = 0;
+
+    ws.eachRow({ includeEmpty: false }, (row, currentRowNumber) => {
+      if (currentRowNumber === 1) return;
+      const record = rowToObj(cols, row);
+      maxId = Math.max(maxId, Number(record.ID) || 0);
+      if (String(record.DeviceID) === device && String(record.SourceKey) === sourceKey) {
+        rowNumber = currentRowNumber;
+      }
+    });
+
+    const now = new Date().toISOString();
+    let record;
+    let created = false;
+    if (rowNumber) {
+      const row = ws.getRow(rowNumber);
+      const existing = rowToObj(cols, row);
+      record = { ...existing, ...data, DeviceID: device, SourceKey: sourceKey, SyncedAt: now };
+      cols.forEach((column, index) => {
+        row.getCell(index + 1).value = record[column] !== undefined ? record[column] : '';
+      });
+    } else {
+      record = appendWorkbookRecord(wb, 'RDF3GrabCrane', {
+        ...data,
+        DeviceID: device,
+        SourceKey: sourceKey,
+        SyncedAt: now,
+      }, maxId + 1);
+      created = true;
+    }
+
+    appendAudit(wb, 'DEVICE_SYNC', 'RDF3GrabCrane', record.ID, null, {
+      deviceId: device,
+      sourceKey,
+      created,
+      weightKg: Number(record.WeightKg),
+      dateTime: record.DateTime,
+    });
+    await saveWorkbook(wb);
+    return { row: record, created };
+  });
+}
+
 async function restoreDeletedRecord(id) {
   return serialize(async () => {
     const wb = await loadWorkbook();
@@ -551,5 +609,6 @@ async function restoreBackup(backup, options = {}) {
 
 module.exports = {
   XLSX_PATH, SHEETS, readSheet, appendRow, appendRows, updateRow, deleteRow,
-  deleteRowsByReportDate, syncGrabRows, restoreDeletedRecord, exportBackup, restoreBackup,
+  deleteRowsByReportDate, syncGrabRows, syncRDF3GrabRow,
+  restoreDeletedRecord, exportBackup, restoreBackup,
 };

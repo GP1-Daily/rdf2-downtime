@@ -67,7 +67,7 @@
 .executive-date strong{display:block; margin-top:3px; font-size:18px; line-height:1.25; letter-spacing:0;}
 .executive-report-body{padding:18px; display:grid; gap:14px;}
 
-.executive-overview{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); background:#fff; border:1px solid var(--exec-line); border-radius:7px; overflow:hidden;}
+.executive-overview{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); background:#fff; border:1px solid var(--exec-line); border-radius:7px; overflow:hidden;}
 .executive-overview article{min-height:112px; padding:18px; display:flex; flex-direction:column; justify-content:center; border-right:1px solid #e0e8e4;}
 .executive-overview article:last-child{border-right:0;}
 .executive-overview span{color:var(--exec-muted); font-size:10px; font-weight:750;}
@@ -99,7 +99,7 @@
 .executive-comparison-row.rdf2lg .actual i b{background:var(--exec-blue);}
 .executive-comparison-bars strong{font-size:11px; color:#33455a; text-align:right; white-space:nowrap;}
 
-.executive-month-progress-grid{display:grid; grid-template-columns:repeat(3,minmax(0,1fr));}
+.executive-month-progress-grid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr));}
 .executive-month-progress-grid article{min-height:150px; padding:20px; border-right:1px solid #e1e8e4;}
 .executive-month-progress-grid article:last-child{border-right:0;}
 .executive-month-progress-grid article > div:first-child{display:flex; align-items:center; justify-content:space-between; gap:10px; color:#5f7184; font-size:11px; font-weight:700;}
@@ -110,6 +110,7 @@
 .executive-progress{height:9px; overflow:hidden; background:#e5ece8; border-radius:4px;}
 .executive-progress i{display:block; width:0; height:100%; background:var(--exec-green); transition:width .65s ease;}
 .executive-month-progress-grid article:nth-child(3) .executive-progress i{background:var(--exec-blue);}
+.executive-month-progress-grid article:nth-child(4) .executive-progress i{background:#236bb0;}
 
 .executive-fuel-columns{display:grid; grid-template-columns:repeat(3,1fr);}
 .executive-fuel-columns > div{min-height:126px; padding:16px 18px; border-right:1px solid #e1e8e4;}
@@ -182,12 +183,12 @@
   .executive-toolbar{align-items:flex-start; flex-direction:column;}
   .executive-toolbar-actions{width:100%; flex-wrap:wrap;}
   .executive-overview{grid-template-columns:1fr 1fr;}
-  .executive-overview article:nth-child(2){border-right:0;}
-  .executive-overview article:nth-child(-n+2){border-bottom:1px solid #e0e8e4;}
+  .executive-overview article:nth-child(even){border-right:0;}
+  .executive-overview article:nth-child(-n+4){border-bottom:1px solid #e0e8e4;}
   .executive-comparison-row{grid-template-columns:150px 1fr;}
   .executive-month-progress-grid{grid-template-columns:1fr 1fr;}
-  .executive-month-progress-grid article:nth-child(2){border-right:0;}
-  .executive-month-progress-grid article:last-child{grid-column:1 / -1; border-top:1px solid #e1e8e4;}
+  .executive-month-progress-grid article:nth-child(even){border-right:0;}
+  .executive-month-progress-grid article:nth-child(-n+2){border-bottom:1px solid #e1e8e4;}
   .executive-fuel-columns{grid-template-columns:1fr;}
   .executive-fuel-columns > div{border-right:0; border-bottom:1px solid #e1e8e4;}
   .executive-fuel-columns > div:last-child{border-bottom:0;}

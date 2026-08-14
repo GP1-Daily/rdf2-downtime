@@ -180,10 +180,11 @@ test('monthly report uses calendar boundaries and combines operations, productio
     historicalTons: 40,
     historicalDays: 1,
   });
-  assert.deepEqual(report.production.products.map((row) => row.product), ['RDF2', 'RDF2LG', 'FineFraction']);
+  assert.deepEqual(report.production.products.map((row) => row.product), ['RDF2', 'RDF2LG', 'RDF3', 'FineFraction']);
   assert.deepEqual(Object.fromEntries(report.production.products.map((row) => [row.product, row.tons])), {
     RDF2: 18,
     RDF2LG: 9,
+    RDF3: 0,
     FineFraction: 27,
   });
   for (const excluded of ['HeavyFraction', 'Metal', 'Water']) {

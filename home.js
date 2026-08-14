@@ -481,6 +481,42 @@
     setText('homeGrabSync', syncLabel);
   }
 
+  function renderRDF3Grab(report) {
+    const panel = document.getElementById('homeRDF3GrabLive');
+    if (!panel) return;
+
+    const grab = report.rdf3Grab || {};
+    const count = Number(grab.totalGrabs) || 0;
+    const average = Number(grab.avgWeight) || 0;
+    const total = Number(grab.totalWeight) || 0;
+    animateNumber('homeRDF3GrabCount', count, (value) => num(Math.round(value), 0), 620);
+    animateNumber('homeRDF3GrabAverage', average, (value) => num(value, 3), 720, 70);
+    animateNumber('homeRDF3GrabTotal', total, (value) => num(value, 3), 820, 120);
+
+    panel.classList.toggle('has-data', count > 0);
+    panel.classList.toggle('device-ready', Boolean(grab.deviceConfigured));
+    panel.style.setProperty('--grab-intensity', String(Math.min(1, count / 30)));
+    if (!count) {
+      setText('homeRDF3GrabWindow', 'ยังไม่มีข้อมูล RDF2 เข้าเครื่อง RDF3 วันนี้');
+      setText('homeRDF3GrabSync', grab.deviceConfigured
+        ? 'พร้อมรับข้อมูล · Waiting for first saved Grab'
+        : 'รอติดตั้งและ Calibrate อุปกรณ์');
+      return;
+    }
+
+    setText('homeRDF3GrabWindow', `First Grab ${grab.firstGrabTime || '-'} · Latest ${grab.lastGrabTime || '-'}`);
+    let syncLabel = 'ESP32 connected · Auto refresh every 5 minutes';
+    if (grab.lastSyncedAt) {
+      const syncedAt = new Date(grab.lastSyncedAt);
+      if (!Number.isNaN(syncedAt.getTime())) {
+        syncLabel = `ESP32 synced ${syncedAt.toLocaleTimeString('th-TH', {
+          timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit',
+        })} · Auto refresh every 5 minutes`;
+      }
+    }
+    setText('homeRDF3GrabSync', syncLabel);
+  }
+
   async function fetchHomeDashboard() {
     const refreshButton = document.getElementById('btnRefreshHome');
     refreshButton.disabled = true;
@@ -510,6 +546,7 @@
 
       if (report) {
         renderGrab(report);
+        renderRDF3Grab(report);
         const running = report.line.segments.some((segment) => segment.ongoing);
         const availability = report.line.availabilityPct === null ? '-' : `${num(report.line.availabilityPct, 1)}%`;
         animateNumber('homeLineValue', report.line.netRunMinutes, (value) => `${minutes(value)} · ${availability}`);

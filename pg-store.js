@@ -57,6 +57,13 @@ const TABLES = {
       SourceID: 'source_id', Amp: 'amp', SourceStatus: 'source_status', SyncedAt: 'synced_at',
     },
   },
+  RDF3GrabCrane: {
+    table: 'rdf3_grab_crane',
+    columns: {
+      ID: 'id', ReportDate: 'report_date', DateTime: 'date_time', WeightKg: 'weight_kg',
+      DeviceID: 'device_id', SourceKey: 'source_key', SyncedAt: 'synced_at', CreatedAt: 'created_at',
+    },
+  },
   YieldSettings: {
     table: 'yield_settings',
     columns: {
@@ -69,6 +76,7 @@ const TABLES = {
     table: 'stock_baseline',
     columns: {
       ID: 'id', BaselineDate: 'baseline_date', RDF2Tons: 'rdf2_tons',
+      RDF2LGTons: 'rdf2_lg_tons', RDF3Tons: 'rdf3_tons',
       FineFractionTons: 'fine_fraction_tons', MetalTons: 'metal_tons', CreatedAt: 'created_at',
     },
   },
@@ -247,6 +255,20 @@ function ensureSchema() {
       CREATE UNIQUE INDEX IF NOT EXISTS grab_crane_source_idx
         ON grab_crane (source_system, source_id)
         WHERE source_system IS NOT NULL AND source_id IS NOT NULL;
+      CREATE TABLE IF NOT EXISTS rdf3_grab_crane (
+        id SERIAL PRIMARY KEY,
+        report_date TEXT NOT NULL,
+        date_time TEXT NOT NULL,
+        weight_kg NUMERIC NOT NULL,
+        device_id TEXT NOT NULL,
+        source_key TEXT NOT NULL,
+        synced_at TIMESTAMPTZ DEFAULT now(),
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS rdf3_grab_crane_report_datetime_idx
+        ON rdf3_grab_crane (report_date, date_time);
+      CREATE UNIQUE INDEX IF NOT EXISTS rdf3_grab_crane_source_idx
+        ON rdf3_grab_crane (device_id, source_key);
       CREATE TABLE IF NOT EXISTS yield_settings (
         id SERIAL PRIMARY KEY,
         effective_date TEXT NOT NULL,
@@ -273,10 +295,14 @@ function ensureSchema() {
         id SERIAL PRIMARY KEY,
         baseline_date TEXT NOT NULL,
         rdf2_tons NUMERIC NOT NULL DEFAULT 0,
+        rdf2_lg_tons NUMERIC NOT NULL DEFAULT 0,
+        rdf3_tons NUMERIC NOT NULL DEFAULT 0,
         fine_fraction_tons NUMERIC NOT NULL DEFAULT 0,
         metal_tons NUMERIC NOT NULL DEFAULT 0,
         created_at TIMESTAMPTZ DEFAULT now()
       );
+      ALTER TABLE stock_baseline ADD COLUMN IF NOT EXISTS rdf2_lg_tons NUMERIC NOT NULL DEFAULT 0;
+      ALTER TABLE stock_baseline ADD COLUMN IF NOT EXISTS rdf3_tons NUMERIC NOT NULL DEFAULT 0;
       CREATE TABLE IF NOT EXISTS sales (
         id SERIAL PRIMARY KEY,
         sale_date TEXT NOT NULL,
@@ -503,20 +529,20 @@ function ensureSchema() {
       -- Remove default API-role grants so the public anon key cannot read or
       -- mutate GP1 data even when a project was created with broad defaults.
       REVOKE ALL PRIVILEGES ON TABLE
-        downtime, line_time, grab_crane, yield_settings, stock_baseline, sales,
+        downtime, line_time, grab_crane, rdf3_grab_crane, yield_settings, stock_baseline, sales,
         revenue_customers, revenue_prices, revenue_rdf3_sales,
         revenue_tipping_settings, revenue_tipping_daily, weekly_delivery_plans,
         kpi_daily_history, kpi_complaints, kpi_target_settings,
-        diesel_machines, diesel_usage,
+        diesel_machines, diesel_usage, diesel_receipts, diesel_stock_baselines,
         app_users, audit_log, deleted_records
       FROM PUBLIC;
       DO $gp1_security$
       BEGIN
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-          EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE downtime, line_time, grab_crane, yield_settings, stock_baseline, sales, revenue_customers, revenue_prices, revenue_rdf3_sales, revenue_tipping_settings, revenue_tipping_daily, weekly_delivery_plans, kpi_daily_history, kpi_complaints, kpi_target_settings, diesel_machines, diesel_usage, app_users, audit_log, deleted_records FROM anon';
+          EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE downtime, line_time, grab_crane, rdf3_grab_crane, yield_settings, stock_baseline, sales, revenue_customers, revenue_prices, revenue_rdf3_sales, revenue_tipping_settings, revenue_tipping_daily, weekly_delivery_plans, kpi_daily_history, kpi_complaints, kpi_target_settings, diesel_machines, diesel_usage, diesel_receipts, diesel_stock_baselines, app_users, audit_log, deleted_records FROM anon';
         END IF;
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-          EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE downtime, line_time, grab_crane, yield_settings, stock_baseline, sales, revenue_customers, revenue_prices, revenue_rdf3_sales, revenue_tipping_settings, revenue_tipping_daily, weekly_delivery_plans, kpi_daily_history, kpi_complaints, kpi_target_settings, diesel_machines, diesel_usage, app_users, audit_log, deleted_records FROM authenticated';
+          EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE downtime, line_time, grab_crane, rdf3_grab_crane, yield_settings, stock_baseline, sales, revenue_customers, revenue_prices, revenue_rdf3_sales, revenue_tipping_settings, revenue_tipping_daily, weekly_delivery_plans, kpi_daily_history, kpi_complaints, kpi_target_settings, diesel_machines, diesel_usage, diesel_receipts, diesel_stock_baselines, app_users, audit_log, deleted_records FROM authenticated';
         END IF;
       END
       $gp1_security$;
@@ -821,6 +847,47 @@ async function syncGrabRows(sourceSystem, rows, options = {}) {
   }
 }
 
+async function syncRDF3GrabRow(deviceId, data) {
+  await ensureSchema();
+  const device = String(deviceId);
+  const sourceKey = String(data.SourceKey);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    let result = await client.query(`
+      INSERT INTO rdf3_grab_crane (
+        report_date, date_time, weight_kg, device_id, source_key, synced_at
+      ) VALUES ($1,$2,$3,$4,$5,now())
+      ON CONFLICT (device_id, source_key) DO NOTHING
+      RETURNING *
+    `, [data.ReportDate, data.DateTime, data.WeightKg, device, sourceKey]);
+    const created = Boolean(result.rows[0]);
+    if (!created) {
+      result = await client.query(`
+        UPDATE rdf3_grab_crane
+        SET report_date = $1, date_time = $2, weight_kg = $3, synced_at = now()
+        WHERE device_id = $4 AND source_key = $5
+        RETURNING *
+      `, [data.ReportDate, data.DateTime, data.WeightKg, device, sourceKey]);
+    }
+    const record = rowToObj(TABLES.RDF3GrabCrane.columns, result.rows[0]);
+    await writeAudit(client, 'DEVICE_SYNC', 'RDF3GrabCrane', record.ID, null, {
+      deviceId: device,
+      sourceKey,
+      created,
+      weightKg: Number(record.WeightKg),
+      dateTime: record.DateTime,
+    });
+    await client.query('COMMIT');
+    return { row: record, created };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function restoreDeletedRecord(id) {
   await ensureSchema();
   const client = await pool.connect();
@@ -943,5 +1010,6 @@ async function close() {
 module.exports = {
   XLSX_PATH: null,
   TABLES, readSheet, appendRow, appendRows, updateRow, deleteRow, deleteRowsByReportDate,
-  syncGrabRows, restoreDeletedRecord, readRecentAudit, readActiveDeleted, exportBackup, restoreBackup, close,
+  syncGrabRows, syncRDF3GrabRow, restoreDeletedRecord, readRecentAudit, readActiveDeleted,
+  exportBackup, restoreBackup, close,
 };

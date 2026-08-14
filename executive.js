@@ -62,6 +62,7 @@
       { key: 'msw', label: 'MSW to Production', actual: data.production.dailyTons, plan: data.targets.dailyTons },
       { key: 'rdf2', label: 'RDF2', actual: data.output.daily.rdf2Tons, plan: data.output.plan.rdf2Tons },
       { key: 'rdf2lg', label: 'RDF2 LG', actual: data.output.daily.rdf2LGTons, plan: data.output.plan.rdf2LGTons },
+      { key: 'rdf3', label: 'RDF3', actual: data.output.daily.rdf3Tons, plan: null },
     ];
     document.getElementById('executiveDailyComparisons').innerHTML = rows.map((row) => {
       const pct = achievement(row.actual, row.plan);
@@ -72,7 +73,7 @@
       return `<article class="executive-comparison-row ${row.key} ${achieved ? 'achieved' : ''}">
         <div class="executive-comparison-label"><strong>${row.label}</strong><span>${pct === null ? 'ยังไม่มีข้อมูลสำหรับแผน' : `${percentLabel(pct)} ของแผน`}</span></div>
         <div class="executive-comparison-bars">
-          <div><span>PLAN</span><i><b style="width:${planWidth}%"></b></i><strong>${numberLabel(row.plan)} ตัน</strong></div>
+          <div><span>PLAN</span><i><b style="width:${planWidth}%"></b></i><strong>${row.plan === null ? '-' : `${numberLabel(row.plan)} ตัน`}</strong></div>
           <div class="actual"><span>ACTUAL</span><i><b style="width:${actualWidth}%"></b></i><strong>${numberLabel(row.actual)} ตัน</strong></div>
         </div>
       </article>`;
@@ -161,6 +162,8 @@
     setText('executiveRDF2Daily', numberLabel(data.output.daily.rdf2Tons));
     setText('executiveRDF2LGDaily', numberLabel(data.output.daily.rdf2LGTons));
     setText('executiveYieldNote', data.output.hasYieldSetting ? 'คำนวณจาก Yield ที่มีผล' : 'ยังไม่มีค่า Yield');
+    setText('executiveRDF3Daily', numberLabel(data.output.daily.rdf3Tons));
+    setText('executiveRDF3DailyMeta', `RDF2 เข้า ${numberLabel(data.output.daily.rdf3FeedTons)} ตัน · Yield ${numberLabel(data.output.rdf3ConversionYieldPct)}%`);
 
     const dailyDieselMachines = Array.isArray(data.diesel.daily.byMachine) ? data.diesel.daily.byMachine : [];
     setText('executiveDieselDaily', numberLabel(data.diesel.daily.totalLiters));
@@ -191,6 +194,10 @@
     setText('executiveRDF2LGMTDPlan', `${numberLabel(plan.mtdRDF2LGTons)} ตัน`);
     setText('executiveRDF2LGMTDPct', percentLabel(rdf2LGMTDPct));
     setProgress('executiveRDF2LGMTDBar', rdf2LGMTDPct);
+    setText('executiveRDF3MTD', `${numberLabel(data.output.mtd.rdf3Tons)} ตัน`);
+    const rdf3Scale = Math.max(1, Number(data.output.mtd.rdf2Tons) || 0, Number(data.output.mtd.rdf3Tons) || 0);
+    setProgress('executiveRDF3MTDBar', Number(data.output.mtd.rdf3Tons) / rdf3Scale * 100);
+    renderMaterialStock('executiveStockGrid', 'executiveStockStatus', data.stock);
     setText('executiveDieselMTD', `MTD ใช้ไป ${numberLabel(data.diesel.mtd.totalLiters)} ลิตร`);
     setText('executiveDieselMTDSummary', `${numberLabel(data.diesel.mtd.totalLiters)} ลิตร`);
     setText('executiveDieselBalance', data.diesel.daily.stock.configured

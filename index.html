@@ -9,13 +9,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
-<link rel="stylesheet" href="home.css?v=20260729-transparent-logo">
+<link rel="stylesheet" href="home.css?v=20260814-rdf3-grab-ready">
 <link rel="stylesheet" href="kpi.css?v=20260723-yieldsplit">
-<link rel="stylesheet" href="monthly.css?v=20260805-monthly-donut-export-v4">
+<link rel="stylesheet" href="monthly.css?v=20260814-rdf3-stock">
 <link rel="stylesheet" href="security-ui.css?v=20260723-security">
 <link rel="stylesheet" href="operations.css?v=20260729-transparent-logo">
 <link rel="stylesheet" href="diesel.css?v=20260811-stock-balance">
-<link rel="stylesheet" href="executive.css?v=20260811-diesel-machine-progress">
+<link rel="stylesheet" href="executive.css?v=20260814-rdf3-stock">
 <style>
   :root{
     --brand:#0f8a5f; --brand-dark:#086342; --brand-bright:#22b573;
@@ -101,6 +101,11 @@
   .ps-table td.left, .ps-table th.left{text-align:left;}
   .ps-table td.ps-label{text-align:left; color:var(--gray); font-weight:600;}
   .ps-table td.ps-value{text-align:right; font-weight:800; color:var(--dark);}
+  .ps-rdf3-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--border);border-radius:7px;overflow:hidden;}
+  .ps-rdf3-grid>div{padding:12px;border-right:1px solid var(--border);}
+  .ps-rdf3-grid>div:last-child{border-right:0;}
+  .ps-rdf3-grid span{display:block;color:var(--gray);font-size:10px;font-weight:700;}
+  .ps-rdf3-grid strong{display:block;margin-top:5px;color:var(--dark);font-size:16px;line-height:1.25;}
   .tab-panel{display:none;}
   .tab-panel.active{display:block;}
   .tab-panel.tab-entering{animation:tabEnter .3s cubic-bezier(.22,.8,.3,1) both;}
@@ -108,7 +113,25 @@
   .toast.show{opacity:1;}
   .toast.err{background:var(--red);}
   @keyframes tabEnter{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
-  .stock-paused{display:none!important;}
+  .material-stock-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border:1px solid var(--border);border-radius:7px;overflow:hidden;background:#fff;}
+  .material-stock-item{min-width:0;padding:17px 18px;border-right:1px solid var(--border);border-top:3px solid var(--brand);}
+  .material-stock-item:last-child{border-right:0;}
+  .material-stock-item.rdf2lg{border-top-color:#64748b;}
+  .material-stock-item.rdf3{border-top-color:#236bb0;}
+  .material-stock-item.fine{border-top-color:#2c8a77;}
+  .material-stock-item.metal{border-top-color:#d97706;}
+  .material-stock-item span{display:block;color:#718096;font-size:10px;font-weight:700;}
+  .material-stock-item strong{display:block;margin-top:6px;color:#14233b;font-size:22px;line-height:1.2;overflow-wrap:anywhere;}
+  .material-stock-item.negative strong{color:var(--red);}
+  .material-stock-empty{padding:20px;color:#64748b;text-align:center;border:1px dashed var(--border);border-radius:7px;background:#f8fafc;}
+  .stock-flow-note{margin-top:12px;color:#64748b;font-size:12px;line-height:1.5;}
+  .rdf3-production-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--border);border-radius:7px;overflow:hidden;background:#fff;}
+  .rdf3-production-summary>div{min-width:0;padding:16px 18px;border-right:1px solid var(--border);}
+  .rdf3-production-summary>div:last-child{border-right:0;}
+  .rdf3-production-summary span{display:block;color:#718096;font-size:10px;font-weight:700;}
+  .rdf3-production-summary strong{display:block;margin-top:5px;color:#14233b;font-size:21px;line-height:1.2;overflow-wrap:anywhere;}
+  @media(max-width:900px){.material-stock-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.material-stock-item{border-bottom:1px solid var(--border);}.material-stock-item:last-child{grid-column:1/-1;border-bottom:0}.rdf3-production-summary{grid-template-columns:repeat(2,minmax(0,1fr));}}
+  @media(max-width:560px){.material-stock-grid,.rdf3-production-summary{grid-template-columns:1fr}.material-stock-item,.rdf3-production-summary>div{border-right:0;border-bottom:1px solid var(--border)}.material-stock-item:last-child,.rdf3-production-summary>div:last-child{grid-column:auto;border-bottom:0}}
   .quick-actions{display:flex; flex-wrap:wrap; gap:14px; margin-bottom:16px;}
   .quick-actions button{flex:1 1 250px; min-width:0;}
   .scroll-table{max-height:320px; overflow:auto; border:1px solid var(--border); border-radius:8px;}
@@ -277,10 +300,11 @@
   .weekly-section-head{padding:14px 18px; border-bottom:1px solid #dbe2ea; display:flex; align-items:center; justify-content:space-between; gap:18px;}
   .weekly-section-title{font-size:17px; font-weight:800; color:#172033;}
   .weekly-section-summary{font-size:11px; color:#64748b; text-align:right;}
-  .weekly-production-grid{display:grid; grid-template-columns:repeat(5,minmax(0,1fr));}
+  .weekly-production-grid{display:grid; grid-template-columns:repeat(3,minmax(0,1fr));}
   .weekly-production-item{min-width:0; min-height:130px; padding:18px; border-right:1px solid #e2e8f0; border-top:4px solid var(--brand); display:flex; flex-direction:column; justify-content:center;}
   .weekly-production-item:last-child{border-right:0;}
   .weekly-production-item.rdf2lg{border-top-color:#64748b;}
+  .weekly-production-item.rdf3{border-top-color:#236bb0;}
   .weekly-production-item.fine{border-top-color:#16a34a;}
   .weekly-production-item.heavy{border-top-color:#d97706;}
   .weekly-production-item.water{border-top-color:#0891b2;}
@@ -304,7 +328,7 @@
     .weekly-production-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
     .weekly-production-item{border-bottom:1px solid #e2e8f0;}
     .weekly-production-item:nth-child(even){border-right:0;}
-    .weekly-production-item:last-child{grid-column:1/-1; border-right:0; border-bottom:0;}
+    .weekly-production-item:last-child{border-right:0; border-bottom:0;}
   }
   @media(max-width:700px){
     main{padding:14px;}
@@ -411,7 +435,7 @@
       <div class="home-grab-flow" aria-hidden="true"><i></i><i></i><i></i></div>
       <header class="home-grab-intro">
         <div class="home-grab-kicker"><i aria-hidden="true"></i><span>LIVE MATERIAL INTAKE</span></div>
-        <h2 id="homeGrabTitle">Daily Grab</h2>
+        <h2 id="homeGrabTitle">RDF2 Grab Crane</h2>
         <p id="homeGrabWindow" data-skeleton="grab-meta">กำลังเชื่อมต่อข้อมูลจาก Grab Crane</p>
         <small id="homeGrabSync" data-skeleton="grab-sync">Auto sync every 5 minutes</small>
       </header>
@@ -428,6 +452,31 @@
       <article class="home-grab-metric total">
         <span>น้ำหนักรวมวันนี้</span>
         <strong id="homeGrabTotal" data-skeleton="grab-value">0.00</strong>
+        <small>ตัน</small>
+      </article>
+    </section>
+
+    <section class="home-grab-live rdf3-feed" id="homeRDF3GrabLive" aria-labelledby="homeRDF3GrabTitle" data-motion-section>
+      <div class="home-grab-flow" aria-hidden="true"><i></i><i></i><i></i></div>
+      <header class="home-grab-intro">
+        <div class="home-grab-kicker"><i aria-hidden="true"></i><span>LIVE RDF2 TRANSFER</span></div>
+        <h2 id="homeRDF3GrabTitle">RDF3 Grab Crane</h2>
+        <p id="homeRDF3GrabWindow" data-skeleton="grab-meta">ระบบพร้อมรองรับ Load Cell ตัวใหม่</p>
+        <small id="homeRDF3GrabSync" data-skeleton="grab-sync">Waiting for device installation</small>
+      </header>
+      <article class="home-grab-metric count">
+        <span>จำนวนคีบ RDF2 วันนี้</span>
+        <strong id="homeRDF3GrabCount" data-skeleton="grab-value">0</strong>
+        <small>Grab</small>
+      </article>
+      <article class="home-grab-metric average">
+        <span>น้ำหนักเฉลี่ยต่อ Grab</span>
+        <strong id="homeRDF3GrabAverage" data-skeleton="grab-value">0.000</strong>
+        <small>ตัน</small>
+      </article>
+      <article class="home-grab-metric total">
+        <span>RDF2 เข้า RDF3 วันนี้</span>
+        <strong id="homeRDF3GrabTotal" data-skeleton="grab-value">0.000</strong>
         <small>ตัน</small>
       </article>
     </section>
@@ -760,7 +809,7 @@
 
     <section class="panel ops-panel report-section grab-report-section">
       <header class="ops-section-head">
-        <div><span>MATERIAL INTAKE</span><h2>Grab Crane</h2></div>
+        <div><span>MATERIAL INTAKE</span><h2>RDF2 Grab Crane</h2></div>
       </header>
       <div class="report-stat-grid">
         <div class="report-stat">
@@ -778,6 +827,18 @@
       </div>
     </section>
 
+    <section class="panel ops-panel report-section grab-report-section">
+      <header class="ops-section-head">
+        <div><span>RDF2 TRANSFER TO RDF3</span><h2>RDF3 Grab Crane</h2></div>
+      </header>
+      <div class="rdf3-production-summary">
+        <div><span>จำนวน Grab</span><strong id="rRDF3GrabCount">-</strong></div>
+        <div><span>RDF2 เข้าเครื่อง RDF3</span><strong id="rRDF3Feed">-</strong></div>
+        <div><span>Yield แปลง RDF2 เป็น RDF3</span><strong id="rRDF3Yield">82.35%</strong></div>
+        <div><span>RDF3 ที่ผลิตได้</span><strong id="rRDF3Output">-</strong></div>
+      </div>
+    </section>
+
     <section class="panel ops-panel report-section production-report-section">
       <header class="ops-section-head">
         <div><span>PRODUCTION OUTPUT</span><h2>ผลผลิตตาม Yield</h2></div>
@@ -792,6 +853,14 @@
           </table>
         </div>
       </div>
+    </section>
+
+    <section class="panel ops-panel report-section">
+      <header class="ops-section-head">
+        <div><span>MATERIAL STOCK</span><h2>สต๊อกคงเหลือ ณ วันรายงาน</h2></div>
+        <div class="report-inline-total"><span>สถานะ</span><strong id="controlStockStatus">-</strong></div>
+      </header>
+      <div id="controlStockGrid" class="material-stock-grid"></div>
     </section>
 
     <section class="panel ops-panel report-section export-report-section">
@@ -818,6 +887,15 @@
         <table class="ps-table">
           <tbody id="psTotalsTable"></tbody>
         </table>
+        <div class="ps-section-title">RDF3 PRODUCTION</div>
+        <div class="ps-rdf3-grid">
+          <div><span>จำนวน RDF3 Grab</span><strong id="psRDF3GrabCount">0 Grab</strong></div>
+          <div><span>RDF2 เข้าเครื่อง RDF3</span><strong id="psRDF3Feed">0.00 ตัน</strong></div>
+          <div><span>RDF3 ผลิตได้ (82.35%)</span><strong id="psRDF3Output">0.00 ตัน</strong></div>
+        </div>
+        <div class="ps-section-title">MATERIAL STOCK</div>
+        <div id="psStockGrid" class="material-stock-grid"></div>
+        <div id="psStockStatus" class="stock-flow-note">-</div>
       </div>
     </section>
 
@@ -854,6 +932,7 @@
             <article><span>MSW Incoming</span><strong><b id="executiveIncomingDaily">0.00</b> ตัน</strong><small id="executiveIncomingStatus">RECORDED</small></article>
             <article><span>MSW to Production</span><strong><b id="executiveProductionDaily">0.00</b> ตัน</strong><small id="executiveProductionPct">0.0% ของแผน</small></article>
             <article><span>RDF2 / RDF2 LG</span><strong><b id="executiveRDF2Daily">0.00</b> / <b id="executiveRDF2LGDaily">0.00</b> ตัน</strong><small id="executiveYieldNote">คำนวณจาก Yield</small></article>
+            <article><span>RDF3 Output</span><strong><b id="executiveRDF3Daily">0.00</b> ตัน</strong><small id="executiveRDF3DailyMeta">RDF2 เข้า 0.00 ตัน · Yield 82.35%</small></article>
             <article class="fuel"><span>Diesel Usage</span><strong><b id="executiveDieselDaily">0.00</b> L</strong><small id="executiveDieselDailyMeta">0 เครื่องจักรที่ใช้วันนี้</small></article>
           </section>
 
@@ -868,7 +947,13 @@
               <article><div><span>MSW to Production</span><b id="executiveMTDPct">0%</b></div><strong id="executiveProductionMTD">0.00 ตัน</strong><small>แผน <b id="executiveMonthlyTarget">8,000.00 ตัน</b></small><div class="executive-progress"><i id="executiveMTDBar"></i></div></article>
               <article><div><span>RDF2</span><b id="executiveRDF2MTDPct">0%</b></div><strong id="executiveRDF2MTD">0.00 ตัน</strong><small>แผนสะสม <b id="executiveRDF2MTDPlan">0.00 ตัน</b></small><div class="executive-progress"><i id="executiveRDF2MTDBar"></i></div></article>
               <article><div><span>RDF2 LG</span><b id="executiveRDF2LGMTDPct">0%</b></div><strong id="executiveRDF2LGMTD">0.00 ตัน</strong><small>แผนสะสม <b id="executiveRDF2LGMTDPlan">0.00 ตัน</b></small><div class="executive-progress"><i id="executiveRDF2LGMTDBar"></i></div></article>
+              <article><div><span>RDF3</span><b>ACTUAL</b></div><strong id="executiveRDF3MTD">0.00 ตัน</strong><small>คำนวณจาก RDF2 ที่ RDF3 Grab Crane ป้อนเข้า</small><div class="executive-progress"><i id="executiveRDF3MTDBar"></i></div></article>
             </div>
+          </section>
+
+          <section class="executive-section">
+            <header class="executive-section-title"><div><span>MATERIAL STOCK</span><h3>สต๊อกคงเหลือ ณ วันรายงาน</h3></div><small id="executiveStockStatus">-</small></header>
+            <div id="executiveStockGrid" class="material-stock-grid"></div>
           </section>
 
           <section class="executive-section executive-fuel-section">
@@ -953,6 +1038,13 @@
           </div>
           <div class="weekly-production-grid" id="weeklyProductionGrid"></div>
           <div class="weekly-yield-warning" id="weeklyYieldWarning"></div>
+        </section>
+
+        <section class="weekly-report-section">
+          <div class="weekly-section-head">
+            <div><div class="weekly-section-title">สต๊อกคงเหลือปลายสัปดาห์</div><div class="weekly-section-summary" id="weeklyStockStatus" style="text-align:left;">-</div></div>
+          </div>
+          <div id="weeklyStockGrid" class="material-stock-grid"></div>
         </section>
 
         <section class="weekly-report-section report-fuel-section">
@@ -1084,6 +1176,14 @@
           <div class="fuel-limit-list report-fuel-list" id="monthlyDieselMachines"></div>
         </section>
 
+        <section class="monthly-section">
+          <div class="monthly-section-head">
+            <div><span>MATERIAL STOCK</span><h2>สต๊อกคงเหลือสิ้นเดือน</h2></div>
+            <div class="monthly-section-meta" id="monthlyStockStatus">-</div>
+          </div>
+          <div id="monthlyStockGrid" class="material-stock-grid"></div>
+        </section>
+
         <section class="monthly-section monthly-revenue-section">
           <div class="monthly-section-head">
             <div><span>REVENUE STRUCTURE</span><h2>สัดส่วนรายได้ 2 ทาง</h2></div>
@@ -1149,22 +1249,9 @@
   <!-- ===================== TAB: PRODUCTION ===================== -->
   <section id="tab-stock" class="tab-panel">
 
-    <section class="panel stock-paused" aria-hidden="true">
-      <h2>สต็อกปัจจุบัน</h2>
-      <div class="cards-grid">
-        <div class="kpi-card blue">
-          <div class="name">RDF2</div>
-          <div class="value" id="stockRDF2">-</div>
-        </div>
-        <div class="kpi-card blue">
-          <div class="name">Fine Fraction</div>
-          <div class="value" id="stockFine">-</div>
-        </div>
-        <div class="kpi-card blue">
-          <div class="name">Metal</div>
-          <div class="value" id="stockMetal">-</div>
-        </div>
-      </div>
+    <section class="panel">
+      <h2>สต๊อกปัจจุบัน</h2>
+      <div id="currentStockGrid" class="material-stock-grid"></div>
       <div class="hint" id="stockBaselineHint"></div>
     </section>
 
@@ -1208,16 +1295,24 @@
       </div>
     </section>
 
-    <section class="panel stock-paused" aria-hidden="true">
-      <h2>สต็อกเริ่มต้น (ตั้งครั้งเดียวตอนเริ่มใช้ระบบ)</h2>
+    <section class="panel">
+      <h2>สต๊อกตั้งต้น</h2>
       <div class="entry-form">
         <div>
-          <label>ณ วันที่</label>
+          <label>ยอดยกมาต้นวันที่</label>
           <input type="date" id="baselineDate">
         </div>
         <div>
           <label>RDF2 (ตัน)</label>
           <input type="number" id="baselineRDF2" min="0" step="0.01">
+        </div>
+        <div>
+          <label>RDF2 LG (ตัน)</label>
+          <input type="number" id="baselineRDF2LG" min="0" step="0.01">
+        </div>
+        <div>
+          <label>RDF3 (ตัน)</label>
+          <input type="number" id="baselineRDF3" min="0" step="0.01">
         </div>
         <div>
           <label>Fine Fraction (ตัน)</label>
@@ -1231,7 +1326,7 @@
           <button class="primary" id="btnSaveBaseline">บันทึกสต็อกเริ่มต้น</button>
         </div>
       </div>
-      <div class="hint">ระบบจะเอาผลผลิต (จาก Grab Crane × Yield) ตั้งแต่วันนี้เป็นต้นไปมาบวกเพิ่ม และลบตามรายการขายที่บันทึก</div>
+      <div class="hint">ระบุยอดยกมาต้นวัน ระบบจะบวกผลผลิต RDF2/RDF2 LG/Fine Fraction/Metal จาก Yield, หัก RDF2 ที่ส่งเข้า RDF3 Grab Crane, บวก RDF3 ที่ผลิตได้ 82.35% และลบยอดขายอัตโนมัติ</div>
     </section>
 
   </section>
@@ -2007,10 +2102,49 @@ async function loadReport(){
 }
 
 const PRODUCT_LABELS = { rdf2: 'RDF2', rdf2LG: 'RDF2 LG', fineFraction: 'Fine Fraction', heavyFraction: 'Heavy Fraction', metal: 'Metal', water: 'น้ำ (ส่วนที่เหลือ)' };
+const MATERIAL_STOCK_ITEMS = [
+  { key:'rdf2', label:'RDF2', cls:'rdf2' },
+  { key:'rdf2LG', label:'RDF2 LG', cls:'rdf2lg' },
+  { key:'rdf3', label:'RDF3', cls:'rdf3' },
+  { key:'fineFraction', label:'Fine Fraction', cls:'fine' },
+  { key:'metal', label:'Metal', cls:'metal' },
+];
+
+function materialStockHtml(data){
+  if (!data?.configured){
+    return '<div class="material-stock-empty" style="grid-column:1/-1">ยังไม่ได้ตั้งค่าสต๊อกตั้งต้น</div>';
+  }
+  return MATERIAL_STOCK_ITEMS.map(item => {
+    const value = Number(data.stock?.[item.key]) || 0;
+    return `<div class="material-stock-item ${item.cls} ${value < 0 ? 'negative' : ''}">
+      <span>${item.label}</span><strong>${revenueNumber(value)} ตัน</strong>
+    </div>`;
+  }).join('');
+}
+
+function renderMaterialStock(gridId, statusId, data, periodLabel='ณ วันที่'){
+  const grid = document.getElementById(gridId);
+  const status = document.getElementById(statusId);
+  if (grid) grid.innerHTML = materialStockHtml(data);
+  if (status) status.textContent = data?.configured
+    ? `${periodLabel} ${data.asOfDate} · ตั้งต้น ${data.baselineDate}`
+    : 'กรุณาตั้งค่าสต๊อกตั้งต้นใน Production Setup';
+}
 
 async function loadProduction(date){
   const data = await api(`/api/production?date=${date}`);
   document.getElementById('prodIncoming').textContent = data.incomingWaste.toFixed(2) + ' ตัน';
+  const rdf3 = data.rdf3Production || {};
+  const rdf3Grab = Math.max(0, Number(data.rdf3Grab?.totalGrabs) || 0);
+  document.getElementById('rRDF3GrabCount').textContent = rdf3Grab.toLocaleString('th-TH');
+  document.getElementById('rRDF3Feed').textContent = `${revenueNumber(rdf3.feedTons)} ตัน`;
+  document.getElementById('rRDF3Yield').textContent = `${revenueNumber(rdf3.yieldPct)}%`;
+  document.getElementById('rRDF3Output').textContent = `${revenueNumber(rdf3.outputTons)} ตัน`;
+  renderMaterialStock('controlStockGrid', 'controlStockStatus', data.stock);
+  document.getElementById('psRDF3GrabCount').textContent = `${rdf3Grab.toLocaleString('th-TH')} Grab`;
+  document.getElementById('psRDF3Feed').textContent = `${revenueNumber(rdf3.feedTons)} ตัน`;
+  document.getElementById('psRDF3Output').textContent = `${revenueNumber(rdf3.outputTons)} ตัน`;
+  renderMaterialStock('psStockGrid', 'psStockStatus', data.stock);
   const noYieldEl = document.getElementById('productionNoYield');
   const contentEl = document.getElementById('productionContent');
   if (!data.hasYieldSetting){
@@ -2166,6 +2300,8 @@ async function loadBaseline(){
   if (data.row){
     document.getElementById('baselineDate').value = data.row.BaselineDate;
     document.getElementById('baselineRDF2').value = data.row.RDF2Tons;
+    document.getElementById('baselineRDF2LG').value = data.row.RDF2LGTons || 0;
+    document.getElementById('baselineRDF3').value = data.row.RDF3Tons || 0;
     document.getElementById('baselineFine').value = data.row.FineFractionTons;
     document.getElementById('baselineMetal').value = data.row.MetalTons;
   }
@@ -2179,10 +2315,13 @@ onClickGuarded(document.getElementById('btnSaveBaseline'), async ()=>{
       body: JSON.stringify({
         baselineDate,
         rdf2Tons: document.getElementById('baselineRDF2').value || 0,
+        rdf2LGTons: document.getElementById('baselineRDF2LG').value || 0,
+        rdf3Tons: document.getElementById('baselineRDF3').value || 0,
         fineFractionTons: document.getElementById('baselineFine').value || 0,
         metalTons: document.getElementById('baselineMetal').value || 0,
       }) });
     toast('บันทึกสต็อกเริ่มต้นแล้ว');
+    await loadStock();
   }catch(e){ toast(e.message, true); }
 });
 
@@ -2310,12 +2449,10 @@ onClickGuarded(document.getElementById('btnAddSale'), async ()=>{
 
 async function loadStock(){
   const data = await api('/api/stock');
-  document.getElementById('stockRDF2').textContent = data.stock.rdf2.toFixed(2) + ' ตัน';
-  document.getElementById('stockFine').textContent = data.stock.fineFraction.toFixed(2) + ' ตัน';
-  document.getElementById('stockMetal').textContent = data.stock.metal.toFixed(2) + ' ตัน';
+  document.getElementById('currentStockGrid').innerHTML = materialStockHtml(data);
   document.getElementById('stockBaselineHint').textContent = data.baseline
-    ? `คำนวณจากสต็อกเริ่มต้นวันที่ ${data.baselineDate} บวกผลผลิต ลบยอดขาย`
-    : 'ยังไม่ได้ตั้งค่าสต็อกเริ่มต้น (ถือว่าเริ่มจาก 0)';
+    ? `ณ ${data.asOfDate} · ตั้งต้น ${data.baselineDate} · RDF2 ส่งเข้า RDF3 สะสม ${revenueNumber(data.rdf2TransferredToRDF3Tons)} ตัน · RDF3 Yield ${revenueNumber(data.rdf3ConversionYieldPct)}%`
+    : 'ยังไม่ได้ตั้งค่าสต๊อกตั้งต้น';
 }
 
 // ---------------- REVENUE TAB ----------------
@@ -2379,10 +2516,10 @@ function deliverySafeFileName(value){
 
 // ---------------- WEEKLY PRODUCTION REPORT TAB ----------------
 const weeklyProductionLabels = {
-  RDF2:'RDF2', RDF2LG:'RDF2 LG', FineFraction:'Fine Fraction', HeavyFraction:'Heavy Fraction', Water:'น้ำ',
+  RDF2:'RDF2', RDF2LG:'RDF2 LG', RDF3:'RDF3', FineFraction:'Fine Fraction', HeavyFraction:'Heavy Fraction', Water:'น้ำ',
 };
 const weeklyProductionClasses = {
-  RDF2:'rdf2', RDF2LG:'rdf2lg', FineFraction:'fine', HeavyFraction:'heavy', Water:'water',
+  RDF2:'rdf2', RDF2LG:'rdf2lg', RDF3:'rdf3', FineFraction:'fine', HeavyFraction:'heavy', Water:'water',
 };
 
 function reportFuelRowsHtml(summary){
@@ -2440,6 +2577,7 @@ async function loadWeeklyReport(){
     ? `ยังคำนวณผลผลิตไม่ครบ ${revenueNumber(data.production.uncalculatedIncomingTons)} ตัน เนื่องจากไม่มีค่า Yield ในวันที่ ${data.production.missingYieldDates.map(deliveryDateLabel).join(', ')}`
     : '';
   yieldWarning.classList.toggle('show', data.production.missingYieldDates.length > 0);
+  renderMaterialStock('weeklyStockGrid', 'weeklyStockStatus', data.stock, 'ปลายสัปดาห์');
 
   const weeklyDieselPct = data.diesel.utilizationPct === null ? '-' : `${revenueNumber(data.diesel.utilizationPct, 1)}%`;
   document.getElementById('weeklyDieselSummary').textContent = `${revenueNumber(data.diesel.totalLiters)} / ${revenueNumber(data.diesel.totalLimitLiters)} ลิตร`;
@@ -3065,7 +3203,7 @@ function initializeAppTab(tab, force=false){
         break;
       case 'stock':
         await loadRevenueCustomers();
-        await Promise.all([loadYieldTable(), loadSalesTable()]);
+        await Promise.all([loadYieldTable(), loadSalesTable(), loadBaseline(), loadStock()]);
         break;
       case 'delivery':
         await loadRevenueCustomers();
@@ -3094,9 +3232,9 @@ initializeAppTab(initialTab && TAB_TITLES[initialTab] ? initialTab : 'home').cat
 </script>
 <script src="security-ui.js?v=20260723-security"></script>
 <script src="kpi.js?v=20260723-yieldsplit"></script>
-<script src="monthly.js?v=20260805-monthly-donut-export-v4"></script>
+<script src="monthly.js?v=20260814-rdf3-stock"></script>
 <script src="diesel.js?v=20260811-stock-balance"></script>
-<script src="executive.js?v=20260811-diesel-machine-progress"></script>
-<script src="home.js?v=20260724-grab-runtime"></script>
+<script src="executive.js?v=20260814-rdf3-stock"></script>
+<script src="home.js?v=20260814-rdf3-grab-ready-v2"></script>
 </body>
 </html>

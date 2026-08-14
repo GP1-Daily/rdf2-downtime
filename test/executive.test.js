@@ -257,8 +257,8 @@ test('diesel entry and executive daily report combine source systems without dou
     /\.executive-skeleton\[hidden\],\.executive-content\[hidden\]\{display:none !important;\}/,
   );
   const page = await fetch(`${baseUrl}/`).then((pageResponse) => pageResponse.text());
-  assert.match(page, /executive\.js\?v=20260811-diesel-machine-progress/);
-  assert.match(page, /executive\.css\?v=20260811-diesel-machine-progress/);
+  assert.match(page, /executive\.js\?v=20260814-rdf3-stock/);
+  assert.match(page, /executive\.css\?v=20260814-rdf3-stock/);
   assert.match(page, /id="executiveDieselMachines"/);
   assert.match(page, /id="executiveDieselDailyMeta"/);
   assert.doesNotMatch(page, /id="executiveDieselDailyLimit"/);

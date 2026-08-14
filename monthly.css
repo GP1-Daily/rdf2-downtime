@@ -273,7 +273,7 @@
 
 .monthly-production-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .monthly-production-item {
@@ -289,6 +289,7 @@
 
 .monthly-production-item:last-child { border-right: 0; }
 .monthly-production-item.rdf2lg { border-top-color: #64748b; }
+.monthly-production-item.rdf3 { border-top-color: #236bb0; }
 .monthly-production-item.fine { border-top-color: #2c8a77; }
 .monthly-production-item span { color: #65766e; font-size: 11px; font-weight: 600; }
 .monthly-production-item strong { margin-top: 7px; color: #17271f; font-size: 23px; line-height: 1.2; overflow-wrap: anywhere; }
