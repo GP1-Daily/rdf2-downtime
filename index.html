@@ -16,7 +16,7 @@
 <link rel="stylesheet" href="operations.css?v=20260814-company-logo">
 <link rel="stylesheet" href="diesel.css?v=20260811-stock-balance">
 <link rel="stylesheet" href="executive.css?v=20260814-company-logo">
-<link rel="stylesheet" href="machines.css?v=20260814-machine-bottleneck">
+<link rel="stylesheet" href="machines.css?v=20260814-industrial-motion-v3">
 <style>
   :root{
     --brand:#0f8a5f; --brand-dark:#086342; --brand-bright:#22b573;
@@ -1260,35 +1260,31 @@
       <div class="hint" id="stockBaselineHint"></div>
     </section>
 
-    <section class="panel machine-process-panel" aria-labelledby="machineProcessTitle">
-      <header class="machine-section-head">
-        <div><span>PRODUCTION FLOW</span><h2 id="machineProcessTitle">ภาพรวมเครื่องจักร RDF2 และ RDF3</h2></div>
-        <p>น้ำหนักจริงจาก Grab Crane เชื่อมกับ Yield และกำลังผลิตของเครื่องที่เปิดใช้งาน</p>
-      </header>
-      <div class="production-flow" aria-label="RDF production process">
-        <article class="process-line rdf2-line">
-          <div class="process-copy"><span>PRIMARY LINE</span><h3>RDF2 Production</h3><p>MSW จาก RDF2 Grab Crane ผ่านกระบวนการคัดแยกตาม Yield</p></div>
-          <div class="machine-visual rdf2-machine" aria-hidden="true">
-            <i class="machine-hopper"></i><i class="machine-body"></i><i class="machine-spinner"></i><i class="machine-belt"></i><i class="machine-output"></i>
-          </div>
-          <div class="process-output-list"><span>RDF2</span><span>RDF2 LG</span><span>Fine Fraction</span><span>Heavy Fraction</span><span>Metal</span></div>
-        </article>
-        <div class="process-connector" aria-hidden="true"><i></i><span>RDF2 Feed</span><b>›</b></div>
-        <article class="process-line rdf3-line">
-          <div class="process-copy"><span>SECONDARY LINE</span><h3>RDF3 Production</h3><p>คำนวณจากเครื่อง MC ที่ ON โดยใช้ Capacity × เวลา × Efficiency</p></div>
-          <div class="machine-visual rdf3-machine" aria-hidden="true">
-            <div class="mini-machine-bank"><i data-label="MC1"></i><i data-label="MC2"></i><i data-label="MC3"></i><i data-label="MC4"></i><i data-label="MC5"></i></div><i class="machine-belt"></i><i class="machine-output"></i>
-          </div>
-          <div class="process-output-list"><span>RDF3</span><span>RDF2 In Process</span></div>
-        </article>
-      </div>
-    </section>
-
     <section class="panel rdf3-machine-panel" id="rdf3MachineControl">
       <header class="machine-section-head">
         <div><span>MACHINE CONTROL</span><h2>RDF3 Capacity Setup</h2></div>
         <p>ระบบใช้ค่าที่มีผลล่าสุด และเลือกผลผลิตต่ำกว่าระหว่าง Material กับ Capacity</p>
       </header>
+      <div class="industrial-motion rdf3-motion is-idle" id="rdf3LineStage" aria-label="สถานะสายการผลิต RDF3">
+        <div class="industrial-motion-head">
+          <div><span>SECONDARY PROCESS</span><strong>RDF3 Production Unit</strong></div>
+          <div class="motion-live-state"><i aria-hidden="true"></i><span id="rdf3LineStatusText">หยุดรอคำสั่ง</span></div>
+        </div>
+        <div class="machine-scene rdf3-scene" aria-hidden="true">
+          <div class="scene-canvas">
+            <i class="factory-floor"></i>
+            <div class="rdf3-feed-bin"><i></i><b></b></div>
+            <div class="rdf3-incline-belt"><i></i><i></i></div>
+            <div class="rdf3-processor">
+              <i class="processor-shell"></i><i class="processor-body"></i><i class="processor-motor"></i><i class="processor-rotor"></i>
+              <div class="rdf3-module-lights"><i data-stage-machine="MC1">1</i><i data-stage-machine="MC2">2</i><i data-stage-machine="MC3">3</i><i data-stage-machine="MC4">4</i><i data-stage-machine="MC5">5</i></div>
+            </div>
+            <div class="rdf3-out-belt"><i></i><i></i></div>
+            <div class="rdf3-material-flow"><i></i><i></i><i></i><i></i><i></i></div>
+          </div>
+        </div>
+        <div class="industrial-flow-strip"><span>RDF2 Feed</span><i></i><strong>MC1–MC5</strong><i></i><span>RDF3 Output</span></div>
+      </div>
       <div class="machine-config-bar">
         <label><span>มีผลตั้งแต่วันที่</span><input type="date" id="rdf3SettingDate"></label>
         <label><span>Yield รวม 5 เครื่อง (%)</span><input type="number" id="rdf3MachineYield" min="0" max="100" step="0.01"></label>
@@ -1322,8 +1318,32 @@
       </div>
     </section>
 
-    <section class="panel">
-      <h2>ตั้งค่า Yield % (ใช้ต่อเนื่องจนกว่าจะตั้งใหม่)</h2>
+    <section class="panel rdf2-yield-panel" aria-labelledby="rdf2YieldTitle">
+      <header class="machine-section-head">
+        <div><span>PRIMARY PROCESS</span><h2 id="rdf2YieldTitle">ตั้งค่า Yield RDF2</h2></div>
+        <p>ค่าที่บันทึกจะใช้ต่อเนื่องจนกว่าจะตั้งค่าใหม่</p>
+      </header>
+      <div class="industrial-motion rdf2-motion is-running" aria-label="กระบวนการผลิต RDF2">
+        <div class="industrial-motion-head">
+          <div><span>RDF2 PROCESS LINE</span><strong>Waste Sorting &amp; Separation</strong></div>
+          <div class="motion-live-state"><i aria-hidden="true"></i><span>PROCESS FLOW</span></div>
+        </div>
+        <div class="machine-scene rdf2-scene" aria-hidden="true">
+          <div class="scene-canvas">
+            <i class="factory-floor"></i>
+            <div class="rdf2-feed-hopper"><i></i><b></b><em></em></div>
+            <div class="rdf2-infeed-belt"><i></i><i></i></div>
+            <div class="rdf2-sorter-frame"><i></i><i></i><i></i><i></i><b></b></div>
+            <div class="rdf2-trommel"><i></i><b></b></div>
+            <div class="rdf2-air-system"><i></i><b></b></div>
+            <div class="rdf2-cross-belt"><i></i><i></i></div>
+            <div class="rdf2-outfeed"><i></i><i></i></div>
+            <div class="rdf2-output-bins"><i></i><i></i><i></i><i></i></div>
+            <div class="rdf2-material-flow"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          </div>
+        </div>
+        <div class="industrial-flow-strip"><span>MSW Input</span><i></i><strong>RDF2 Separation</strong><i></i><span>5 Outputs</span></div>
+      </div>
       <div class="entry-form">
         <div>
           <label>มีผลตั้งแต่วันที่</label>
@@ -1844,7 +1864,7 @@
 </footer>
 <div class="toast" id="toast"></div>
 
-<script src="machines.js?v=20260814-machine-bottleneck"></script>
+<script src="machines.js?v=20260814-industrial-motion-v3"></script>
 <script>
 const PERIOD_LABEL = { 'เช้า':'morning', 'บ่าย':'afternoon', 'ดึก':'night' };
 let html2CanvasPromise = null;

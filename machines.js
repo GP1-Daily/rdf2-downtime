@@ -45,9 +45,11 @@
 
   function setMachineState(code, isOn) {
     const control = document.querySelector(`[data-machine="${code}"]`);
+    const stageIndicator = document.querySelector(`[data-stage-machine="${code}"]`);
     const input = element(`rdf3${code}On`);
     if (input) input.checked = Boolean(isOn);
     control?.classList.toggle('is-off', !isOn);
+    stageIndicator?.classList.toggle('is-on', Boolean(isOn));
     const label = control?.querySelector('.machine-switch b');
     if (label) label.textContent = isOn ? 'ON' : 'OFF';
   }
@@ -73,6 +75,7 @@
       number(serverPreview.availableFeedTons),
       number(serverPreview.feedTons),
     );
+    const onMachines = values.machines.filter((machine) => machine.active);
     const activeMachines = values.machines.filter((machine) => machine.active && machine.capTPH > 0);
     const activeCapacityTPH = activeMachines.reduce((sum, machine) => sum + machine.capTPH, 0);
     const materialOutputTons = availableFeedTons * values.yieldPct / 100;
@@ -81,6 +84,16 @@
     const inputConsumedTons = values.yieldPct > 0
       ? Math.min(availableFeedTons, estimatedOutputTons / (values.yieldPct / 100))
       : 0;
+
+    const lineStage = element('rdf3LineStage');
+    const lineStatus = element('rdf3LineStatusText');
+    lineStage?.classList.toggle('is-running', onMachines.length > 0);
+    lineStage?.classList.toggle('is-idle', onMachines.length === 0);
+    if (lineStatus) {
+      lineStatus.textContent = onMachines.length > 0
+        ? `กำลังทำงาน ${onMachines.length} / 5 เครื่อง`
+        : 'หยุดรอคำสั่ง';
+    }
 
     element('rdf3MachineActive').textContent = `${activeMachines.length} / 5`;
     element('rdf3MachineActiveCap').textContent = `${format(activeCapacityTPH)} ตัน/ชม.`;
