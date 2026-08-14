@@ -16,7 +16,7 @@
 <link rel="stylesheet" href="operations.css?v=20260814-company-logo">
 <link rel="stylesheet" href="diesel.css?v=20260811-stock-balance">
 <link rel="stylesheet" href="executive.css?v=20260814-company-logo">
-<link rel="stylesheet" href="machines.css?v=20260814-industrial-motion-v3">
+<link rel="stylesheet" href="machines.css?v=20260814-production-layout-v1">
 <style>
   :root{
     --brand:#0f8a5f; --brand-dark:#086342; --brand-bright:#22b573;
@@ -1252,39 +1252,34 @@
   </section>
 
   <!-- ===================== TAB: PRODUCTION ===================== -->
-  <section id="tab-stock" class="tab-panel">
+  <section id="tab-stock" class="tab-panel production-setup-tab">
 
-    <section class="panel">
-      <h2>สต๊อกปัจจุบัน</h2>
+    <header class="production-setup-header">
+      <div class="production-setup-title">
+        <span>PRODUCTION MANAGEMENT</span>
+        <h2>Production Setup</h2>
+      </div>
+      <nav class="production-section-nav" aria-label="Production setup sections">
+        <a href="#rdf2YieldSetup"><span>01</span><strong>RDF2 Production</strong><small>Yield &amp; Output Mix</small></a>
+        <a href="#rdf3MachineControl"><span>02</span><strong>RDF3 Production</strong><small>Capacity &amp; Daily Status</small></a>
+        <a href="#productionStockSetup"><span>03</span><strong>Production Stock</strong><small>Balance &amp; Opening Stock</small></a>
+      </nav>
+    </header>
+
+    <section class="panel production-stock-panel" id="productionStockSetup">
+      <header class="machine-section-head stock-section-head">
+        <div class="production-section-identity"><span class="production-section-number">03</span><div><span>INVENTORY CONTROL</span><h2>Production Stock</h2></div></div>
+        <p>ยอดคงเหลือปัจจุบัน</p>
+      </header>
       <div id="currentStockGrid" class="material-stock-grid"></div>
       <div class="hint" id="stockBaselineHint"></div>
     </section>
 
     <section class="panel rdf3-machine-panel" id="rdf3MachineControl">
-      <header class="machine-section-head">
-        <div><span>MACHINE CONTROL</span><h2>RDF3 Capacity Setup</h2></div>
-        <p>ระบบใช้ค่าที่มีผลล่าสุด และเลือกผลผลิตต่ำกว่าระหว่าง Material กับ Capacity</p>
+      <header class="machine-section-head rdf3-section-head">
+        <div class="production-section-identity"><span class="production-section-number">02</span><div><span>SECONDARY PROCESS</span><h2>RDF3 Production Setup</h2></div></div>
+        <p>Capacity · Yield · Efficiency · ON/OFF</p>
       </header>
-      <div class="industrial-motion rdf3-motion is-idle" id="rdf3LineStage" aria-label="สถานะสายการผลิต RDF3">
-        <div class="industrial-motion-head">
-          <div><span>SECONDARY PROCESS</span><strong>RDF3 Production Unit</strong></div>
-          <div class="motion-live-state"><i aria-hidden="true"></i><span id="rdf3LineStatusText">หยุดรอคำสั่ง</span></div>
-        </div>
-        <div class="machine-scene rdf3-scene" aria-hidden="true">
-          <div class="scene-canvas">
-            <i class="factory-floor"></i>
-            <div class="rdf3-feed-bin"><i></i><b></b></div>
-            <div class="rdf3-incline-belt"><i></i><i></i></div>
-            <div class="rdf3-processor">
-              <i class="processor-shell"></i><i class="processor-body"></i><i class="processor-motor"></i><i class="processor-rotor"></i>
-              <div class="rdf3-module-lights"><i data-stage-machine="MC1">1</i><i data-stage-machine="MC2">2</i><i data-stage-machine="MC3">3</i><i data-stage-machine="MC4">4</i><i data-stage-machine="MC5">5</i></div>
-            </div>
-            <div class="rdf3-out-belt"><i></i><i></i></div>
-            <div class="rdf3-material-flow"><i></i><i></i><i></i><i></i><i></i></div>
-          </div>
-        </div>
-        <div class="industrial-flow-strip"><span>RDF2 Feed</span><i></i><strong>MC1–MC5</strong><i></i><span>RDF3 Output</span></div>
-      </div>
       <div class="machine-config-bar">
         <label><span>มีผลตั้งแต่วันที่</span><input type="date" id="rdf3SettingDate"></label>
         <label><span>Yield รวม 5 เครื่อง (%)</span><input type="number" id="rdf3MachineYield" min="0" max="100" step="0.01"></label>
@@ -1297,11 +1292,11 @@
         <button id="btnSaveRDF3MachineDaily">บันทึก ON / OFF วันนี้</button>
       </div>
       <div class="machine-bank-controls" id="rdf3MachineBank">
-        <article class="machine-control" data-machine="MC1"><div class="machine-control-top"><span class="machine-index">01</span><div><strong>MC1</strong><small>RDF3 Machine</small></div><label class="machine-switch" title="เปิดหรือปิดเครื่องสำหรับวันที่เลือก"><input type="checkbox" id="rdf3MC1On"><span aria-hidden="true"></span><b>ON</b></label></div><div class="machine-control-graphic" aria-hidden="true"><i></i><i></i><i></i><i></i></div><label class="machine-capacity-field"><span>Capacity</span><div><input type="number" id="rdf3MC1Cap" min="0" step="0.01"><b>ตัน/ชม.</b></div></label></article>
-        <article class="machine-control" data-machine="MC2"><div class="machine-control-top"><span class="machine-index">02</span><div><strong>MC2</strong><small>RDF3 Machine</small></div><label class="machine-switch" title="เปิดหรือปิดเครื่องสำหรับวันที่เลือก"><input type="checkbox" id="rdf3MC2On"><span aria-hidden="true"></span><b>ON</b></label></div><div class="machine-control-graphic" aria-hidden="true"><i></i><i></i><i></i><i></i></div><label class="machine-capacity-field"><span>Capacity</span><div><input type="number" id="rdf3MC2Cap" min="0" step="0.01"><b>ตัน/ชม.</b></div></label></article>
-        <article class="machine-control" data-machine="MC3"><div class="machine-control-top"><span class="machine-index">03</span><div><strong>MC3</strong><small>RDF3 Machine</small></div><label class="machine-switch" title="เปิดหรือปิดเครื่องสำหรับวันที่เลือก"><input type="checkbox" id="rdf3MC3On"><span aria-hidden="true"></span><b>ON</b></label></div><div class="machine-control-graphic" aria-hidden="true"><i></i><i></i><i></i><i></i></div><label class="machine-capacity-field"><span>Capacity</span><div><input type="number" id="rdf3MC3Cap" min="0" step="0.01"><b>ตัน/ชม.</b></div></label></article>
-        <article class="machine-control" data-machine="MC4"><div class="machine-control-top"><span class="machine-index">04</span><div><strong>MC4</strong><small>RDF3 Machine</small></div><label class="machine-switch" title="เปิดหรือปิดเครื่องสำหรับวันที่เลือก"><input type="checkbox" id="rdf3MC4On"><span aria-hidden="true"></span><b>ON</b></label></div><div class="machine-control-graphic" aria-hidden="true"><i></i><i></i><i></i><i></i></div><label class="machine-capacity-field"><span>Capacity</span><div><input type="number" id="rdf3MC4Cap" min="0" step="0.01"><b>ตัน/ชม.</b></div></label></article>
-        <article class="machine-control" data-machine="MC5"><div class="machine-control-top"><span class="machine-index">05</span><div><strong>MC5</strong><small>RDF3 Machine</small></div><label class="machine-switch" title="เปิดหรือปิดเครื่องสำหรับวันที่เลือก"><input type="checkbox" id="rdf3MC5On"><span aria-hidden="true"></span><b>ON</b></label></div><div class="machine-control-graphic" aria-hidden="true"><i></i><i></i><i></i><i></i></div><label class="machine-capacity-field"><span>Capacity</span><div><input type="number" id="rdf3MC5Cap" min="0" step="0.01"><b>ตัน/ชม.</b></div></label></article>
+        <article class="machine-control" data-machine="MC1"><div class="machine-control-top"><span class="machine-index">01</span><div><strong>MC1</strong><small>RDF3 Machine</small></div><label class="machine-switch" title="เปิดหรือปิดเครื่องสำหรับวันที่เลือก"><input type="checkbox" id="rdf3MC1On"><span aria-hidden="true"></span><b>ON</b></label></div><label class="machine-capacity-field"><span>Capacity</span><div><input type="number" id="rdf3MC1Cap" min="0" step="0.01"><b>ตัน/ชม.</b></div></label></article>
+        <article class="machine-control" data-machine="MC2"><div class="machine-control-top"><span class="machine-index">02</span><div><strong>MC2</strong><small>RDF3 Machine</small></div><label class="machine-switch" title="เปิดหรือปิดเครื่องสำหรับวันที่เลือก"><input type="checkbox" id="rdf3MC2On"><span aria-hidden="true"></span><b>ON</b></label></div><label class="machine-capacity-field"><span>Capacity</span><div><input type="number" id="rdf3MC2Cap" min="0" step="0.01"><b>ตัน/ชม.</b></div></label></article>
+        <article class="machine-control" data-machine="MC3"><div class="machine-control-top"><span class="machine-index">03</span><div><strong>MC3</strong><small>RDF3 Machine</small></div><label class="machine-switch" title="เปิดหรือปิดเครื่องสำหรับวันที่เลือก"><input type="checkbox" id="rdf3MC3On"><span aria-hidden="true"></span><b>ON</b></label></div><label class="machine-capacity-field"><span>Capacity</span><div><input type="number" id="rdf3MC3Cap" min="0" step="0.01"><b>ตัน/ชม.</b></div></label></article>
+        <article class="machine-control" data-machine="MC4"><div class="machine-control-top"><span class="machine-index">04</span><div><strong>MC4</strong><small>RDF3 Machine</small></div><label class="machine-switch" title="เปิดหรือปิดเครื่องสำหรับวันที่เลือก"><input type="checkbox" id="rdf3MC4On"><span aria-hidden="true"></span><b>ON</b></label></div><label class="machine-capacity-field"><span>Capacity</span><div><input type="number" id="rdf3MC4Cap" min="0" step="0.01"><b>ตัน/ชม.</b></div></label></article>
+        <article class="machine-control" data-machine="MC5"><div class="machine-control-top"><span class="machine-index">05</span><div><strong>MC5</strong><small>RDF3 Machine</small></div><label class="machine-switch" title="เปิดหรือปิดเครื่องสำหรับวันที่เลือก"><input type="checkbox" id="rdf3MC5On"><span aria-hidden="true"></span><b>ON</b></label></div><label class="machine-capacity-field"><span>Capacity</span><div><input type="number" id="rdf3MC5Cap" min="0" step="0.01"><b>ตัน/ชม.</b></div></label></article>
       </div>
       <div class="machine-calculation" id="rdf3MachineCalculation">
         <div><span>เครื่องที่เดิน</span><strong id="rdf3MachineActive">0 / 5</strong></div>
@@ -1318,32 +1313,11 @@
       </div>
     </section>
 
-    <section class="panel rdf2-yield-panel" aria-labelledby="rdf2YieldTitle">
-      <header class="machine-section-head">
-        <div><span>PRIMARY PROCESS</span><h2 id="rdf2YieldTitle">ตั้งค่า Yield RDF2</h2></div>
-        <p>ค่าที่บันทึกจะใช้ต่อเนื่องจนกว่าจะตั้งค่าใหม่</p>
+    <section class="panel rdf2-yield-panel" id="rdf2YieldSetup" aria-labelledby="rdf2YieldTitle">
+      <header class="machine-section-head rdf2-section-head">
+        <div class="production-section-identity"><span class="production-section-number">01</span><div><span>PRIMARY PROCESS</span><h2 id="rdf2YieldTitle">RDF2 Production Setup</h2></div></div>
+        <p>Yield &amp; Output Mix</p>
       </header>
-      <div class="industrial-motion rdf2-motion is-running" aria-label="กระบวนการผลิต RDF2">
-        <div class="industrial-motion-head">
-          <div><span>RDF2 PROCESS LINE</span><strong>Waste Sorting &amp; Separation</strong></div>
-          <div class="motion-live-state"><i aria-hidden="true"></i><span>PROCESS FLOW</span></div>
-        </div>
-        <div class="machine-scene rdf2-scene" aria-hidden="true">
-          <div class="scene-canvas">
-            <i class="factory-floor"></i>
-            <div class="rdf2-feed-hopper"><i></i><b></b><em></em></div>
-            <div class="rdf2-infeed-belt"><i></i><i></i></div>
-            <div class="rdf2-sorter-frame"><i></i><i></i><i></i><i></i><b></b></div>
-            <div class="rdf2-trommel"><i></i><b></b></div>
-            <div class="rdf2-air-system"><i></i><b></b></div>
-            <div class="rdf2-cross-belt"><i></i><i></i></div>
-            <div class="rdf2-outfeed"><i></i><i></i></div>
-            <div class="rdf2-output-bins"><i></i><i></i><i></i><i></i></div>
-            <div class="rdf2-material-flow"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-          </div>
-        </div>
-        <div class="industrial-flow-strip"><span>MSW Input</span><i></i><strong>RDF2 Separation</strong><i></i><span>5 Outputs</span></div>
-      </div>
       <div class="entry-form">
         <div>
           <label>มีผลตั้งแต่วันที่</label>
@@ -1382,8 +1356,11 @@
       </div>
     </section>
 
-    <section class="panel">
-      <h2>สต๊อกตั้งต้น</h2>
+    <section class="panel production-baseline-panel">
+      <header class="machine-section-head baseline-section-head">
+        <div><span>OPENING BALANCE</span><h2>Opening Stock</h2></div>
+        <p>ยอดยกมาต้นวัน</p>
+      </header>
       <div class="entry-form">
         <div>
           <label>ยอดยกมาต้นวันที่</label>
@@ -1864,7 +1841,7 @@
 </footer>
 <div class="toast" id="toast"></div>
 
-<script src="machines.js?v=20260814-industrial-motion-v3"></script>
+<script src="machines.js?v=20260814-production-layout-v1"></script>
 <script>
 const PERIOD_LABEL = { 'เช้า':'morning', 'บ่าย':'afternoon', 'ดึก':'night' };
 let html2CanvasPromise = null;
