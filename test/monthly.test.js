@@ -192,10 +192,10 @@ test('monthly report uses calendar boundaries and combines operations, productio
   }
 
   assert.equal(report.operations.lineMinutes, 240);
-  assert.equal(report.operations.productionMinutes, 200);
+  assert.equal(report.operations.productionMinutes, 100);
   assert.equal(report.operations.downtimeMinutes, 50);
-  assert.equal(report.operations.netRunMinutes, 150);
-  assert.ok(Math.abs(report.operations.availabilityPct - (150 / 200 * 100)) < 0.0001);
+  assert.equal(report.operations.netRunMinutes, 80);
+  assert.ok(Math.abs(report.operations.availabilityPct - 80) < 0.0001);
   assert.deepEqual(report.operations.reasonTotals.map((row) => [row.reason, row.count, row.minutes]), [
     ['พักกะดึก', 1, 30],
     ['Plug Spinner', 1, 20],

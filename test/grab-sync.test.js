@@ -207,6 +207,13 @@ test('Grab device API requires its token and assigns the calendar date from sour
   assert.equal(reportDay.rows.length, 1);
   assert.equal(reportDay.rows[0].DateTime, '2026-07-25 00:05:00');
   assert.equal(previousDay.rows.length, 0);
+
+  const report = await fetch(`${baseUrl}/api/report?date=2026-07-25`).then((response) => response.json());
+  assert.equal(report.grab.deviceConfigured, true);
+  assert.equal(report.grab.syncStatus.Status, 'success');
+  assert.equal(Number(report.grab.syncStatus.LastSourceID), 501);
+  assert.equal(Number(report.grab.syncStatus.LastRowCount), 1);
+  assert.ok(report.grab.syncStatus.LastSuccessAt);
 });
 
 test('RDF3 Grab device API accepts ESP32 form data and reports tons on the dashboard', async (t) => {
@@ -353,7 +360,7 @@ test('RDF3 Grab device API accepts ESP32 form data and reports tons on the dashb
   assertNear(executive.stock.stock.rdf3, 1.8193825);
 });
 
-test('RDF3 machine bottleneck uses active capacity, runtime, efficiency, yield, and WIP', async (t) => {
+test('RDF3 production uses measured feed and yield while capacity remains a performance benchmark', async (t) => {
   const port = await freePort();
   const workbookPath = path.join(tempDir, 'rdf3-machine-bottleneck.xlsx');
   const token = 'm'.repeat(64);
@@ -400,7 +407,6 @@ test('RDF3 machine bottleneck uses active capacity, runtime, efficiency, yield, 
       rdf2Tons: 20,
       rdf2LGTons: 0,
       rdf3Tons: 0,
-      rdf2InProcessTons: 1,
       fineFractionTons: 0,
       metalTons: 0,
     }),
@@ -452,36 +458,55 @@ test('RDF3 machine bottleneck uses active capacity, runtime, efficiency, yield, 
   await sendGrab('2026-08-12 10:00:00', 500);
 
   const production = await fetch(`${baseUrl}/api/production?date=2026-08-12`).then((response) => response.json());
-  assert.equal(production.rdf3Production.mode, 'machine-bottleneck');
+  assert.equal(production.rdf3Production.mode, 'material-yield');
   assert.equal(production.rdf3Production.activeMachineCount, 3);
   assertNear(production.rdf3Production.feedTons, 1);
-  assertNear(production.rdf3Production.availableFeedTons, 2);
+  assertNear(production.rdf3Production.availableFeedTons, 1);
   assertNear(production.rdf3Production.activeCapacityTPH, 1);
   assertNear(production.rdf3Production.runtimeHours, 2);
-  assertNear(production.rdf3Production.materialOutputTons, 1.6);
+  assertNear(production.rdf3Production.materialOutputTons, 0.8);
   assertNear(production.rdf3Production.capacityOutputTons, 1);
-  assertNear(production.rdf3Production.outputTons, 1);
-  assertNear(production.rdf3Production.inputConsumedTons, 1.25);
-  assertNear(production.rdf3Production.wipTons, 0.75);
+  assertNear(production.rdf3Production.outputTons, 0.8);
+  assertNear(production.rdf3Production.inputConsumedTons, 1);
+  assertNear(production.rdf3Production.wipTons, 0);
 
   const stock = await fetch(`${baseUrl}/api/stock?date=2026-08-12`).then((response) => response.json());
   assertNear(stock.stock.rdf2, 19);
-  assertNear(stock.stock.rdf2InProcess, 0.75);
-  assertNear(stock.stock.rdf3, 1);
+  assert.equal(stock.stock.rdf2InProcess, undefined);
+  assertNear(stock.stock.rdf3, 0.8);
+
+  const adjustmentResponse = await fetch(`${baseUrl}/api/stock/adjustments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      entryDate: '2026-08-12', material: 'RDF2', tonsDelta: -20,
+      reason: 'ตรวจนับสต๊อกจริง', note: 'integration test',
+    }),
+  });
+  assert.equal(adjustmentResponse.status, 201, await adjustmentResponse.text());
+  const adjustedStock = await fetch(`${baseUrl}/api/stock?date=2026-08-12`).then((response) => response.json());
+  assertNear(adjustedStock.stock.rdf2, -1);
+  assert.equal(adjustedStock.warnings[0].material, 'rdf2');
+  const adjustmentHistory = await fetch(`${baseUrl}/api/stock/adjustments?month=2026-08`).then((response) => response.json());
+  assert.equal(adjustmentHistory.rows.length, 1);
+  assert.equal(Number(adjustmentHistory.rows[0].TonsDelta), -20);
 
   const weekly = await fetch(`${baseUrl}/api/weekly-report?weekStart=2026-08-10`).then((response) => response.json());
   const weeklyRDF3 = weekly.production.products.find((row) => row.product === 'RDF3');
-  assertNear(weeklyRDF3.tons, 1);
-  assertNear(weekly.production.rdf3Machine.inputConsumedTons, 1.25);
-  assertNear(weekly.production.rdf3Machine.closingWipTons, 0.75);
+  assertNear(weeklyRDF3.tons, 0.8);
+  assertNear(weekly.production.rdf3Machine.inputConsumedTons, 1);
+  assertNear(weekly.production.rdf3Machine.closingWipTons, 0);
+  assertNear(weekly.stock.stock.rdf2, -1);
 
   const monthly = await fetch(`${baseUrl}/api/monthly-report?month=2026-08`).then((response) => response.json());
   const monthlyRDF3 = monthly.production.products.find((row) => row.product === 'RDF3');
-  assertNear(monthlyRDF3.tons, 1);
+  assertNear(monthlyRDF3.tons, 0.8);
   assertNear(monthly.production.rdf3Machine.runtimeMinutes, 120);
+  assertNear(monthly.stock.stock.rdf2, -1);
 
   const executive = await fetch(`${baseUrl}/api/executive-report?date=2026-08-12`).then((response) => response.json());
-  assertNear(executive.output.daily.rdf3Tons, 1);
+  assertNear(executive.output.daily.rdf3Tons, 0.8);
   assertNear(executive.output.rdf3Machine.daily.capacityOutputTons, 1);
-  assertNear(executive.output.rdf3Machine.mtd.closingWipTons, 0.75);
+  assertNear(executive.output.rdf3Machine.mtd.closingWipTons, 0);
+  assertNear(executive.stock.stock.rdf2, -1);
 });

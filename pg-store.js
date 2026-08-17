@@ -97,6 +97,13 @@ const TABLES = {
       MetalTons: 'metal_tons', CreatedAt: 'created_at',
     },
   },
+  StockAdjustments: {
+    table: 'stock_adjustments',
+    columns: {
+      ID: 'id', EntryDate: 'entry_date', Material: 'material', TonsDelta: 'tons_delta',
+      Reason: 'reason', Note: 'note', CreatedAt: 'created_at',
+    },
+  },
   Sales: {
     table: 'sales',
     columns: {
@@ -197,6 +204,22 @@ const TABLES = {
       Note: 'note', CreatedAt: 'created_at',
     },
   },
+  DeviceSyncStatus: {
+    table: 'device_sync_status',
+    columns: {
+      ID: 'id', DeviceID: 'device_id', LastAttemptAt: 'last_attempt_at',
+      LastSuccessAt: 'last_success_at', LastSourceID: 'last_source_id',
+      LastRowCount: 'last_row_count', Status: 'status', Error: 'error',
+      CreatedAt: 'created_at', UpdatedAt: 'updated_at',
+    },
+  },
+  BackupRuns: {
+    table: 'backup_runs',
+    columns: {
+      ID: 'id', Status: 'status', StartedAt: 'started_at', CompletedAt: 'completed_at',
+      ObjectPath: 'object_path', SizeBytes: 'size_bytes', Error: 'error', CreatedAt: 'created_at',
+    },
+  },
   AppUsers: {
     table: 'app_users',
     columns: {
@@ -223,7 +246,7 @@ const TABLES = {
   },
 };
 
-const SYSTEM_SHEETS = new Set(['AuditLog', 'DeletedRecords']);
+const SYSTEM_SHEETS = new Set(['AuditLog', 'DeletedRecords', 'DeviceSyncStatus', 'BackupRuns']);
 
 let schemaReady = null;
 function ensureSchema() {
@@ -348,6 +371,16 @@ function ensureSchema() {
       ALTER TABLE stock_baseline ADD COLUMN IF NOT EXISTS rdf2_lg_tons NUMERIC NOT NULL DEFAULT 0;
       ALTER TABLE stock_baseline ADD COLUMN IF NOT EXISTS rdf3_tons NUMERIC NOT NULL DEFAULT 0;
       ALTER TABLE stock_baseline ADD COLUMN IF NOT EXISTS rdf2_in_process_tons NUMERIC NOT NULL DEFAULT 0;
+      CREATE TABLE IF NOT EXISTS stock_adjustments (
+        id SERIAL PRIMARY KEY,
+        entry_date TEXT NOT NULL,
+        material TEXT NOT NULL CHECK (material IN ('RDF2', 'RDF2LG', 'RDF3', 'FineFraction', 'Metal')),
+        tons_delta NUMERIC NOT NULL CHECK (tons_delta <> 0),
+        reason TEXT NOT NULL,
+        note TEXT DEFAULT '',
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS stock_adjustments_date_idx ON stock_adjustments (entry_date);
       CREATE TABLE IF NOT EXISTS sales (
         id SERIAL PRIMARY KEY,
         sale_date TEXT NOT NULL,
@@ -492,6 +525,33 @@ function ensureSchema() {
       CREATE UNIQUE INDEX IF NOT EXISTS diesel_stock_baselines_date_idx
         ON diesel_stock_baselines (effective_date);
 
+      CREATE TABLE IF NOT EXISTS device_sync_status (
+        id SERIAL PRIMARY KEY,
+        device_id TEXT NOT NULL UNIQUE,
+        last_attempt_at TIMESTAMPTZ,
+        last_success_at TIMESTAMPTZ,
+        last_source_id BIGINT,
+        last_row_count INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'unknown',
+        error TEXT DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS device_sync_status_success_idx
+        ON device_sync_status (last_success_at DESC);
+      CREATE TABLE IF NOT EXISTS backup_runs (
+        id BIGSERIAL PRIMARY KEY,
+        status TEXT NOT NULL CHECK (status IN ('success', 'failed')),
+        started_at TIMESTAMPTZ NOT NULL,
+        completed_at TIMESTAMPTZ NOT NULL,
+        object_path TEXT DEFAULT '',
+        size_bytes BIGINT NOT NULL DEFAULT 0,
+        error TEXT DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS backup_runs_completed_idx
+        ON backup_runs (completed_at DESC);
+
       CREATE TABLE IF NOT EXISTS app_users (
         id SERIAL PRIMARY KEY,
         auth_user_id TEXT,
@@ -539,6 +599,12 @@ function ensureSchema() {
       CREATE INDEX IF NOT EXISTS deleted_records_active_idx
         ON deleted_records (deleted_at DESC) WHERE restored_at IS NULL;
 
+      CREATE INDEX IF NOT EXISTS downtime_entry_start_idx ON downtime (entry_date, start_time);
+      CREATE INDEX IF NOT EXISTS line_time_entry_time_idx ON line_time (entry_date, time);
+      CREATE INDEX IF NOT EXISTS sales_date_idx ON sales (sale_date);
+      CREATE INDEX IF NOT EXISTS revenue_rdf3_sales_date_idx ON revenue_rdf3_sales (sale_date);
+      CREATE INDEX IF NOT EXISTS kpi_complaints_date_idx ON kpi_complaints (entry_date);
+
       -- All RDF2 shipped to TPI is low grade. Keep this migration idempotent
       -- so old sales, prices and delivery plans are corrected on deployment.
       UPDATE sales
@@ -575,20 +641,21 @@ function ensureSchema() {
       -- mutate GP1 data even when a project was created with broad defaults.
       REVOKE ALL PRIVILEGES ON TABLE
         downtime, line_time, grab_crane, rdf3_grab_crane, rdf3_machine_settings, rdf3_machine_daily,
-        yield_settings, stock_baseline, sales,
+        yield_settings, stock_baseline, stock_adjustments, sales,
         revenue_customers, revenue_prices, revenue_rdf3_sales,
         revenue_tipping_settings, revenue_tipping_daily, weekly_delivery_plans,
         kpi_daily_history, kpi_complaints, kpi_target_settings,
         diesel_machines, diesel_usage, diesel_receipts, diesel_stock_baselines,
+        device_sync_status, backup_runs,
         app_users, audit_log, deleted_records
       FROM PUBLIC;
       DO $gp1_security$
       BEGIN
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-          EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE downtime, line_time, grab_crane, rdf3_grab_crane, rdf3_machine_settings, rdf3_machine_daily, yield_settings, stock_baseline, sales, revenue_customers, revenue_prices, revenue_rdf3_sales, revenue_tipping_settings, revenue_tipping_daily, weekly_delivery_plans, kpi_daily_history, kpi_complaints, kpi_target_settings, diesel_machines, diesel_usage, diesel_receipts, diesel_stock_baselines, app_users, audit_log, deleted_records FROM anon';
+          EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE downtime, line_time, grab_crane, rdf3_grab_crane, rdf3_machine_settings, rdf3_machine_daily, yield_settings, stock_baseline, stock_adjustments, sales, revenue_customers, revenue_prices, revenue_rdf3_sales, revenue_tipping_settings, revenue_tipping_daily, weekly_delivery_plans, kpi_daily_history, kpi_complaints, kpi_target_settings, diesel_machines, diesel_usage, diesel_receipts, diesel_stock_baselines, device_sync_status, backup_runs, app_users, audit_log, deleted_records FROM anon';
         END IF;
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-          EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE downtime, line_time, grab_crane, rdf3_grab_crane, rdf3_machine_settings, rdf3_machine_daily, yield_settings, stock_baseline, sales, revenue_customers, revenue_prices, revenue_rdf3_sales, revenue_tipping_settings, revenue_tipping_daily, weekly_delivery_plans, kpi_daily_history, kpi_complaints, kpi_target_settings, diesel_machines, diesel_usage, diesel_receipts, diesel_stock_baselines, app_users, audit_log, deleted_records FROM authenticated';
+          EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE downtime, line_time, grab_crane, rdf3_grab_crane, rdf3_machine_settings, rdf3_machine_daily, yield_settings, stock_baseline, stock_adjustments, sales, revenue_customers, revenue_prices, revenue_rdf3_sales, revenue_tipping_settings, revenue_tipping_daily, weekly_delivery_plans, kpi_daily_history, kpi_complaints, kpi_target_settings, diesel_machines, diesel_usage, diesel_receipts, diesel_stock_baselines, device_sync_status, backup_runs, app_users, audit_log, deleted_records FROM authenticated';
         END IF;
       END
       $gp1_security$;
@@ -612,6 +679,48 @@ async function readSheet(sheetName) {
   const { table, columns } = TABLES[sheetName];
   const res = await pool.query(`SELECT * FROM ${table} ORDER BY id`);
   return res.rows.map((r) => rowToObj(columns, r));
+}
+
+async function readSheetRange(sheetName, field, start, end) {
+  await ensureSchema();
+  const definition = TABLES[sheetName];
+  const dbColumn = definition?.columns?.[field];
+  if (!definition || !dbColumn) throw new Error('Unsupported sheet range');
+  const conditions = [];
+  const values = [];
+  if (start !== undefined) {
+    values.push(start);
+    conditions.push(`${dbColumn} >= $${values.length}`);
+  }
+  if (end !== undefined) {
+    values.push(end);
+    conditions.push(`${dbColumn} <= $${values.length}`);
+  }
+  const where = conditions.length ? ` WHERE ${conditions.join(' AND ')}` : '';
+  const result = await pool.query(`SELECT * FROM ${definition.table}${where} ORDER BY id`, values);
+  return result.rows.map((row) => rowToObj(definition.columns, row));
+}
+
+async function upsertDeviceSyncStatus(deviceId, patch) {
+  await ensureSchema();
+  const fields = {
+    LastAttemptAt: 'last_attempt_at', LastSuccessAt: 'last_success_at',
+    LastSourceID: 'last_source_id', LastRowCount: 'last_row_count',
+    Status: 'status', Error: 'error',
+  };
+  const entries = Object.entries(fields).filter(([key]) => patch[key] !== undefined);
+  const insertColumns = ['device_id', ...entries.map(([, column]) => column)];
+  const values = [String(deviceId), ...entries.map(([key]) => patch[key])];
+  const placeholders = values.map((_, index) => `$${index + 1}`);
+  const updates = entries.map(([, column]) => `${column} = EXCLUDED.${column}`);
+  updates.push('updated_at = now()');
+  const result = await pool.query(`
+    INSERT INTO device_sync_status (${insertColumns.join(', ')})
+    VALUES (${placeholders.join(', ')})
+    ON CONFLICT (device_id) DO UPDATE SET ${updates.join(', ')}
+    RETURNING *
+  `, values);
+  return rowToObj(TABLES.DeviceSyncStatus.columns, result.rows[0]);
 }
 
 function actorFields() {
@@ -1055,7 +1164,7 @@ async function close() {
 
 module.exports = {
   XLSX_PATH: null,
-  TABLES, readSheet, appendRow, appendRows, updateRow, deleteRow, deleteRowsByReportDate,
+  TABLES, readSheet, readSheetRange, appendRow, appendRows, updateRow, deleteRow, deleteRowsByReportDate,
   syncGrabRows, syncRDF3GrabRow, restoreDeletedRecord, readRecentAudit, readActiveDeleted,
-  exportBackup, restoreBackup, close,
+  upsertDeviceSyncStatus, exportBackup, restoreBackup, close,
 };

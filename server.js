@@ -122,6 +122,16 @@ function textWithin(value, maxLength) {
   return String(value || '').length <= maxLength;
 }
 
+function finiteNumber(value, { min = -Infinity, max = Infinity } = {}) {
+  if (value === '' || value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : null;
+}
+
+function automaticGrabRow(row) {
+  return Boolean(String(row?.SourceSystem || '').trim());
+}
+
 function sendStatic(req, res, filePath, query) {
   fs.stat(filePath, (statError, stat) => {
     if (statError || !stat.isFile()) { res.writeHead(404); res.end('Not found'); return; }
@@ -169,9 +179,11 @@ function sendStatic(req, res, filePath, query) {
 
 async function handleDowntime(req, res, parts, query) {
   if (req.method === 'GET' && parts.length === 0) {
-    const rows = await store.readSheet('Downtime');
     const date = query.date;
-    const filtered = date ? rows.filter((r) => r.EntryDate === date) : rows;
+    if (date && !validIsoDate(date)) return sendJson(res, 400, { ok: false, error: 'รูปแบบวันที่ไม่ถูกต้อง' });
+    const filtered = date
+      ? await store.readSheetRange('Downtime', 'EntryDate', date, date)
+      : await store.readSheet('Downtime');
     filtered.sort((a, b) => (a.StartTime > b.StartTime ? 1 : -1));
     return sendJson(res, 200, { ok: true, rows: filtered });
   }
@@ -180,14 +192,22 @@ async function handleDowntime(req, res, parts, query) {
     if (!validIsoDate(body.entryDate) || !validClockTime(body.startTime) || !validClockTime(body.endTime)) {
       return sendJson(res, 400, { ok: false, error: 'ต้องระบุ entryDate, startTime, endTime' });
     }
-    if (!textWithin(body.reason, 200) || !textWithin(body.note, 1000)) {
-      return sendJson(res, 400, { ok: false, error: 'รายละเอียดรายการยาวเกินกำหนด' });
+    const reason = String(body.reason || '').trim();
+    if (!reason || !textWithin(reason, 200) || !textWithin(body.note, 1000)) {
+      return sendJson(res, 400, { ok: false, error: 'กรุณาระบุสาเหตุการหยุดเครื่องไม่เกิน 200 ตัวอักษร' });
+    }
+    const rows = await store.readSheet('Downtime');
+    const duplicate = rows.find((row) => row.EntryDate === body.entryDate
+      && row.StartTime === body.startTime && row.EndTime === body.endTime
+      && String(row.Reason || '').trim().toLocaleLowerCase('th-TH') === reason.toLocaleLowerCase('th-TH'));
+    if (duplicate) {
+      return sendJson(res, 200, { ok: true, row: duplicate, duplicate: true });
     }
     const record = await store.appendRow('Downtime', {
       EntryDate: body.entryDate,
       StartTime: body.startTime,
       EndTime: body.endTime,
-      Reason: body.reason || '',
+      Reason: reason,
       Note: body.note || '',
     });
     return sendJson(res, 200, { ok: true, row: record });
@@ -221,9 +241,11 @@ async function handleDowntime(req, res, parts, query) {
 
 async function handleLine(req, res, parts, query) {
   if (req.method === 'GET' && parts.length === 0) {
-    const rows = await store.readSheet('LineTime');
     const date = query.date;
-    const filtered = date ? rows.filter((r) => r.EntryDate === date) : rows;
+    if (date && !validIsoDate(date)) return sendJson(res, 400, { ok: false, error: 'รูปแบบวันที่ไม่ถูกต้อง' });
+    const filtered = date
+      ? await store.readSheetRange('LineTime', 'EntryDate', date, date)
+      : await store.readSheet('LineTime');
     filtered.sort((a, b) => (a.Time > b.Time ? 1 : -1));
     return sendJson(res, 200, { ok: true, rows: filtered });
   }
@@ -240,6 +262,13 @@ async function handleLine(req, res, parts, query) {
     }
     if (!textWithin(body.note, 1000)) {
       return sendJson(res, 400, { ok: false, error: 'หมายเหตุยาวเกินกำหนด' });
+    }
+    const rows = await store.readSheet('LineTime');
+    const duplicate = rows.find((row) => row.EntryDate === body.entryDate
+      && row.EventType === body.eventType && row.Time === body.time
+      && String(row.StopType || '') === (body.eventType === 'Stop' ? (body.stopType || '') : ''));
+    if (duplicate) {
+      return sendJson(res, 200, { ok: true, row: duplicate, duplicate: true });
     }
     const record = await store.appendRow('LineTime', {
       EntryDate: body.entryDate,
@@ -308,10 +337,12 @@ function computeLineSessions(rows) {
 // ---------- Grab Crane ----------
 
 async function handleGrabGet(req, res, query) {
-  const rows = await store.readSheet('GrabCrane');
   const date = query.date;
-  const filtered = date ? rows.filter((r) => r.ReportDate === date) : rows;
-  return sendJson(res, 200, { ok: true, rows: filtered });
+  if (date && !validIsoDate(date)) return sendJson(res, 400, { ok: false, error: 'รูปแบบวันที่ไม่ถูกต้อง' });
+  const rows = date
+    ? await store.readSheetRange('GrabCrane', 'ReportDate', date, date)
+    : await store.readSheet('GrabCrane');
+  return sendJson(res, 200, { ok: true, rows });
 }
 
 async function handleGrabDelete(req, res, query) {
@@ -408,10 +439,31 @@ async function handleGrabDeviceSync(req, res) {
     userAgent: String(req.headers['user-agent'] || '').slice(0, 500),
     user: { id: `device:${deviceId}`, email: `${deviceId}@device.local`, role: 'operator' },
   };
-  const result = await runWithRequestContext(context, () => store.syncGrabRows(deviceId, rows, {
-    snapshotStart,
-    snapshotEnd,
-  }));
+  const attemptedAt = new Date().toISOString();
+  let result;
+  try {
+    result = await runWithRequestContext(context, () => store.syncGrabRows(deviceId, rows, {
+      snapshotStart,
+      snapshotEnd,
+    }));
+    const maxSourceId = receivedRows.reduce((max, row) => Math.max(max, row.SourceID), 0);
+    await store.upsertDeviceSyncStatus(deviceId, {
+      LastAttemptAt: attemptedAt,
+      LastSuccessAt: new Date().toISOString(),
+      ...(maxSourceId > 0 ? { LastSourceID: maxSourceId } : {}),
+      LastRowCount: rows.length,
+      Status: 'success',
+      Error: '',
+    });
+  } catch (error) {
+    await store.upsertDeviceSyncStatus(deviceId, {
+      LastAttemptAt: attemptedAt,
+      LastRowCount: rows.length,
+      Status: 'error',
+      Error: String(error?.message || error).slice(0, 500),
+    }).catch(() => {});
+    throw error;
+  }
   return sendJson(res, 200, {
     ok: true,
     deviceId,
@@ -518,12 +570,12 @@ async function handleRDF3GrabDeviceSync(req, res) {
 async function handleRDF3GrabGet(req, res, query) {
   const date = query.date || lib.todayStr();
   if (!validIsoDate(date)) return sendJson(res, 400, { ok: false, error: 'Invalid date' });
-  const rows = await store.readSheet('RDF3GrabCrane');
+  const rows = await store.readSheetRange('RDF3GrabCrane', 'ReportDate', date, date);
   return sendJson(res, 200, {
     ok: true,
     date,
     summary: summarizeRDF3Grab(rows, date),
-    rows: rows.filter((row) => row.ReportDate === date),
+    rows,
   });
 }
 
@@ -572,6 +624,7 @@ function rangeMinutes(ranges) {
 
 function buildDailyGrabProduction(reportDate, grabRows) {
   const points = grabRows
+    .filter(automaticGrabRow)
     .map(grabDateTimePoint)
     .filter((point) => point && point.date === reportDate)
     .sort((a, b) => a.key.localeCompare(b.key));
@@ -613,11 +666,13 @@ function buildDailyGrabProduction(reportDate, grabRows) {
 
 async function handleReport(req, res, query) {
   const date = query.date || lib.addDays(lib.todayStr(), -1);
+  if (!validIsoDate(date)) return sendJson(res, 400, { ok: false, error: 'รูปแบบวันที่ต้องเป็น YYYY-MM-DD' });
   const prevDate = lib.addDays(date, -1);
 
   const [
     downtimeRows, lineRows, grabRows, rdf3GrabRows, yieldRows,
     baselineRows, salesRows, rdf3SalesRows, rdf3MachineSettingRows, rdf3MachineDailyRows,
+    stockAdjustmentRows, deviceSyncRows,
   ] = await Promise.all([
     store.readSheet('Downtime'),
     store.readSheet('LineTime'),
@@ -629,6 +684,8 @@ async function handleReport(req, res, query) {
     store.readSheet('RevenueRDF3Sales'),
     store.readSheet('RDF3MachineSettings'),
     store.readSheet('RDF3MachineDaily'),
+    store.readSheet('StockAdjustments'),
+    store.readSheet('DeviceSyncStatus'),
   ]);
 
   // ---- Line sessions ----
@@ -782,9 +839,11 @@ async function handleReport(req, res, query) {
   }
 
   const rdf3Grab = summarizeRDF3Grab(rdf3GrabRows, date);
+  const grabDeviceId = String(process.env.GRAB_SYNC_DEVICE_ID || 'grab-pi-1');
+  const grabSyncStatus = deviceSyncRows.find((row) => String(row.DeviceID) === grabDeviceId) || null;
   const stock = buildMaterialStockData({
     asOfDate: date, grabRows, rdf3GrabRows, yieldRows, baselineRows, salesRows, rdf3SalesRows,
-    rdf3MachineSettingRows, rdf3MachineDailyRows,
+    rdf3MachineSettingRows, rdf3MachineDailyRows, stockAdjustmentRows,
   });
   const rdf3Production = stock.daily.find((row) => row.date === date)?.rdf3Production
     || computeRDF3Production(rdf3FeedTonsForDate(rdf3GrabRows, date), {
@@ -792,7 +851,6 @@ async function handleReport(req, res, query) {
       grabRows: rdf3GrabRows,
       setting: getApplicableRDF3MachineSetting(rdf3MachineSettingRows, date),
       dailyStatus: rdf3MachineDailyRows.find((row) => row.EntryDate === date),
-      availableFeedTons: stock.stock.rdf2InProcess,
     });
 
   return sendJson(res, 200, {
@@ -826,6 +884,8 @@ async function handleReport(req, res, query) {
       lastGrabTime,
       lastSyncedAt,
       automaticGrabs: grabForDate.filter((row) => row.SourceSystem).length,
+      deviceConfigured: Boolean(process.env.GRAB_SYNC_TOKEN),
+      syncStatus: grabSyncStatus,
       byPeriod: grabByPeriod,
     },
     rdf3Grab,
@@ -920,21 +980,20 @@ function rdf3DailyMachineState(setting, dailyRow) {
 function computeRDF3Production(feedTons, options = {}) {
   const normalizedFeedTons = Math.max(0, Number(feedTons) || 0);
   const setting = options.setting || null;
-  const availableFeedTons = Math.max(
-    normalizedFeedTons,
-    Number(options.availableFeedTons) || 0,
-  );
+  // Every saved RDF3 Grab is RDF2 that enters the RDF3 process immediately.
+  // Capacity is a performance benchmark; it must not create artificial WIP
+  // or reduce the material balance calculated from the Load Cell.
+  const availableFeedTons = normalizedFeedTons;
 
   // Preserve historical reports until the first machine setting takes effect.
   if (!setting) {
-    const previousWipTons = Math.max(0, availableFeedTons - normalizedFeedTons);
     return {
       mode: 'legacy-yield',
       configured: false,
       feedTons: normalizedFeedTons,
       availableFeedTons,
       inputConsumedTons: normalizedFeedTons,
-      wipTons: previousWipTons,
+      wipTons: 0,
       yieldPct: RDF3_CONVERSION_YIELD_PCT,
       efficiencyPct: null,
       runtimeMinutes: rdf3RuntimeMinutesForDate(options.grabRows || [], options.date || ''),
@@ -961,16 +1020,16 @@ function computeRDF3Production(feedTons, options = {}) {
   const runtimeHours = runtimeMinutes / 60;
   const materialOutputTons = availableFeedTons * yieldPct / 100;
   const capacityOutputTons = activeCapacityTPH * runtimeHours * efficiencyPct / 100;
-  const outputTons = Math.max(0, Math.min(materialOutputTons, capacityOutputTons));
-  const inputConsumedTons = yieldPct > 0 ? Math.min(availableFeedTons, outputTons / (yieldPct / 100)) : 0;
+  const outputTons = materialOutputTons;
+  const inputConsumedTons = availableFeedTons;
 
   return {
-    mode: 'machine-bottleneck',
+    mode: 'material-yield',
     configured: true,
     feedTons: normalizedFeedTons,
     availableFeedTons,
     inputConsumedTons,
-    wipTons: Math.max(0, availableFeedTons - inputConsumedTons),
+    wipTons: 0,
     yieldPct,
     efficiencyPct,
     runtimeMinutes,
@@ -992,9 +1051,13 @@ function rdf3FeedTonsForDate(rows, date) {
     .reduce((sum, row) => sum + Math.max(0, Number(row.WeightKg) || 0) / 1000, 0);
 }
 
+const STOCK_ADJUSTMENT_KEYS = Object.freeze({
+  RDF2: 'rdf2', RDF2LG: 'rdf2LG', RDF3: 'rdf3', FineFraction: 'fineFraction', Metal: 'metal',
+});
+
 function buildMaterialStockData({
   asOfDate, grabRows, rdf3GrabRows, yieldRows, baselineRows, salesRows, rdf3SalesRows,
-  rdf3MachineSettingRows = [], rdf3MachineDailyRows = [],
+  rdf3MachineSettingRows = [], rdf3MachineDailyRows = [], stockAdjustmentRows = [],
 }) {
   const baseline = baselineRows[0] || null;
   const baselineDate = baseline?.BaselineDate || '';
@@ -1003,18 +1066,19 @@ function buildMaterialStockData({
     rdf2: configured ? Number(baseline.RDF2Tons) || 0 : 0,
     rdf2LG: configured ? Number(baseline.RDF2LGTons) || 0 : 0,
     rdf3: configured ? Number(baseline.RDF3Tons) || 0 : 0,
-    rdf2InProcess: configured ? Number(baseline.RDF2InProcessTons) || 0 : 0,
     fineFraction: configured ? Number(baseline.FineFractionTons) || 0 : 0,
     metal: configured ? Number(baseline.MetalTons) || 0 : 0,
   };
   const productionTotals = { rdf2: 0, rdf2LG: 0, rdf3: 0, fineFraction: 0, metal: 0 };
   const salesTotals = { rdf2: 0, rdf2LG: 0, rdf3: 0, fineFraction: 0, metal: 0 };
+  const adjustmentTotals = { rdf2: 0, rdf2LG: 0, rdf3: 0, fineFraction: 0, metal: 0 };
   let rdf2TransferredToRDF3Tons = 0;
   const daily = [];
   if (!configured) {
     return {
       configured, baseline, baselineDate, asOfDate, stock, productionTotals, salesTotals,
-      rdf2TransferredToRDF3Tons, rdf3ConversionYieldPct: RDF3_CONVERSION_YIELD_PCT, daily,
+      adjustmentTotals, warnings: [], rdf2TransferredToRDF3Tons,
+      rdf3ConversionYieldPct: RDF3_CONVERSION_YIELD_PCT, daily,
     };
   }
 
@@ -1023,6 +1087,7 @@ function buildMaterialStockData({
   for (const row of rdf3GrabRows) dates.add(row.ReportDate);
   for (const row of salesRows) dates.add(row.SaleDate);
   for (const row of rdf3SalesRows) dates.add(row.SaleDate);
+  for (const row of stockAdjustmentRows) dates.add(row.EntryDate);
   const orderedDates = [...dates]
     .filter((date) => validIsoDate(date) && date >= baselineDate && date <= asOfDate)
     .sort();
@@ -1040,7 +1105,6 @@ function buildMaterialStockData({
       grabRows: rdf3GrabRows,
       setting: machineSetting,
       dailyStatus: machineDaily,
-      availableFeedTons: stock.rdf2InProcess + rdf3FeedTons,
     });
     const dayProduction = {
       rdf2: rdf2Production?.tons.rdf2 || 0,
@@ -1060,18 +1124,24 @@ function buildMaterialStockData({
     daySales.rdf3 = rdf3SalesRows
       .filter((row) => row.SaleDate === date)
       .reduce((sum, row) => sum + Math.max(0, Number(row.Tons) || 0), 0);
+    const dayAdjustments = { rdf2: 0, rdf2LG: 0, rdf3: 0, fineFraction: 0, metal: 0 };
+    for (const row of stockAdjustmentRows.filter((item) => item.EntryDate === date)) {
+      const key = STOCK_ADJUSTMENT_KEYS[row.Material];
+      if (key) dayAdjustments[key] += Number(row.TonsDelta) || 0;
+    }
 
     for (const key of Object.keys(productionTotals)) {
       productionTotals[key] += dayProduction[key];
       salesTotals[key] += daySales[key];
+      adjustmentTotals[key] += dayAdjustments[key];
     }
     rdf2TransferredToRDF3Tons += rdf3Production.feedTons;
     stock.rdf2 += dayProduction.rdf2 - rdf3Production.feedTons - daySales.rdf2;
     stock.rdf2LG += dayProduction.rdf2LG - daySales.rdf2LG;
-    stock.rdf2InProcess = rdf3Production.wipTons;
     stock.rdf3 += dayProduction.rdf3 - daySales.rdf3;
     stock.fineFraction += dayProduction.fineFraction - daySales.fineFraction;
     stock.metal += dayProduction.metal - daySales.metal;
+    for (const key of Object.keys(dayAdjustments)) stock[key] += dayAdjustments[key];
     daily.push({
       date,
       incomingTons,
@@ -1080,12 +1150,16 @@ function buildMaterialStockData({
       rdf3ConversionYieldPct: rdf3Production.yieldPct,
       rdf3Production,
       sales: daySales,
+      adjustments: dayAdjustments,
       closingStock: { ...stock },
     });
   }
 
   return {
-    configured, baseline, baselineDate, asOfDate, stock, productionTotals, salesTotals,
+    configured, baseline, baselineDate, asOfDate, stock, productionTotals, salesTotals, adjustmentTotals,
+    warnings: Object.entries(stock)
+      .filter(([, tons]) => tons < -0.000001)
+      .map(([material, tons]) => ({ material, tons, code: 'NEGATIVE_STOCK' })),
     rdf2TransferredToRDF3Tons,
     rdf3ConversionYieldPct: getApplicableRDF3MachineSetting(rdf3MachineSettingRows, asOfDate)?.YieldPct
       || RDF3_CONVERSION_YIELD_PCT,
@@ -1096,9 +1170,10 @@ function buildMaterialStockData({
 
 async function handleProduction(req, res, query) {
   const date = query.date || lib.todayStr();
+  if (!validIsoDate(date)) return sendJson(res, 400, { ok: false, error: 'รูปแบบวันที่ต้องเป็น YYYY-MM-DD' });
   const [
     grabRows, rdf3GrabRows, yieldRows, baselineRows, salesRows, rdf3SalesRows,
-    rdf3MachineSettingRows, rdf3MachineDailyRows,
+    rdf3MachineSettingRows, rdf3MachineDailyRows, stockAdjustmentRows,
   ] = await Promise.all([
     store.readSheet('GrabCrane'),
     store.readSheet('RDF3GrabCrane'),
@@ -1108,6 +1183,7 @@ async function handleProduction(req, res, query) {
     store.readSheet('RevenueRDF3Sales'),
     store.readSheet('RDF3MachineSettings'),
     store.readSheet('RDF3MachineDaily'),
+    store.readSheet('StockAdjustments'),
   ]);
   const incomingWaste = grabRows.filter((r) => r.ReportDate === date).reduce((s, r) => s + (Number(r.Weight) || 0), 0);
   const yieldSetting = getApplicableYield(yieldRows, date);
@@ -1115,7 +1191,7 @@ async function handleProduction(req, res, query) {
   const rdf3Grab = summarizeRDF3Grab(rdf3GrabRows, date);
   const stock = buildMaterialStockData({
     asOfDate: date, grabRows, rdf3GrabRows, yieldRows, baselineRows, salesRows, rdf3SalesRows,
-    rdf3MachineSettingRows, rdf3MachineDailyRows,
+    rdf3MachineSettingRows, rdf3MachineDailyRows, stockAdjustmentRows,
   });
   const rdf3Production = stock.daily.find((row) => row.date === date)?.rdf3Production
     || computeRDF3Production(rdf3FeedTonsForDate(rdf3GrabRows, date), {
@@ -1123,7 +1199,6 @@ async function handleProduction(req, res, query) {
       grabRows: rdf3GrabRows,
       setting: getApplicableRDF3MachineSetting(rdf3MachineSettingRows, date),
       dailyStatus: rdf3MachineDailyRows.find((row) => row.EntryDate === date),
-      availableFeedTons: stock.stock.rdf2InProcess,
     });
   return sendJson(res, 200, {
     ok: true, date, incomingWaste, hasYieldSetting: !!yieldSetting, production,
@@ -1140,7 +1215,7 @@ async function handleYield(req, res, parts) {
   if (req.method === 'POST' && parts.length === 0) {
     const body = await readBody(req);
     const { effectiveDate, rdf2Pct, rdf2LGPct, fineFractionPct, heavyFractionPct, metalPct } = body;
-    if (!effectiveDate || [rdf2Pct, fineFractionPct, heavyFractionPct, metalPct].some((v) => v === undefined || v === null || v === '')) {
+    if (!validIsoDate(effectiveDate) || [rdf2Pct, fineFractionPct, heavyFractionPct, metalPct].some((v) => v === undefined || v === null || v === '')) {
       return sendJson(res, 400, { ok: false, error: 'ต้องระบุ effectiveDate และเปอร์เซ็นต์ทั้ง 4 ค่า' });
     }
     const hasExplicitRDF2LG = rdf2LGPct !== undefined && rdf2LGPct !== null && rdf2LGPct !== '';
@@ -1284,19 +1359,24 @@ async function handleStockBaseline(req, res) {
   if (req.method === 'PUT') {
     const body = await readBody(req);
     const {
-      baselineDate, rdf2Tons, rdf2LGTons, rdf3Tons, rdf2InProcessTons,
+      baselineDate, rdf2Tons, rdf2LGTons, rdf3Tons,
       fineFractionTons, metalTons,
     } = body;
-    if (!baselineDate) return sendJson(res, 400, { ok: false, error: 'ต้องระบุ baselineDate' });
+    if (!validIsoDate(baselineDate)) return sendJson(res, 400, { ok: false, error: 'วันที่ตั้งต้นไม่ถูกต้อง' });
+    const values = [rdf2Tons, rdf2LGTons, rdf3Tons, fineFractionTons, metalTons]
+      .map((value) => finiteNumber(value, { min: 0, max: 1000000 }));
+    if (values.some((value) => value === null)) {
+      return sendJson(res, 400, { ok: false, error: 'สต๊อกตั้งต้นต้องเป็นตัวเลขตั้งแต่ 0 ขึ้นไป' });
+    }
     const rows = await store.readSheet('StockBaseline');
     const patch = {
       BaselineDate: baselineDate,
-      RDF2Tons: Number(rdf2Tons) || 0,
-      RDF2LGTons: Number(rdf2LGTons) || 0,
-      RDF3Tons: Number(rdf3Tons) || 0,
-      RDF2InProcessTons: Number(rdf2InProcessTons) || 0,
-      FineFractionTons: Number(fineFractionTons) || 0,
-      MetalTons: Number(metalTons) || 0,
+      RDF2Tons: values[0],
+      RDF2LGTons: values[1],
+      RDF3Tons: values[2],
+      RDF2InProcessTons: 0,
+      FineFractionTons: values[3],
+      MetalTons: values[4],
     };
     const record = rows.length === 0
       ? await store.appendRow('StockBaseline', patch)
@@ -1304,6 +1384,50 @@ async function handleStockBaseline(req, res) {
     return sendJson(res, 200, { ok: true, row: record });
   }
   return sendJson(res, 404, { ok: false, error: 'not found' });
+}
+
+async function handleStockAdjustments(req, res, parts, query = {}) {
+  if (req.method === 'GET' && parts.length === 0) {
+    let rows;
+    if (query.month) {
+      if (!validMonth(query.month)) {
+        return sendJson(res, 400, { ok: false, error: 'รูปแบบเดือนต้องเป็น YYYY-MM' });
+      }
+      rows = await store.readSheetRange('StockAdjustments', 'EntryDate', `${query.month}-01`, `${query.month}-31`);
+    } else rows = await store.readSheet('StockAdjustments');
+    rows.sort((a, b) => String(b.EntryDate).localeCompare(String(a.EntryDate))
+      || Number(b.ID) - Number(a.ID));
+    return sendJson(res, 200, { ok: true, rows: rows.slice(0, 500) });
+  }
+  if (req.method === 'POST' && parts.length === 0) {
+    const body = await readBody(req);
+    const entryDate = cleanText(body.entryDate);
+    const material = cleanText(body.material);
+    const tonsDelta = finiteNumber(body.tonsDelta, { min: -1000000, max: 1000000 });
+    const reason = cleanText(body.reason);
+    const note = cleanText(body.note);
+    if (!validIsoDate(entryDate) || !STOCK_ADJUSTMENT_KEYS[material]
+      || tonsDelta === null || tonsDelta === 0 || !reason || reason.length > 200 || note.length > 1000) {
+      return sendJson(res, 400, {
+        ok: false,
+        error: 'กรุณาระบุวันที่ วัสดุ จำนวนปรับเพิ่ม/ลด และเหตุผลให้ถูกต้อง',
+      });
+    }
+    const row = await store.appendRow('StockAdjustments', {
+      EntryDate: entryDate,
+      Material: material,
+      TonsDelta: tonsDelta,
+      Reason: reason,
+      Note: note,
+    });
+    return sendJson(res, 201, { ok: true, row });
+  }
+  if (req.method === 'DELETE' && parts.length === 1) {
+    const deleted = await store.deleteRow('StockAdjustments', parts[0]);
+    if (!deleted) return sendJson(res, 404, { ok: false, error: 'ไม่พบรายการปรับสต๊อก' });
+    return sendJson(res, 200, { ok: true });
+  }
+  return sendJson(res, 404, { ok: false, error: 'unknown stock adjustment route' });
 }
 
 const SALES_MATERIALS = ['RDF2', 'RDF2LG', 'FineFraction', 'Metal'];
@@ -1330,13 +1454,13 @@ function findMatchingSale(rows, sale) {
 
 async function handleSales(req, res, parts, query = {}) {
   if (req.method === 'GET' && parts.length === 0) {
-    let rows = await store.readSheet('Sales');
+    let rows;
     if (query.month) {
       if (!validMonth(query.month)) {
         return sendJson(res, 400, { ok: false, error: 'รูปแบบเดือนต้องเป็น YYYY-MM' });
       }
-      rows = rows.filter((row) => String(row.SaleDate).startsWith(`${query.month}-`));
-    }
+      rows = await store.readSheetRange('Sales', 'SaleDate', `${query.month}-01`, `${query.month}-31`);
+    } else rows = await store.readSheet('Sales');
     rows.sort((a, b) => (a.SaleDate < b.SaleDate ? 1 : -1));
     return sendJson(res, 200, {
       ok: true,
@@ -1387,10 +1511,13 @@ async function handleSales(req, res, parts, query = {}) {
 }
 
 async function handleStock(req, res, query = {}) {
-  const asOfDate = validIsoDate(query.date) ? query.date : lib.todayStr();
+  if (query.date && !validIsoDate(query.date)) {
+    return sendJson(res, 400, { ok: false, error: 'รูปแบบวันที่ต้องเป็น YYYY-MM-DD' });
+  }
+  const asOfDate = query.date || lib.todayStr();
   const [
     grabRows, rdf3GrabRows, yieldRows, baselineRows, salesRows, rdf3SalesRows,
-    rdf3MachineSettingRows, rdf3MachineDailyRows,
+    rdf3MachineSettingRows, rdf3MachineDailyRows, stockAdjustmentRows,
   ] = await Promise.all([
     store.readSheet('GrabCrane'),
     store.readSheet('RDF3GrabCrane'),
@@ -1400,10 +1527,11 @@ async function handleStock(req, res, query = {}) {
     store.readSheet('RevenueRDF3Sales'),
     store.readSheet('RDF3MachineSettings'),
     store.readSheet('RDF3MachineDaily'),
+    store.readSheet('StockAdjustments'),
   ]);
   const result = buildMaterialStockData({
     asOfDate, grabRows, rdf3GrabRows, yieldRows, baselineRows, salesRows, rdf3SalesRows,
-    rdf3MachineSettingRows, rdf3MachineDailyRows,
+    rdf3MachineSettingRows, rdf3MachineDailyRows, stockAdjustmentRows,
   });
   return sendJson(res, 200, { ok: true, ...result });
 }
@@ -1504,7 +1632,7 @@ async function handleRevenuePrices(req, res, parts) {
     const customer = cleanText(body.customer);
     const product = normalizeCustomerProduct(cleanText(body.product), customer);
     const pricePerTon = Number(body.pricePerTon);
-    if (!effectiveDate || !customer || !REVENUE_PRODUCTS.includes(product) || !Number.isFinite(pricePerTon) || pricePerTon < 0) {
+    if (!validIsoDate(effectiveDate) || !customer || !REVENUE_PRODUCTS.includes(product) || !Number.isFinite(pricePerTon) || pricePerTon < 0) {
       return sendJson(res, 400, { ok: false, error: 'กรุณาระบุวันที่ ลูกค้า สินค้า และราคาต่อตันให้ถูกต้อง' });
     }
     const customers = await store.readSheet('RevenueCustomers');
@@ -1528,13 +1656,13 @@ async function handleRevenuePrices(req, res, parts) {
 
 async function handleRevenueRDF3Sales(req, res, parts, query = {}) {
   if (req.method === 'GET' && parts.length === 0) {
-    let rows = await store.readSheet('RevenueRDF3Sales');
+    let rows;
     if (query.month) {
       if (!validMonth(query.month)) {
         return sendJson(res, 400, { ok: false, error: 'รูปแบบเดือนต้องเป็น YYYY-MM' });
       }
-      rows = rows.filter((row) => String(row.SaleDate).startsWith(`${query.month}-`));
-    }
+      rows = await store.readSheetRange('RevenueRDF3Sales', 'SaleDate', `${query.month}-01`, `${query.month}-31`);
+    } else rows = await store.readSheet('RevenueRDF3Sales');
     rows.sort((a, b) => String(b.SaleDate).localeCompare(String(a.SaleDate)));
     return sendJson(res, 200, {
       ok: true,
@@ -1602,9 +1730,11 @@ async function handleRevenueTippingSettings(req, res, parts) {
       ExcludedMinTons: Number(body.excludedMinTons),
       ExcludedMaxTons: Number(body.excludedMaxTons),
     };
-    if (!data.EffectiveDate || !Number.isFinite(data.RatePerTon) || data.RatePerTon < 0
-      || !Number.isFinite(data.ExcludedCentralTons) || !Number.isFinite(data.ExcludedMinTons)
-      || !Number.isFinite(data.ExcludedMaxTons) || data.ExcludedMinTons > data.ExcludedCentralTons
+    if (!validIsoDate(data.EffectiveDate) || !Number.isFinite(data.RatePerTon) || data.RatePerTon < 0
+      || !Number.isFinite(data.ExcludedCentralTons) || data.ExcludedCentralTons < 0
+      || !Number.isFinite(data.ExcludedMinTons) || data.ExcludedMinTons < 0
+      || !Number.isFinite(data.ExcludedMaxTons) || data.ExcludedMaxTons < 0
+      || data.ExcludedMinTons > data.ExcludedCentralTons
       || data.ExcludedCentralTons > data.ExcludedMaxTons) {
       return sendJson(res, 400, { ok: false, error: 'ค่าตั้ง Tipping Fee หรือช่วงบ้านมะเกลือไม่ถูกต้อง' });
     }
@@ -1624,13 +1754,13 @@ async function handleRevenueTippingSettings(req, res, parts) {
 
 async function handleRevenueTippingDaily(req, res, parts, query) {
   if (req.method === 'GET' && parts.length === 0) {
-    let rows = await store.readSheet('RevenueTippingDaily');
+    let rows;
     if (query.month) {
       if (!validMonth(query.month)) {
         return sendJson(res, 400, { ok: false, error: 'รูปแบบเดือนต้องเป็น YYYY-MM' });
       }
-      rows = rows.filter((row) => String(row.EntryDate).startsWith(`${query.month}-`));
-    }
+      rows = await store.readSheetRange('RevenueTippingDaily', 'EntryDate', `${query.month}-01`, `${query.month}-31`);
+    } else rows = await store.readSheet('RevenueTippingDaily');
     rows.sort((a, b) => String(b.EntryDate).localeCompare(String(a.EntryDate)));
     return sendJson(res, 200, {
       ok: true,
@@ -1645,7 +1775,7 @@ async function handleRevenueTippingDaily(req, res, parts, query) {
     const body = await readBody(req);
     const entryDate = cleanText(body.entryDate);
     const mswTons = Number(body.mswTons);
-    if (!entryDate || !Number.isFinite(mswTons) || mswTons < 0) {
+    if (!validIsoDate(entryDate) || !Number.isFinite(mswTons) || mswTons < 0) {
       return sendJson(res, 400, { ok: false, error: 'กรุณาระบุวันที่และน้ำหนัก MSW ให้ถูกต้อง' });
     }
     const rows = await store.readSheet('RevenueTippingDaily');
@@ -1711,19 +1841,31 @@ function buildRevenueDashboardData(month, stockSales, rdf3Sales, prices, tipping
   const monthTippingRows = tippingRows.filter((row) => row.EntryDate >= bounds.start && row.EntryDate <= bounds.end);
   const totalMSW = monthTippingRows.reduce((sum, row) => sum + (Number(row.MSWTons) || 0), 0);
   const setting = applicableRow(tippingSettings, bounds.end, 'EffectiveDate') || DEFAULT_TIPPING_SETTING;
-  const rate = Number(setting.RatePerTon) || 0;
+  const rateForDate = (date) => Number(
+    (applicableRow(tippingSettings, date, 'EffectiveDate') || DEFAULT_TIPPING_SETTING).RatePerTon,
+  ) || 0;
+  const rate = totalMSW > 0
+    ? monthTippingRows.reduce((sum, row) => sum + (Number(row.MSWTons) || 0) * rateForDate(row.EntryDate), 0) / totalMSW
+    : Number(setting.RatePerTon) || 0;
   const excludedCentral = Math.min(totalMSW, Number(setting.ExcludedCentralTons) || 0);
   const excludedMin = Math.min(totalMSW, Number(setting.ExcludedMinTons) || 0);
   const excludedMax = Math.min(totalMSW, Number(setting.ExcludedMaxTons) || 0);
+  let tippingCentral = 0;
+  let tippingLow = 0;
+  let tippingHigh = 0;
   for (const row of monthTippingRows) {
     const msw = Number(row.MSWTons) || 0;
-    const allocatedExcluded = totalMSW > 0 ? excludedCentral * msw / totalMSW : 0;
+    const rowRate = rateForDate(row.EntryDate);
+    const allocatedCentral = totalMSW > 0 ? excludedCentral * msw / totalMSW : 0;
+    const allocatedMin = totalMSW > 0 ? excludedMin * msw / totalMSW : 0;
+    const allocatedMax = totalMSW > 0 ? excludedMax * msw / totalMSW : 0;
+    const rowCentral = Math.max(0, msw - allocatedCentral) * rowRate;
+    tippingCentral += rowCentral;
+    tippingLow += Math.max(0, msw - allocatedMax) * rowRate;
+    tippingHigh += Math.max(0, msw - allocatedMin) * rowRate;
     dailyMap[row.EntryDate].mswTons += msw;
-    dailyMap[row.EntryDate].tippingRevenue += Math.max(0, msw - allocatedExcluded) * rate;
+    dailyMap[row.EntryDate].tippingRevenue += rowCentral;
   }
-  const tippingCentral = Math.max(0, totalMSW - excludedCentral) * rate;
-  const tippingLow = Math.max(0, totalMSW - excludedMax) * rate;
-  const tippingHigh = Math.max(0, totalMSW - excludedMin) * rate;
   const salesLow = salesBase * 0.9;
   const salesHigh = salesBase * 1.1;
   const companyCentral = salesBase + tippingCentral;
@@ -1763,10 +1905,10 @@ async function handleRevenueDashboard(req, res, query) {
   const nowBkk = lib.nowInBangkok();
   const month = validMonth(query.month) ? query.month : nowBkk.date.slice(0, 7);
   const [stockSales, rdf3Sales, prices, tippingRows, tippingSettings] = await Promise.all([
-    store.readSheet('Sales'),
-    store.readSheet('RevenueRDF3Sales'),
+    store.readSheetRange('Sales', 'SaleDate', `${month}-01`, `${month}-31`),
+    store.readSheetRange('RevenueRDF3Sales', 'SaleDate', `${month}-01`, `${month}-31`),
     store.readSheet('RevenuePrices'),
-    store.readSheet('RevenueTippingDaily'),
+    store.readSheetRange('RevenueTippingDaily', 'EntryDate', `${month}-01`, `${month}-31`),
     store.readSheet('RevenueTippingSettings'),
   ]);
   return sendJson(res, 200, buildRevenueDashboardData(
@@ -2253,9 +2395,11 @@ async function handleDieselUsage(req, res, parts, query) {
       return sendJson(res, 400, { ok: false, error: 'รูปแบบเดือนต้องเป็น YYYY-MM' });
     }
     const machines = await store.readSheet('DieselMachines');
-    let rows = await store.readSheet('DieselUsage');
-    if (date) rows = rows.filter((row) => row.EntryDate === date);
-    if (month) rows = rows.filter((row) => String(row.EntryDate).startsWith(`${month}-`));
+    let rows = date
+      ? await store.readSheetRange('DieselUsage', 'EntryDate', date, date)
+      : month
+        ? await store.readSheetRange('DieselUsage', 'EntryDate', `${month}-01`, `${month}-31`)
+        : await store.readSheet('DieselUsage');
     rows.sort((a, b) => String(b.EntryDate).localeCompare(String(a.EntryDate)) || Number(b.ID) - Number(a.ID));
     return sendJson(res, 200, { ok: true, rows, summary: dieselUsageSummary(rows, machines) });
   }
@@ -2385,6 +2529,9 @@ const WEEKLY_PRODUCTION_PRODUCTS = [
 
 async function handleWeeklyReport(req, res, query) {
   const requested = cleanText(query.weekStart);
+  if (requested && !validIsoDate(requested)) {
+    return sendJson(res, 400, { ok: false, error: 'รูปแบบวันที่ต้องเป็น YYYY-MM-DD' });
+  }
   const weekStart = validIsoDate(requested) ? requested : mondayForDate(lib.nowInBangkok().date);
   if (mondayForDate(weekStart) !== weekStart) {
     return sendJson(res, 400, { ok: false, error: 'วันเริ่มสัปดาห์ต้องเป็นวันจันทร์' });
@@ -2396,7 +2543,7 @@ async function handleWeeklyReport(req, res, query) {
   const [
     grabRows, rdf3GrabRows, yieldRows, stockBaselineRows, stockSales, rdf3Sales, kpiTargetRows,
     dieselRows, dieselMachines, dieselReceipts, dieselBaselines,
-    rdf3MachineSettingRows, rdf3MachineDailyRows,
+    rdf3MachineSettingRows, rdf3MachineDailyRows, stockAdjustmentRows,
   ] = await Promise.all([
     store.readSheet('GrabCrane'),
     store.readSheet('RDF3GrabCrane'),
@@ -2411,6 +2558,7 @@ async function handleWeeklyReport(req, res, query) {
     store.readSheet('DieselStockBaselines'),
     store.readSheet('RDF3MachineSettings'),
     store.readSheet('RDF3MachineDaily'),
+    store.readSheet('StockAdjustments'),
   ]);
 
   const stock = buildMaterialStockData({
@@ -2423,6 +2571,7 @@ async function handleWeeklyReport(req, res, query) {
     rdf3SalesRows: rdf3Sales,
     rdf3MachineSettingRows,
     rdf3MachineDailyRows,
+    stockAdjustmentRows,
   });
   const rdf3DailyMap = new Map(stock.daily.map((row) => [row.date, row.rdf3Production]));
   const productionTons = Object.fromEntries(WEEKLY_PRODUCTION_PRODUCTS.map((item) => [item.tonsKey, 0]));
@@ -2559,7 +2708,7 @@ async function handleWeeklyReport(req, res, query) {
         inputConsumedTons: rdf3InputConsumedTons,
         outputTons: productionTons.rdf3,
         runtimeMinutes: rdf3RuntimeMinutes,
-        closingWipTons: stock.stock.rdf2InProcess,
+        closingWipTons: 0,
       },
     },
     sales: {
@@ -2734,7 +2883,7 @@ async function handleMonthlyReport(req, res, query) {
     grabRows, rdf3GrabRows, yieldRows, stockBaselineRows, stockSales, rdf3Sales, prices,
     tippingRows, tippingSettings, downtimeRows, lineRows, historyRows,
     dieselRows, dieselMachines, dieselReceipts, dieselBaselines,
-    rdf3MachineSettingRows, rdf3MachineDailyRows,
+    rdf3MachineSettingRows, rdf3MachineDailyRows, stockAdjustmentRows,
   ] = await Promise.all([
     store.readSheet('GrabCrane'),
     store.readSheet('RDF3GrabCrane'),
@@ -2754,6 +2903,7 @@ async function handleMonthlyReport(req, res, query) {
     store.readSheet('DieselStockBaselines'),
     store.readSheet('RDF3MachineSettings'),
     store.readSheet('RDF3MachineDaily'),
+    store.readSheet('StockAdjustments'),
   ]);
 
   const revenue = buildRevenueDashboardData(
@@ -2773,6 +2923,7 @@ async function handleMonthlyReport(req, res, query) {
     rdf3SalesRows: rdf3Sales,
     rdf3MachineSettingRows,
     rdf3MachineDailyRows,
+    stockAdjustmentRows,
   });
   const rdf3DailyMap = new Map(stock.daily.map((row) => [row.date, row.rdf3Production]));
   const productionTotals = Object.fromEntries(MONTHLY_PRODUCTION_PRODUCTS.map((item) => [item.tonsKey, 0]));
@@ -2937,7 +3088,7 @@ async function handleMonthlyReport(req, res, query) {
         inputConsumedTons: rdf3InputConsumedTons,
         outputTons: productionTotals.rdf3,
         runtimeMinutes: rdf3RuntimeMinutes,
-        closingWipTons: stock.stock.rdf2InProcess,
+        closingWipTons: 0,
       },
     },
     operations: {
@@ -3088,7 +3239,7 @@ async function handleExecutiveReport(req, res, query) {
     tippingRows, grabRows, rdf3GrabRows, historyRows, yieldRows, stockBaselineRows,
     stockSales, rdf3Sales, targetRows,
     dieselRows, dieselMachines, dieselReceipts, dieselBaselines, downtimeRows,
-    rdf3MachineSettingRows, rdf3MachineDailyRows,
+    rdf3MachineSettingRows, rdf3MachineDailyRows, stockAdjustmentRows,
   ] = await Promise.all([
     store.readSheet('RevenueTippingDaily'),
     store.readSheet('GrabCrane'),
@@ -3106,6 +3257,7 @@ async function handleExecutiveReport(req, res, query) {
     store.readSheet('Downtime'),
     store.readSheet('RDF3MachineSettings'),
     store.readSheet('RDF3MachineDaily'),
+    store.readSheet('StockAdjustments'),
   ]);
 
   const historyByDate = new Map(historyRows.map((row) => [row.EntryDate, row]));
@@ -3124,6 +3276,7 @@ async function handleExecutiveReport(req, res, query) {
     rdf3SalesRows: rdf3Sales,
     rdf3MachineSettingRows,
     rdf3MachineDailyRows,
+    stockAdjustmentRows,
   });
   const rdf3DailyMap = new Map(stock.daily.map((row) => [row.date, row.rdf3Production]));
 
@@ -3249,7 +3402,7 @@ async function handleExecutiveReport(req, res, query) {
           effectiveYieldPct: rdf3MTDInputConsumedTons > 0
             ? rdf3MTDTons / rdf3MTDInputConsumedTons * 100
             : 0,
-          closingWipTons: stock.stock.rdf2InProcess,
+          closingWipTons: 0,
         },
       },
       plan: {
@@ -3726,6 +3879,15 @@ async function handleSecurityApi(req, res, parts, query) {
     return;
   }
   if (section === 'status' && req.method === 'GET') {
+    const scheduledBackupConfigured = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.BACKUP_BUCKET);
+    const backupRuns = await store.readSheet('BackupRuns');
+    backupRuns.sort((a, b) => String(b.CompletedAt).localeCompare(String(a.CompletedAt)));
+    const latestBackup = backupRuns[0] || null;
+    const latestSuccess = backupRuns.find((row) => row.Status === 'success') || null;
+    const latestSuccessMs = latestSuccess ? new Date(latestSuccess.CompletedAt).getTime() : NaN;
+    const scheduledBackupHealthy = scheduledBackupConfigured
+      && Number.isFinite(latestSuccessMs)
+      && Date.now() - latestSuccessMs <= 36 * 60 * 60 * 1000;
     return sendJson(res, 200, {
       ok: true,
       authEnabled: auth.enabled,
@@ -3733,7 +3895,11 @@ async function handleSecurityApi(req, res, parts, query) {
       database: process.env.DATABASE_URL ? 'postgres' : 'excel',
       separateMigrationRole: Boolean(process.env.MIGRATION_DATABASE_URL),
       verifiedDatabaseTls: process.env.DATABASE_URL ? process.env.DATABASE_SSL !== 'false' : null,
-      scheduledBackupConfigured: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.BACKUP_BUCKET),
+      scheduledBackupConfigured,
+      scheduledBackupHealthy,
+      lastBackupAt: latestSuccess?.CompletedAt || null,
+      lastBackupStatus: latestBackup?.Status || null,
+      lastBackupError: latestBackup?.Status === 'failed' ? latestBackup.Error : '',
     });
   }
   return sendJson(res, 404, { ok: false, error: 'unknown security route' });
@@ -3764,6 +3930,7 @@ async function dispatchBusinessApi(req, res, pathname, query) {
   if (resource === 'delivery-plans') return handleDeliveryPlans(req, res, rest, query);
   if (resource === 'stock') {
     if (rest[0] === 'baseline') return handleStockBaseline(req, res);
+    if (rest[0] === 'adjustments') return handleStockAdjustments(req, res, rest.slice(1), query);
     if (rest.length === 0 && req.method === 'GET') return handleStock(req, res, query);
   }
   if (resource === 'revenue') return handleRevenue(req, res, rest, query);

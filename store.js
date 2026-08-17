@@ -30,6 +30,7 @@ const SHEETS = {
     'ID', 'BaselineDate', 'RDF2Tons', 'FineFractionTons', 'MetalTons', 'CreatedAt',
     'RDF2LGTons', 'RDF3Tons', 'RDF2InProcessTons',
   ],
+  StockAdjustments: ['ID', 'EntryDate', 'Material', 'TonsDelta', 'Reason', 'Note', 'CreatedAt'],
   Sales: ['ID', 'SaleDate', 'Material', 'Customer', 'Tons', 'Note', 'CreatedAt'],
   RevenueCustomers: ['ID', 'Name', 'Active', 'CreatedAt'],
   RevenuePrices: ['ID', 'EffectiveDate', 'Customer', 'Product', 'PricePerTon', 'CreatedAt'],
@@ -44,12 +45,20 @@ const SHEETS = {
   DieselUsage: ['ID', 'EntryDate', 'Machine', 'Liters', 'Note', 'CreatedAt'],
   DieselReceipts: ['ID', 'EntryDate', 'Liters', 'Reference', 'Note', 'CreatedAt'],
   DieselStockBaselines: ['ID', 'EffectiveDate', 'OpeningLiters', 'Note', 'CreatedAt'],
+  DeviceSyncStatus: [
+    'ID', 'DeviceID', 'LastAttemptAt', 'LastSuccessAt', 'LastSourceID',
+    'LastRowCount', 'Status', 'Error', 'CreatedAt', 'UpdatedAt',
+  ],
+  BackupRuns: [
+    'ID', 'Status', 'StartedAt', 'CompletedAt', 'ObjectPath',
+    'SizeBytes', 'Error', 'CreatedAt',
+  ],
   AppUsers: ['ID', 'AuthUserID', 'Email', 'DisplayName', 'Role', 'Active', 'CreatedAt', 'UpdatedAt'],
   AuditLog: ['ID', 'Action', 'Entity', 'RecordID', 'ActorUserID', 'ActorEmail', 'BeforeData', 'AfterData', 'RequestID', 'IPAddress', 'UserAgent', 'CreatedAt'],
   DeletedRecords: ['ID', 'Entity', 'OriginalID', 'Snapshot', 'DeletedBy', 'DeletedByEmail', 'DeletedAt', 'RestoredBy', 'RestoredByEmail', 'RestoredAt'],
 };
 
-const SYSTEM_SHEETS = new Set(['AuditLog', 'DeletedRecords']);
+const SYSTEM_SHEETS = new Set(['AuditLog', 'DeletedRecords', 'DeviceSyncStatus', 'BackupRuns']);
 const JSON_COLUMNS = new Set(['BeforeData', 'AfterData', 'Snapshot']);
 
 function isTPICustomer(value) {
@@ -252,6 +261,53 @@ async function readSheet(sheetName) {
       rows.push(obj);
     });
     return rows;
+  });
+}
+
+async function readSheetRange(sheetName, field, start, end) {
+  if (!SHEETS[sheetName]?.includes(field)) throw new Error('Unsupported sheet range');
+  return serialize(async () => {
+    const wb = await loadWorkbook();
+    const ws = wb.getWorksheet(sheetName);
+    const cols = SHEETS[sheetName];
+    const rows = [];
+    ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const obj = rowToObj(cols, row);
+      if (obj.ID === '' || obj.ID === null) return;
+      const value = String(obj[field] || '');
+      if ((start === undefined || value >= String(start))
+        && (end === undefined || value <= String(end))) rows.push(obj);
+    });
+    return rows;
+  });
+}
+
+async function upsertDeviceSyncStatus(deviceId, patch) {
+  return serialize(async () => {
+    const wb = await loadWorkbook();
+    const ws = wb.getWorksheet('DeviceSyncStatus');
+    const cols = SHEETS.DeviceSyncStatus;
+    const now = new Date().toISOString();
+    let record = null;
+    ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber === 1 || String(row.getCell(cols.indexOf('DeviceID') + 1).value) !== String(deviceId)) return;
+      cols.forEach((column, index) => {
+        if (patch[column] !== undefined) row.getCell(index + 1).value = patch[column];
+      });
+      row.getCell(cols.indexOf('UpdatedAt') + 1).value = now;
+      record = rowToObj(cols, row);
+    });
+    if (!record) {
+      record = appendWorkbookRecord(wb, 'DeviceSyncStatus', {
+        DeviceID: String(deviceId),
+        LastAttemptAt: '', LastSuccessAt: '', LastSourceID: '', LastRowCount: 0,
+        Status: 'unknown', Error: '', UpdatedAt: now,
+        ...patch,
+      });
+    }
+    await saveWorkbook(wb);
+    return record;
   });
 }
 
@@ -615,7 +671,8 @@ async function restoreBackup(backup, options = {}) {
 }
 
 module.exports = {
-  XLSX_PATH, SHEETS, readSheet, appendRow, appendRows, updateRow, deleteRow,
+  XLSX_PATH, SHEETS, readSheet, readSheetRange, appendRow, appendRows, updateRow, deleteRow,
   deleteRowsByReportDate, syncGrabRows, syncRDF3GrabRow,
+  upsertDeviceSyncStatus,
   restoreDeletedRecord, exportBackup, restoreBackup,
 };

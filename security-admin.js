@@ -100,15 +100,26 @@ async function loadSession() {
 
 async function loadStatus() {
   const data = await api('/api/security/status');
+  let backupStatus = ['ยังไม่ตั้งค่า', false, 'ยังไม่ได้ตั้งค่า Scheduled Backup'];
+  if (data.scheduledBackupConfigured && data.lastBackupStatus === 'failed') {
+    backupStatus = ['สำรองล่าสุดไม่สำเร็จ', false, data.lastBackupError || 'ตรวจสอบ Scheduled Job'];
+  } else if (data.scheduledBackupHealthy) {
+    backupStatus = [`ล่าสุด ${fmtDateTime(data.lastBackupAt)}`, true, 'สำรองข้อมูลสำเร็จภายใน 36 ชั่วโมง'];
+  } else if (data.scheduledBackupConfigured && data.lastBackupAt) {
+    backupStatus = [`เกินกำหนด · ${fmtDateTime(data.lastBackupAt)}`, false, 'ไม่มี Backup สำเร็จภายใน 36 ชั่วโมง'];
+  } else if (data.scheduledBackupConfigured) {
+    backupStatus = ['รอ Backup ครั้งแรก', false, 'ตั้งค่าแล้ว แต่ยังไม่มีประวัติสำรองข้อมูลสำเร็จ'];
+  }
   const values = [
     [data.authEnabled ? (data.authConfigured ? 'พร้อมใช้งาน' : 'ต้องตั้งค่า') : 'Local development', data.authEnabled ? data.authConfigured : true],
     [data.database === 'postgres' ? 'PostgreSQL' : 'Local Excel', data.database === 'postgres'],
     [data.verifiedDatabaseTls === null ? 'ไม่เกี่ยวข้อง' : (data.verifiedDatabaseTls ? 'ตรวจสอบ Certificate' : 'ไม่ปลอดภัย'), data.verifiedDatabaseTls !== false],
-    [data.scheduledBackupConfigured ? 'พร้อมใช้งาน' : 'ยังไม่ตั้งค่า', data.scheduledBackupConfigured],
+    backupStatus,
   ];
   document.querySelectorAll('#securityStatus strong').forEach((node, index) => {
     node.textContent = values[index][0];
     node.className = values[index][1] ? 'ok' : 'warn';
+    node.title = values[index][2] || '';
   });
 }
 

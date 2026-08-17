@@ -77,10 +77,7 @@
     const activeCapacityTPH = activeMachines.reduce((sum, machine) => sum + machine.capTPH, 0);
     const materialOutputTons = availableFeedTons * values.yieldPct / 100;
     const capacityOutputTons = activeCapacityTPH * runtimeHours * values.efficiencyPct / 100;
-    const estimatedOutputTons = Math.min(materialOutputTons, capacityOutputTons);
-    const inputConsumedTons = values.yieldPct > 0
-      ? Math.min(availableFeedTons, estimatedOutputTons / (values.yieldPct / 100))
-      : 0;
+    const estimatedOutputTons = materialOutputTons;
 
     element('rdf3MachineActive').textContent = `${activeMachines.length} / 5`;
     element('rdf3MachineActiveCap').textContent = `${format(activeCapacityTPH)} ตัน/ชม.`;
@@ -88,7 +85,6 @@
     element('rdf3MachineMaterialOutput').textContent = `${format(materialOutputTons)} ตัน`;
     element('rdf3MachineCapacityOutput').textContent = `${format(capacityOutputTons)} ตัน`;
     element('rdf3MachineEstimatedOutput').textContent = `${format(estimatedOutputTons)} ตัน`;
-    element('rdf3MachineWIP').textContent = `${format(Math.max(0, availableFeedTons - inputConsumedTons))} ตัน`;
   }
 
   function renderHistory(rows) {

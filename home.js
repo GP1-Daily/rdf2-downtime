@@ -462,23 +462,72 @@
     const panel = document.getElementById('homeGrabLive');
     panel.classList.toggle('has-data', count > 0);
     panel.style.setProperty('--grab-intensity', String(Math.min(1, count / 30)));
+    const heartbeat = grab.syncStatus || {};
+    const lastSuccessValue = heartbeat.LastSuccessAt || grab.lastSyncedAt;
+    const lastSuccess = lastSuccessValue ? new Date(lastSuccessValue) : null;
+    const ageMinutes = lastSuccess && !Number.isNaN(lastSuccess.getTime())
+      ? Math.max(0, Math.floor((Date.now() - lastSuccess.getTime()) / 60000))
+      : null;
+    let syncState = 'offline';
+    let syncLabel = grab.deviceConfigured
+      ? 'ยังไม่พบประวัติการซิงก์จาก Raspberry Pi'
+      : 'ยังไม่ได้ตั้งค่าการซิงก์ Raspberry Pi';
+    if (heartbeat.Status === 'error') {
+      syncLabel = `ซิงก์ล่าสุดไม่สำเร็จ${ageMinutes === null ? '' : ` · ${ageMinutes} นาทีที่แล้ว`}`;
+    } else if (ageMinutes !== null && ageMinutes <= 15) {
+      syncState = 'online';
+      syncLabel = `เชื่อมต่อปกติ · อัปเดต ${lastSuccess.toLocaleTimeString('th-TH', {
+        timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit',
+      })}`;
+    } else if (ageMinutes !== null && ageMinutes <= 60) {
+      syncState = 'delayed';
+      syncLabel = `ข้อมูลล่าช้า ${ageMinutes} นาที · ระบบจะลองใหม่อัตโนมัติ`;
+    } else if (ageMinutes !== null) {
+      syncLabel = `ไม่ได้รับข้อมูลจาก Pi มา ${Math.max(1, Math.floor(ageMinutes / 60))} ชม.`;
+    }
+    panel.classList.toggle('sync-delayed', syncState === 'delayed');
+    panel.classList.toggle('sync-offline', syncState === 'offline');
+    setText('homeGrabSync', syncLabel);
+    const syncSummary = {
+      state: syncState,
+      configured: Boolean(grab.deviceConfigured),
+    };
     if (!count) {
       setText('homeGrabWindow', 'ยังไม่มีข้อมูล Grab สำหรับวันนี้');
-      setText('homeGrabSync', 'Waiting for Raspberry Pi · Auto sync every 5 minutes');
-      return;
+      return syncSummary;
     }
 
     setText('homeGrabWindow', `First Grab ${grab.firstGrabTime || '-'} · Latest ${grab.lastGrabTime || '-'}`);
-    let syncLabel = 'Pi connected · Auto sync every 5 minutes';
-    if (grab.lastSyncedAt) {
-      const syncedAt = new Date(grab.lastSyncedAt);
-      if (!Number.isNaN(syncedAt.getTime())) {
-        syncLabel = `Pi synced ${syncedAt.toLocaleTimeString('th-TH', {
-          timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit',
-        })} · Auto sync every 5 minutes`;
-      }
+    return syncSummary;
+  }
+
+  function renderHomeDataStatus(sourceFailures, grabSync) {
+    const status = document.getElementById('homeDataStatus');
+    const indicator = status?.closest('.home-live-state');
+    if (!status || !indicator) return;
+
+    indicator.classList.remove('is-delayed', 'is-offline');
+    if (sourceFailures > 0) {
+      indicator.classList.add('is-delayed');
+      status.textContent = `${5 - sourceFailures}/5 Sources Online`;
+      return;
     }
-    setText('homeGrabSync', syncLabel);
+    if (!grabSync?.configured) {
+      indicator.classList.add('is-offline');
+      status.textContent = 'Grab Sync Not Configured';
+      return;
+    }
+    if (grabSync.state === 'delayed') {
+      indicator.classList.add('is-delayed');
+      status.textContent = 'Grab Sync Delayed';
+      return;
+    }
+    if (grabSync.state !== 'online') {
+      indicator.classList.add('is-offline');
+      status.textContent = 'Grab Sync Offline';
+      return;
+    }
+    status.textContent = 'All Data Online';
   }
 
   function renderRDF3Grab(report) {
@@ -543,9 +592,10 @@
       const delivery = successful(results[2]);
       const revenue = successful(results[3]);
       const kpi = successful(results[4]);
+      let grabSync = null;
 
       if (report) {
-        renderGrab(report);
+        grabSync = renderGrab(report);
         renderRDF3Grab(report);
         const running = report.line.segments.some((segment) => segment.ongoing);
         const availability = report.line.availabilityPct === null ? '-' : `${num(report.line.availabilityPct, 1)}%`;
@@ -572,7 +622,7 @@
       if (kpi) renderKPI(kpi);
 
       const failed = results.filter((result) => result.status === 'rejected').length;
-      setText('homeDataStatus', failed ? `${5 - failed}/5 Sources Online` : 'All Data Online');
+      renderHomeDataStatus(failed, grabSync);
       setText('homeLastSync', new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }));
       animateDashboardUpdate();
       lastLoadedAt = Date.now();

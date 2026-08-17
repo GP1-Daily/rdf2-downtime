@@ -11,11 +11,15 @@ async function main() {
   const bucket = process.env.BACKUP_BUCKET || 'gp1-backups';
   const retentionDays = Math.max(7, Number(process.env.BACKUP_RETENTION_DAYS || 35));
   const store = require('../pg-store');
+  const startedAt = new Date().toISOString();
+  let objectPath = '';
+  let sizeBytes = 0;
   try {
     const backup = await store.exportBackup();
     const payload = await gzipAsync(Buffer.from(JSON.stringify(backup)));
     const stamp = backup.generatedAt.replace(/[:.]/g, '-');
-    const objectPath = `database/gp1-connect-${stamp}.json.gz`;
+    objectPath = `database/gp1-connect-${stamp}.json.gz`;
+    sizeBytes = payload.length;
     const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
@@ -44,7 +48,25 @@ async function main() {
         if (removed.error) throw removed.error;
       }
     }
+    await store.appendRow('BackupRuns', {
+      Status: 'success',
+      StartedAt: startedAt,
+      CompletedAt: new Date().toISOString(),
+      ObjectPath: `${bucket}/${objectPath}`,
+      SizeBytes: sizeBytes,
+      Error: '',
+    });
     process.stdout.write(`Backup uploaded: ${bucket}/${objectPath} (${payload.length} bytes)\n`);
+  } catch (error) {
+    await store.appendRow('BackupRuns', {
+      Status: 'failed',
+      StartedAt: startedAt,
+      CompletedAt: new Date().toISOString(),
+      ObjectPath: objectPath ? `${bucket}/${objectPath}` : '',
+      SizeBytes: sizeBytes,
+      Error: String(error?.message || error).slice(0, 1000),
+    }).catch(() => {});
+    throw error;
   } finally {
     await store.close();
   }
