@@ -29,6 +29,7 @@ input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(15,138,95,.12)}
 .auth-error{margin:8px 0 0;border-left:3px solid var(--danger);padding:8px 10px;background:#fff1f0;color:var(--danger);font-size:12px}
 .auth-help,.field-note{color:var(--muted);font-size:11px}
 .auth-help{margin:24px 0 0;padding-top:20px;border-top:1px solid var(--line)}
+.app-version{min-height:22px;margin:12px 0 0;color:var(--muted);font-size:14px;text-align:right}
 .field-note{margin-top:-5px}
 @media(max-width:1200px){.auth-brand{padding:42px 44px}.auth-brand h1{font-size:50px;line-height:1.42}}
 @media(max-width:780px){.auth-shell{grid-template-columns:1fr}.auth-brand{min-height:280px;padding:28px 24px}.auth-brand img{width:260px}.auth-brand h1{max-width:520px;margin:28px 0 10px;font-size:34px;line-height:1.42}.auth-panel{place-items:start center;padding:34px 24px 50px}.auth-heading{margin-bottom:24px}}

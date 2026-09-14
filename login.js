@@ -9,6 +9,7 @@ const form = document.getElementById('loginForm');
 const button = document.getElementById('loginButton');
 const errorBox = document.getElementById('loginError');
 const password = document.getElementById('password');
+const versionLabel = document.getElementById('appVersion');
 
 function showError(message) {
   errorBox.textContent = message;
@@ -17,6 +18,13 @@ function showError(message) {
 
 fetch('/api/auth/session', { credentials: 'same-origin' })
   .then((response) => { if (response.ok) window.location.replace('/'); })
+  .catch(() => {});
+
+fetch('/api/version')
+  .then((response) => response.json())
+  .then((data) => {
+    if (data.ok && data.version) versionLabel.textContent = `เวอร์ชัน ${data.version}`;
+  })
   .catch(() => {});
 
 document.getElementById('togglePassword').addEventListener('click', (event) => {

@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { version: APP_VERSION } = require('./package.json');
 
 // Uses Postgres (e.g. free Supabase) when DATABASE_URL is set - needed for
 // cloud deploys with no persistent local disk. Falls back to the local
@@ -3198,6 +3199,37 @@ function historicalRDFOutputPlan(date, grabRows, historyRows, yieldRows, maxDays
   };
 }
 
+function historicalRDF3OutputPlan(
+  date, rdf3GrabRows, rdf3MachineSettingRows, rdf3MachineDailyRows, maxDays = 30,
+) {
+  const candidates = [...new Set(rdf3GrabRows.map((row) => row.ReportDate))]
+    .filter((entryDate) => validIsoDate(entryDate) && entryDate < date)
+    .sort((a, b) => b.localeCompare(a));
+  const samples = [];
+
+  for (const entryDate of candidates) {
+    const feedTons = rdf3FeedTonsForDate(rdf3GrabRows, entryDate);
+    if (feedTons <= 0) continue;
+    const production = computeRDF3Production(feedTons, {
+      date: entryDate,
+      grabRows: rdf3GrabRows,
+      setting: getApplicableRDF3MachineSetting(rdf3MachineSettingRows, entryDate),
+      dailyStatus: rdf3MachineDailyRows.find((row) => row.EntryDate === entryDate),
+      availableFeedTons: feedTons,
+    });
+    samples.push({ date: entryDate, rdf3Tons: production.outputTons });
+    if (samples.length >= maxDays) break;
+  }
+
+  const basisDays = samples.length;
+  return {
+    basisDays,
+    rdf3Tons: basisDays ? samples.reduce((sum, row) => sum + row.rdf3Tons, 0) / basisDays : 0,
+    startDate: basisDays ? samples[samples.length - 1].date : '',
+    endDate: basisDays ? samples[0].date : '',
+  };
+}
+
 function dailyDowntimeIncidents(date, downtimeRows) {
   const previousDate = lib.addDays(date, -1);
   const incidents = new Map();
@@ -3331,6 +3363,9 @@ async function handleExecutiveReport(req, res, query) {
     availableFeedTons: selectedRDF3FeedTons,
   });
   const outputPlan = historicalRDFOutputPlan(date, grabRows, historyRows, yieldRows);
+  const rdf3OutputPlan = historicalRDF3OutputPlan(
+    date, rdf3GrabRows, rdf3MachineSettingRows, rdf3MachineDailyRows,
+  );
 
   const incomingRow = tippingRows.find((row) => row.EntryDate === date);
   const incomingMTDRows = tippingRows.filter((row) => row.EntryDate >= bounds.start && row.EntryDate <= date);
@@ -3407,8 +3442,13 @@ async function handleExecutiveReport(req, res, query) {
       },
       plan: {
         ...outputPlan,
+        rdf3BasisDays: rdf3OutputPlan.basisDays,
+        rdf3Tons: rdf3OutputPlan.rdf3Tons,
+        rdf3StartDate: rdf3OutputPlan.startDate,
+        rdf3EndDate: rdf3OutputPlan.endDate,
         mtdRDF2Tons: outputPlan.rdf2Tons * elapsedDays,
         mtdRDF2LGTons: outputPlan.rdf2LGTons * elapsedDays,
+        mtdRDF3Tons: rdf3OutputPlan.rdf3Tons * elapsedDays,
       },
     },
     diesel: {
@@ -3963,6 +4003,10 @@ const server = http.createServer(async (req, res) => {
     if (pathname.startsWith('/api/auth/')) {
       const authParts = pathname.split('/').filter(Boolean).slice(2);
       return await handleAuthApi(req, res, authParts);
+    }
+
+    if (pathname === '/api/version' && (req.method === 'GET' || req.method === 'HEAD')) {
+      return sendJson(res, 200, { ok: true, version: APP_VERSION });
     }
 
     if (pathname.startsWith('/api/')) {

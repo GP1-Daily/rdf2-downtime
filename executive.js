@@ -62,7 +62,10 @@
       { key: 'msw', label: 'MSW to Production', actual: data.production.dailyTons, plan: data.targets.dailyTons },
       { key: 'rdf2', label: 'RDF2', actual: data.output.daily.rdf2Tons, plan: data.output.plan.rdf2Tons },
       { key: 'rdf2lg', label: 'RDF2 LG', actual: data.output.daily.rdf2LGTons, plan: data.output.plan.rdf2LGTons },
-      { key: 'rdf3', label: 'RDF3', actual: data.output.daily.rdf3Tons, plan: null },
+      {
+        key: 'rdf3', label: 'RDF3', actual: data.output.daily.rdf3Tons,
+        plan: data.output.plan.rdf3BasisDays ? data.output.plan.rdf3Tons : null,
+      },
     ];
     document.getElementById('executiveDailyComparisons').innerHTML = rows.map((row) => {
       const pct = achievement(row.actual, row.plan);
@@ -195,8 +198,11 @@
     setText('executiveRDF2LGMTDPct', percentLabel(rdf2LGMTDPct));
     setProgress('executiveRDF2LGMTDBar', rdf2LGMTDPct);
     setText('executiveRDF3MTD', `${numberLabel(data.output.mtd.rdf3Tons)} ตัน`);
-    const rdf3Scale = Math.max(1, Number(data.output.mtd.rdf2Tons) || 0, Number(data.output.mtd.rdf3Tons) || 0);
-    setProgress('executiveRDF3MTDBar', Number(data.output.mtd.rdf3Tons) / rdf3Scale * 100);
+    const rdf3MTDPlan = plan.rdf3BasisDays ? plan.mtdRDF3Tons : null;
+    const rdf3MTDPct = achievement(data.output.mtd.rdf3Tons, rdf3MTDPlan);
+    setText('executiveRDF3MTDPlan', rdf3MTDPlan === null ? '-' : `${numberLabel(rdf3MTDPlan)} ตัน`);
+    setText('executiveRDF3MTDPct', percentLabel(rdf3MTDPct));
+    setProgress('executiveRDF3MTDBar', rdf3MTDPct);
     renderMaterialStock('executiveStockGrid', 'executiveStockStatus', data.stock);
     setText('executiveDieselMTD', `MTD ใช้ไป ${numberLabel(data.diesel.mtd.totalLiters)} ลิตร`);
     setText('executiveDieselMTDSummary', `${numberLabel(data.diesel.mtd.totalLiters)} ลิตร`);

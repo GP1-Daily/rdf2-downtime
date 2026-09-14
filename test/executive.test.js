@@ -101,6 +101,11 @@ test('diesel entry and executive daily report combine source systems without dou
     { EntryDate: '2026-08-02', MSWTons: 300, Source: 'legacy-import' },
     { EntryDate: '2026-08-03', MSWTons: 999, Source: 'legacy-import' },
   ]);
+  await store.appendRows('RDF3GrabCrane', [
+    { ReportDate: '2026-08-01', DateTime: '2026-08-01 08:00:00', WeightKg: 1000, DeviceID: 'grabcrane-01', SourceKey: 'rdf3-plan-1' },
+    { ReportDate: '2026-08-02', DateTime: '2026-08-02 08:00:00', WeightKg: 2000, DeviceID: 'grabcrane-01', SourceKey: 'rdf3-plan-2' },
+    { ReportDate: '2026-08-03', DateTime: '2026-08-03 08:00:00', WeightKg: 3000, DeviceID: 'grabcrane-01', SourceKey: 'rdf3-plan-3' },
+  ]);
   await store.appendRows('YieldSettings', [{
     EffectiveDate: '2026-08-01',
     RDF2Pct: 20,
@@ -190,11 +195,15 @@ test('diesel entry and executive daily report combine source systems without dou
   assert.equal(report.output.daily.rdf2LGTons, 25);
   assert.equal(report.output.mtd.rdf2Tons, 210);
   assert.equal(report.output.mtd.rdf2LGTons, 105);
+  assert.ok(Math.abs(report.output.mtd.rdf3Tons - 4.941) < 0.0001);
   assert.equal(report.output.plan.basisDays, 3);
   assert.ok(Math.abs(report.output.plan.rdf2Tons - (160 / 3)) < 0.0001);
   assert.ok(Math.abs(report.output.plan.rdf2LGTons - (80 / 3)) < 0.0001);
   assert.ok(Math.abs(report.output.plan.mtdRDF2Tons - (640 / 3)) < 0.0001);
   assert.ok(Math.abs(report.output.plan.mtdRDF2LGTons - (320 / 3)) < 0.0001);
+  assert.equal(report.output.plan.rdf3BasisDays, 3);
+  assert.ok(Math.abs(report.output.plan.rdf3Tons - 1.647) < 0.0001);
+  assert.ok(Math.abs(report.output.plan.mtdRDF3Tons - 6.588) < 0.0001);
   assert.equal(report.diesel.daily.totalLiters, 201);
   assert.equal(report.diesel.daily.totalLimitLiters, 250);
   assert.equal(report.diesel.daily.utilizationPct, 80.4);
@@ -257,7 +266,9 @@ test('diesel entry and executive daily report combine source systems without dou
     /\.executive-skeleton\[hidden\],\.executive-content\[hidden\]\{display:none !important;\}/,
   );
   const page = await fetch(`${baseUrl}/`).then((pageResponse) => pageResponse.text());
-  assert.match(page, /executive\.js\?v=20260814-rdf3-stock/);
+  assert.match(page, /executive\.js\?v=20260914-rdf3-plan/);
+  assert.match(page, /id="executiveRDF3MTDPct"/);
+  assert.match(page, /id="executiveRDF3MTDPlan"/);
   assert.match(page, /executive\.css\?v=20260814-company-logo/);
   assert.match(page, /id="executiveDieselMachines"/);
   assert.match(page, /id="executiveDieselDailyMeta"/);
@@ -267,4 +278,8 @@ test('diesel entry and executive daily report combine source systems without dou
   assert.match(page, /id="tab-executive-report"/);
   assert.match(page, /<h2>Control Report<\/h2>/);
   assert.match(page, /<h2>Daily Report<\/h2>/);
+  const version = await fetch(`${baseUrl}/api/version`).then((versionResponse) => versionResponse.json());
+  assert.equal(version.version, '1.1.0');
+  const loginPage = await fetch(`${baseUrl}/login.html`).then((pageResponse) => pageResponse.text());
+  assert.match(loginPage, /id="appVersion"/);
 });
