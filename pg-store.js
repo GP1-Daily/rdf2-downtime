@@ -165,7 +165,7 @@ const TABLES = {
     table: 'production_plan_settings',
     columns: {
       ID: 'id', EffectiveDate: 'effective_date', MSWTonsPerDay: 'msw_tons_per_day',
-      Note: 'note', CreatedAt: 'created_at',
+      RDF3TonsPerDay: 'rdf3_tons_per_day', Note: 'note', CreatedAt: 'created_at',
     },
   },
   KPIComplaints: {
@@ -479,6 +479,7 @@ function ensureSchema() {
         id SERIAL PRIMARY KEY,
         effective_date TEXT NOT NULL,
         msw_tons_per_day NUMERIC NOT NULL DEFAULT 0,
+        rdf3_tons_per_day NUMERIC NOT NULL DEFAULT 0,
         note TEXT,
         created_at TIMESTAMPTZ DEFAULT now()
       );
@@ -486,6 +487,8 @@ function ensureSchema() {
         ON production_plan_settings (effective_date);
       ALTER TABLE production_plan_settings
         ADD COLUMN IF NOT EXISTS msw_tons_per_day NUMERIC NOT NULL DEFAULT 0;
+      ALTER TABLE production_plan_settings
+        ADD COLUMN IF NOT EXISTS rdf3_tons_per_day NUMERIC NOT NULL DEFAULT 0;
       CREATE TABLE IF NOT EXISTS kpi_target_settings (
         id SERIAL PRIMARY KEY,
         effective_date TEXT NOT NULL,

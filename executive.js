@@ -181,15 +181,19 @@
 
     renderDailyComparisons(data);
     const plan = data.output.plan;
-    if (plan.source === 'manual' && plan.rdfAvailable) {
-      setText('executiveOutputPlanMeta', `Plan RDF คำนวณจากเป้า MSW ${numberLabel(plan.mswTons)} ตัน/วัน × Yield RDF2 ${percentLabel(plan.rdf2Pct)} · LG ${percentLabel(plan.rdf2LGPct)} · RDF3 ${percentLabel(plan.rdf3YieldPct)} ของ LG (มีผลตั้งแต่ ${thaiDate(plan.effectiveDate)})`);
-    } else if (plan.source === 'manual') {
-      setText('executiveOutputPlanMeta', `ตั้งเป้า MSW ${numberLabel(plan.mswTons)} ตัน/วันแล้ว แต่ยังไม่มี Yield ที่มีผลกับวันนี้ จึงยังคำนวณ Plan RDF ไม่ได้`);
-    } else {
-      setText('executiveOutputPlanMeta', plan.basisDays
-        ? `Plan RDF จากค่าเฉลี่ยย้อนหลัง ${plan.basisDays.toLocaleString('th-TH')} วัน (${thaiDate(plan.startDate)} - ${thaiDate(plan.endDate)}) — ยังไม่ได้ตั้งเป้าผลผลิตรายวัน`
-        : 'ยังไม่ได้ตั้งเป้าผลผลิตรายวัน และยังไม่มีข้อมูลย้อนหลังเพียงพอสำหรับ Plan RDF');
-    }
+    // RDF2/RDF2 LG and RDF3 come from different places and can fall back
+    // independently, so the meta line names the source of each.
+    const historicalNote = plan.basisDays
+      ? `ค่าเฉลี่ยย้อนหลัง ${plan.basisDays.toLocaleString('th-TH')} วัน (${thaiDate(plan.startDate)} - ${thaiDate(plan.endDate)})`
+      : 'ยังไม่มีข้อมูลย้อนหลังเพียงพอ';
+    const rdfNote = plan.rdfSource === 'manual'
+      ? `RDF2 · RDF2 LG จากเป้า MSW ${numberLabel(plan.mswTons)} ตัน/วัน × Yield ${percentLabel(plan.rdf2Pct)} · ${percentLabel(plan.rdf2LGPct)}`
+      : `RDF2 · RDF2 LG จาก${historicalNote}`;
+    const rdf3Note = plan.rdf3Source === 'manual'
+      ? `RDF3 ตั้งไว้ ${numberLabel(plan.rdf3Tons)} ตัน/วัน`
+      : `RDF3 จาก${plan.rdf3BasisDays ? `ค่าเฉลี่ยย้อนหลัง ${plan.rdf3BasisDays.toLocaleString('th-TH')} วัน` : 'ยังไม่มีข้อมูลย้อนหลังเพียงพอ'}`;
+    const planSuffix = plan.source === 'manual' ? ` (แผนมีผลตั้งแต่ ${thaiDate(plan.effectiveDate)})` : '';
+    setText('executiveOutputPlanMeta', `${rdfNote} · ${rdf3Note}${planSuffix}`);
 
     setText('executiveMonthMeta', `${monthLabel(data.month)} · วันที่ ${data.elapsedDays} จาก ${data.daysInMonth}`);
     setText('executiveMTDPct', percentLabel(data.production.monthlyAchievementPct));

@@ -1249,16 +1249,18 @@ async function handleYield(req, res, parts) {
 function validateProductionPlan(body) {
   const effectiveDate = cleanText(body.effectiveDate);
   const mswTonsPerDay = Number(body.mswTonsPerDay);
+  const rdf3TonsPerDay = Number(body.rdf3TonsPerDay);
   if (!validIsoDate(effectiveDate)) {
     return { error: 'กรุณาระบุวันที่เริ่มใช้แผนให้ถูกต้อง' };
   }
-  if (!Number.isFinite(mswTonsPerDay) || mswTonsPerDay < 0) {
-    return { error: 'เป้า MSW ต้องเป็นตัวเลขตั้งแต่ 0 ขึ้นไป' };
+  if ([mswTonsPerDay, rdf3TonsPerDay].some((value) => !Number.isFinite(value) || value < 0)) {
+    return { error: 'เป้า MSW และ RDF3 ต้องเป็นตัวเลขตั้งแต่ 0 ขึ้นไป' };
   }
   return {
     data: {
       EffectiveDate: effectiveDate,
       MSWTonsPerDay: mswTonsPerDay,
+      RDF3TonsPerDay: rdf3TonsPerDay,
       Note: cleanText(body.note),
     },
   };
@@ -1267,10 +1269,9 @@ function validateProductionPlan(body) {
 async function handleProductionPlan(req, res, parts, query) {
   if (req.method === 'GET' && parts.length === 0) {
     const date = validIsoDate(query.date) ? query.date : lib.todayStr();
-    const [rows, yieldRows, rdf3MachineSettingRows] = await Promise.all([
+    const [rows, yieldRows] = await Promise.all([
       store.readSheet('ProductionPlanSettings'),
       store.readSheet('YieldSettings'),
-      store.readSheet('RDF3MachineSettings'),
     ]);
     rows.sort((a, b) => String(b.EffectiveDate).localeCompare(String(a.EffectiveDate)));
     const applicable = applicableRow(rows, date, 'EffectiveDate');
@@ -1282,12 +1283,12 @@ async function handleProductionPlan(req, res, parts, query) {
       rows: rows.map((row) => ({
         ...row,
         derived: productionPlanOutputs(
-          row.MSWTonsPerDay, row.EffectiveDate, yieldRows, rdf3MachineSettingRows,
+          row.MSWTonsPerDay, row.RDF3TonsPerDay, row.EffectiveDate, yieldRows,
         ),
       })),
       applicable,
       yields: productionPlanOutputs(
-        applicable?.MSWTonsPerDay ?? 0, date, yieldRows, rdf3MachineSettingRows,
+        applicable?.MSWTonsPerDay ?? 0, applicable?.RDF3TonsPerDay ?? 0, date, yieldRows,
       ),
     });
   }
@@ -3296,17 +3297,14 @@ function historicalRDF3OutputPlan(
   };
 }
 
-// Only the MSW figure is typed in; the product lines follow from it through the
+// MSW and RDF3 are both typed in. RDF2 and RDF2 LG follow from MSW through the
 // same yields that turn measured MSW into measured output, so plan and actual are
-// read off the same ruler. RDF3 is fed by the RDF2 LG stream, not by RDF2.
-function productionPlanOutputs(mswTonsPerDay, date, yieldRows, rdf3MachineSettingRows) {
+// read off the same ruler. RDF3 gets no formula: how much RDF2 LG actually goes
+// into the RDF3 line is an operating decision, not a fixed fraction.
+function productionPlanOutputs(mswTonsPerDay, rdf3TonsPerDay, date, yieldRows) {
   const mswTons = Math.max(0, Number(mswTonsPerDay) || 0);
+  const rdf3Tons = Math.max(0, Number(rdf3TonsPerDay) || 0);
   const yieldSetting = getApplicableYield(yieldRows, date);
-  const rdf3Setting = getApplicableRDF3MachineSetting(rdf3MachineSettingRows, date);
-  const rawRDF3Yield = rdf3Setting ? Number(rdf3Setting.YieldPct) : RDF3_CONVERSION_YIELD_PCT;
-  const rdf3YieldPct = Number.isFinite(rawRDF3Yield)
-    ? Math.max(0, Math.min(100, rawRDF3Yield))
-    : RDF3_CONVERSION_YIELD_PCT;
   const rdf2Pct = Math.max(0, Number(yieldSetting?.RDF2Pct) || 0);
   const rdf2LGPct = Math.max(0, Number(yieldSetting?.RDF2LGPct) || 0);
   const rdf2LGTons = mswTons * rdf2LGPct / 100;
@@ -3315,10 +3313,12 @@ function productionPlanOutputs(mswTonsPerDay, date, yieldRows, rdf3MachineSettin
     yieldConfigured: Boolean(yieldSetting),
     rdf2Pct,
     rdf2LGPct,
-    rdf3YieldPct,
     rdf2Tons: mswTons * rdf2Pct / 100,
     rdf2LGTons,
-    rdf3Tons: rdf2LGTons * rdf3YieldPct / 100,
+    rdf3Tons,
+    // Reported only so the number can be sanity-checked against the LG stream
+    // it is drawn from; nothing is computed from it.
+    rdf3ShareOfLGPct: rdf2LGTons > 0 ? rdf3Tons / rdf2LGTons * 100 : null,
   };
 }
 
@@ -3326,54 +3326,30 @@ function productionPlanOutputs(mswTonsPerDay, date, yieldRows, rdf3MachineSettin
 // effect on a given day governs that day. Days that fall before the first plan
 // row keep using the historical average so reports for months recorded before
 // this feature still show what they always did.
-function resolveProductionPlanForDate(planRows, yieldRows, rdf3MachineSettingRows, date, fallback) {
+function resolveProductionPlanForDate(planRows, yieldRows, date, fallback) {
   const setting = applicableRow(planRows, date, 'EffectiveDate');
   const mswTons = Math.max(0, Number(setting?.MSWTonsPerDay) || 0);
-  if (!setting || mswTons <= 0) {
-    return {
-      source: 'historical',
-      effectiveDate: '',
-      mswTons: 0,
-      rdf2Tons: fallback.rdf2Tons,
-      rdf2LGTons: fallback.rdf2LGTons,
-      rdf3Tons: fallback.rdf3Tons,
-      rdfAvailable: fallback.rdfAvailable,
-      rdf3Available: fallback.rdf3Available,
-      rdf2Pct: null,
-      rdf2LGPct: null,
-      rdf3YieldPct: null,
-    };
-  }
-  const outputs = productionPlanOutputs(mswTons, date, yieldRows, rdf3MachineSettingRows);
-  // Without a yield in effect there is nothing to derive the product lines from,
-  // and the actual side is blank for the same reason, so fall back for those.
-  if (!outputs.yieldConfigured) {
-    return {
-      source: 'manual',
-      effectiveDate: setting.EffectiveDate,
-      mswTons,
-      rdf2Tons: fallback.rdf2Tons,
-      rdf2LGTons: fallback.rdf2LGTons,
-      rdf3Tons: fallback.rdf3Tons,
-      rdfAvailable: fallback.rdfAvailable,
-      rdf3Available: fallback.rdf3Available,
-      rdf2Pct: null,
-      rdf2LGPct: null,
-      rdf3YieldPct: null,
-    };
-  }
+  const plannedRDF3Tons = Math.max(0, Number(setting?.RDF3TonsPerDay) || 0);
+  const outputs = setting
+    ? productionPlanOutputs(mswTons, plannedRDF3Tons, date, yieldRows)
+    : null;
+  // MSW drives RDF2 and RDF2 LG, so those need both an MSW figure and a yield in
+  // effect; RDF3 stands on its own and each side falls back independently.
+  const rdfFromPlan = Boolean(outputs) && mswTons > 0 && outputs.yieldConfigured;
+  const rdf3FromPlan = plannedRDF3Tons > 0;
   return {
-    source: 'manual',
-    effectiveDate: setting.EffectiveDate,
-    mswTons,
-    rdf2Tons: outputs.rdf2Tons,
-    rdf2LGTons: outputs.rdf2LGTons,
-    rdf3Tons: outputs.rdf3Tons,
-    rdfAvailable: true,
-    rdf3Available: true,
-    rdf2Pct: outputs.rdf2Pct,
-    rdf2LGPct: outputs.rdf2LGPct,
-    rdf3YieldPct: outputs.rdf3YieldPct,
+    source: rdfFromPlan || rdf3FromPlan ? 'manual' : 'historical',
+    effectiveDate: rdfFromPlan || rdf3FromPlan ? setting.EffectiveDate : '',
+    mswTons: rdfFromPlan ? mswTons : 0,
+    rdf2Tons: rdfFromPlan ? outputs.rdf2Tons : fallback.rdf2Tons,
+    rdf2LGTons: rdfFromPlan ? outputs.rdf2LGTons : fallback.rdf2LGTons,
+    rdf3Tons: rdf3FromPlan ? plannedRDF3Tons : fallback.rdf3Tons,
+    rdfAvailable: rdfFromPlan || fallback.rdfAvailable,
+    rdf3Available: rdf3FromPlan || fallback.rdf3Available,
+    rdfSource: rdfFromPlan ? 'manual' : 'historical',
+    rdf3Source: rdf3FromPlan ? 'manual' : 'historical',
+    rdf2Pct: rdfFromPlan ? outputs.rdf2Pct : null,
+    rdf2LGPct: rdfFromPlan ? outputs.rdf2LGPct : null,
   };
 }
 
@@ -3532,7 +3508,7 @@ async function handleExecutiveReport(req, res, query) {
     rdf3Available: rdf3OutputPlan.basisDays > 0,
   };
   const planForDate = (entryDate) => resolveProductionPlanForDate(
-    productionPlanRows, yieldRows, rdf3MachineSettingRows, entryDate, planFallback,
+    productionPlanRows, yieldRows, entryDate, planFallback,
   );
   const dailyPlan = planForDate(date);
   const mtdPlan = datesToReport.reduce((sum, entryDate) => {
@@ -3628,9 +3604,10 @@ async function handleExecutiveReport(req, res, query) {
         rdf3Tons: dailyPlan.rdf3Tons,
         rdfAvailable: dailyPlan.rdfAvailable,
         rdf3Available: dailyPlan.rdf3Available,
+        rdfSource: dailyPlan.rdfSource,
+        rdf3Source: dailyPlan.rdf3Source,
         rdf2Pct: dailyPlan.rdf2Pct,
         rdf2LGPct: dailyPlan.rdf2LGPct,
-        rdf3YieldPct: dailyPlan.rdf3YieldPct,
         rdf3BasisDays: rdf3OutputPlan.basisDays,
         rdf3StartDate: rdf3OutputPlan.startDate,
         rdf3EndDate: rdf3OutputPlan.endDate,

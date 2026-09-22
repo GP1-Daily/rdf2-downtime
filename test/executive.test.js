@@ -288,7 +288,7 @@ test('diesel entry and executive daily report combine source systems without dou
   assert.match(page, /<h2>Control Report<\/h2>/);
   assert.match(page, /<h2>Daily Report<\/h2>/);
   const version = await fetch(`${baseUrl}/api/version`).then((versionResponse) => versionResponse.json());
-  assert.equal(version.version, '1.4.1');
+  assert.equal(version.version, '1.5.0');
   const loginPage = await fetch(`${baseUrl}/login.html`).then((pageResponse) => pageResponse.text());
   assert.match(loginPage, /id="appVersion"/);
 });
@@ -304,20 +304,22 @@ test('a saved daily output plan replaces the historical average on the executive
   const saved = await jsonRequest(baseUrl, '/api/production-plan', 'PUT', {
     effectiveDate: '2026-08-04',
     mswTonsPerDay: 300,
+    rdf3TonsPerDay: 25,
     note: 'แผนทดสอบ',
   });
   assert.equal(saved.response.status, 200);
   assert.equal(saved.data.updated, false);
 
-  // The yield in effect is RDF2 20% and RDF2 LG 10%, and RDF3 converts the LG
-  // stream at its configured 82.35%.
+  // The yield in effect is RDF2 20% and RDF2 LG 10%; RDF3 is typed in, not derived.
   const listed = await fetch(`${baseUrl}/api/production-plan?date=2026-08-04`).then((r) => r.json());
   assert.equal(listed.applicable.EffectiveDate, '2026-08-04');
   assert.equal(Number(listed.applicable.MSWTonsPerDay), 300);
   assert.equal(listed.yields.rdf2Pct, 20);
   assert.equal(listed.yields.rdf2LGPct, 10);
   assert.equal(listed.rows[0].derived.rdf2Tons, 60);
-  assert.ok(Math.abs(listed.rows[0].derived.rdf3Tons - 24.705) < 0.0001);
+  assert.equal(listed.rows[0].derived.rdf2LGTons, 30);
+  assert.equal(listed.rows[0].derived.rdf3Tons, 25);
+  assert.ok(Math.abs(listed.rows[0].derived.rdf3ShareOfLGPct - (25 / 30 * 100)) < 0.0001);
 
   const report = await fetch(`${baseUrl}/api/executive-report?date=2026-08-04`).then((r) => r.json());
   const plan = report.output.plan;
@@ -326,7 +328,9 @@ test('a saved daily output plan replaces the historical average on the executive
   assert.equal(plan.mswTons, 300);
   assert.equal(plan.rdf2Tons, 60);
   assert.equal(plan.rdf2LGTons, 30);
-  assert.ok(Math.abs(plan.rdf3Tons - 24.705) < 0.0001);
+  assert.equal(plan.rdf3Tons, 25);
+  assert.equal(plan.rdfSource, 'manual');
+  assert.equal(plan.rdf3Source, 'manual');
   assert.equal(plan.rdfAvailable, true);
   assert.equal(plan.rdf3Available, true);
 
@@ -341,13 +345,28 @@ test('a saved daily output plan replaces the historical average on the executive
   // average while Aug 4 uses the numbers derived from the typed-in MSW target.
   assert.ok(Math.abs(plan.mtdRDF2Tons - (160 + 60)) < 0.0001);
   assert.ok(Math.abs(plan.mtdRDF2LGTons - (80 + 30)) < 0.0001);
-  assert.ok(Math.abs(plan.mtdRDF3Tons - (3 * 1.647 + 24.705)) < 0.0001);
+  assert.ok(Math.abs(plan.mtdRDF3Tons - (3 * 1.647 + 25)) < 0.0001);
   assert.ok(Math.abs(plan.averageRDF2Tons - (160 / 3)) < 0.0001);
   assert.equal(plan.basisDays, 3);
 
   // A day before the plan starts still reads as historical.
   const earlier = await fetch(`${baseUrl}/api/executive-report?date=2026-08-03`).then((r) => r.json());
   assert.equal(earlier.output.plan.source, 'historical');
+
+  // Clearing MSW but keeping RDF3 leaves each line on its own source.
+  await jsonRequest(baseUrl, '/api/production-plan', 'PUT', {
+    effectiveDate: '2026-08-04', mswTonsPerDay: 0, rdf3TonsPerDay: 25,
+  });
+  const rdf3Only = await fetch(`${baseUrl}/api/executive-report?date=2026-08-04`).then((r) => r.json());
+  assert.equal(rdf3Only.output.plan.rdfSource, 'historical');
+  assert.equal(rdf3Only.output.plan.rdf3Source, 'manual');
+  assert.equal(rdf3Only.output.plan.rdf3Tons, 25);
+  assert.ok(Math.abs(rdf3Only.output.plan.rdf2Tons - (160 / 3)) < 0.0001);
+  assert.equal(rdf3Only.targets.source, 'kpi-target');
+
+  await jsonRequest(baseUrl, '/api/production-plan', 'PUT', {
+    effectiveDate: '2026-08-04', mswTonsPerDay: 300, rdf3TonsPerDay: 25,
+  });
 
   const removed = await jsonRequest(baseUrl, `/api/production-plan/${listed.applicable.ID}`, 'DELETE');
   assert.equal(removed.response.status, 200);

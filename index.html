@@ -1290,6 +1290,7 @@
       <div class="entry-form plan-target-form">
         <div><label>มีผลตั้งแต่วันที่</label><input type="date" id="planEffectiveDate"></div>
         <div><label>MSW to Production (ตัน/วัน)</label><input type="number" id="planMSW" min="0" step="0.01"></div>
+        <div><label>RDF3 (ตัน/วัน)</label><input type="number" id="planRDF3" min="0" step="0.01"></div>
         <div><label>หมายเหตุ</label><input type="text" id="planNote" maxlength="120" placeholder="เช่น แผนไตรมาส 4"></div>
         <div><button class="primary" id="btnSaveProductionPlan">บันทึกแผน</button></div>
       </div>
@@ -1297,10 +1298,10 @@
         <div><span>MSW ต่อวัน</span><strong id="planMSWDaily">0.00 ตัน/วัน</strong></div>
         <div><span id="planRDF2Label">RDF2</span><strong id="planRDF2">0.00 ตัน/วัน</strong></div>
         <div><span id="planRDF2LGLabel">RDF2 LG</span><strong id="planRDF2LG">0.00 ตัน/วัน</strong></div>
-        <div><span id="planRDF3Label">RDF3</span><strong id="planRDF3">0.00 ตัน/วัน</strong></div>
+        <div><span id="planRDF3Label">RDF3</span><strong id="planRDF3Display">0.00 ตัน/วัน</strong></div>
         <div class="result"><span>MSW รวม 30 วัน</span><strong id="planMonthlyTotal">0.00 ตัน</strong></div>
       </div>
-      <div class="hint">กรอกเฉพาะ MSW ต่อวัน ส่วน RDF2 · RDF2 LG · RDF3 คำนวณต่อให้จาก Yield ที่ตั้งไว้ในแผง 01 และ 02 — RDF2 = MSW × Yield RDF2, RDF2 LG = MSW × Yield RDF2 LG, RDF3 = RDF2 LG × Yield RDF3 · เป้าเดือนใช้ MSW ต่อวัน × จำนวนวันจริงของเดือนนั้น ถ้าปล่อย MSW เป็น 0 หน้า Daily Report จะกลับไปใช้ MSW Target รายเดือนจากแท็บ KPI</div>
+      <div class="hint">กรอก MSW และ RDF3 เป็นตัน/วัน ส่วน RDF2 และ RDF2 LG คำนวณต่อให้จาก Yield ที่ตั้งไว้ในแผง 01 — RDF2 = MSW × Yield RDF2, RDF2 LG = MSW × Yield RDF2 LG · เป้าเดือนใช้ MSW ต่อวัน × จำนวนวันจริงของเดือนนั้น · ช่องไหนปล่อยเป็น 0 หน้า Daily Report จะกลับไปใช้ค่าเดิมของช่องนั้น (MSW ใช้ MSW Target จากแท็บ KPI ส่วน RDF ใช้ค่าเฉลี่ยย้อนหลัง)</div>
       <div class="machine-status-line" id="productionPlanStatus" role="status"></div>
       <div class="scroll-table machine-history-wrap">
         <table>
