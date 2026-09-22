@@ -28,7 +28,7 @@ const BODY_LIMIT_BYTES = Math.min(
 const PUBLIC_FILES = new Set([
   'index.html', 'login.html', 'accept-invite.html', 'security.html',
   'home.css', 'home.js', 'kpi.css', 'kpi.js', 'monthly.css', 'monthly.js', 'machines.css', 'machines.js', 'html2canvas.min.js',
-  'operations.css', 'diesel.css', 'diesel.js', 'executive.css', 'executive.js',
+  'operations.css', 'diesel.css', 'diesel.js', 'executive.css', 'executive.js', 'production-plan.js',
   'login.css', 'login.js', 'invite.js', 'security.css', 'security-admin.js',
   'security-ui.css', 'security-ui.js',
   'assets/gp1-connect-logo.png', 'assets/gp1-connect-mark.png', 'assets/gp1-connect-favicon.png',
@@ -1243,6 +1243,59 @@ async function handleYield(req, res, parts) {
     const okDel = await store.deleteRow('YieldSettings', parts[0]);
     return sendJson(res, 200, { ok: okDel });
   }
+  return sendJson(res, 404, { ok: false, error: 'not found' });
+}
+
+function validateProductionPlan(body) {
+  const effectiveDate = cleanText(body.effectiveDate);
+  const values = [body.rdf2TonsPerDay, body.rdf2LGTonsPerDay, body.rdf3TonsPerDay].map(Number);
+  if (!validIsoDate(effectiveDate)) {
+    return { error: 'กรุณาระบุวันที่เริ่มใช้แผนให้ถูกต้อง' };
+  }
+  if (values.some((value) => !Number.isFinite(value) || value < 0)) {
+    return { error: 'เป้าผลผลิตต้องเป็นตัวเลขตั้งแต่ 0 ขึ้นไป' };
+  }
+  return {
+    data: {
+      EffectiveDate: effectiveDate,
+      RDF2TonsPerDay: values[0],
+      RDF2LGTonsPerDay: values[1],
+      RDF3TonsPerDay: values[2],
+      Note: cleanText(body.note),
+    },
+  };
+}
+
+async function handleProductionPlan(req, res, parts, query) {
+  if (req.method === 'GET' && parts.length === 0) {
+    const date = validIsoDate(query.date) ? query.date : lib.todayStr();
+    const rows = await store.readSheet('ProductionPlanSettings');
+    rows.sort((a, b) => String(b.EffectiveDate).localeCompare(String(a.EffectiveDate)));
+    return sendJson(res, 200, {
+      ok: true,
+      date,
+      rows,
+      applicable: applicableRow(rows, date, 'EffectiveDate'),
+    });
+  }
+
+  if (req.method === 'PUT' && parts.length === 0) {
+    const body = await readBody(req);
+    const validated = validateProductionPlan(body);
+    if (validated.error) return sendJson(res, 400, { ok: false, error: validated.error });
+    const rows = await store.readSheet('ProductionPlanSettings');
+    const existing = rows.find((row) => row.EffectiveDate === validated.data.EffectiveDate);
+    const row = existing
+      ? await store.updateRow('ProductionPlanSettings', existing.ID, validated.data)
+      : await store.appendRow('ProductionPlanSettings', validated.data);
+    return sendJson(res, 200, { ok: true, row, updated: Boolean(existing) });
+  }
+
+  if (req.method === 'DELETE' && parts.length === 1) {
+    const deleted = await store.deleteRow('ProductionPlanSettings', parts[0]);
+    return sendJson(res, 200, { ok: deleted });
+  }
+
   return sendJson(res, 404, { ok: false, error: 'not found' });
 }
 
@@ -3230,6 +3283,32 @@ function historicalRDF3OutputPlan(
   };
 }
 
+// The daily output plan is a number somebody types in, effective-dated the same
+// way the yield settings are: the row in effect on a given day governs that day.
+// Days that fall before the first plan row keep using the historical average so
+// reports for months recorded before this feature still show what they always did.
+function resolveProductionPlanForDate(planRows, date, fallback) {
+  const setting = applicableRow(planRows, date, 'EffectiveDate');
+  if (!setting) {
+    return {
+      source: 'historical',
+      effectiveDate: '',
+      rdf2Tons: fallback.rdf2Tons,
+      rdf2LGTons: fallback.rdf2LGTons,
+      rdf3Tons: fallback.rdf3Tons,
+      rdf3Available: fallback.rdf3Available,
+    };
+  }
+  return {
+    source: 'manual',
+    effectiveDate: setting.EffectiveDate,
+    rdf2Tons: Math.max(0, Number(setting.RDF2TonsPerDay) || 0),
+    rdf2LGTons: Math.max(0, Number(setting.RDF2LGTonsPerDay) || 0),
+    rdf3Tons: Math.max(0, Number(setting.RDF3TonsPerDay) || 0),
+    rdf3Available: true,
+  };
+}
+
 function dailyDowntimeIncidents(date, downtimeRows) {
   const previousDate = lib.addDays(date, -1);
   const incidents = new Map();
@@ -3271,7 +3350,7 @@ async function handleExecutiveReport(req, res, query) {
     tippingRows, grabRows, rdf3GrabRows, historyRows, yieldRows, stockBaselineRows,
     stockSales, rdf3Sales, targetRows,
     dieselRows, dieselMachines, dieselReceipts, dieselBaselines, downtimeRows,
-    rdf3MachineSettingRows, rdf3MachineDailyRows, stockAdjustmentRows,
+    rdf3MachineSettingRows, rdf3MachineDailyRows, stockAdjustmentRows, productionPlanRows,
   ] = await Promise.all([
     store.readSheet('RevenueTippingDaily'),
     store.readSheet('GrabCrane'),
@@ -3290,6 +3369,7 @@ async function handleExecutiveReport(req, res, query) {
     store.readSheet('RDF3MachineSettings'),
     store.readSheet('RDF3MachineDaily'),
     store.readSheet('StockAdjustments'),
+    store.readSheet('ProductionPlanSettings'),
   ]);
 
   const historyByDate = new Map(historyRows.map((row) => [row.EntryDate, row]));
@@ -3366,6 +3446,21 @@ async function handleExecutiveReport(req, res, query) {
   const rdf3OutputPlan = historicalRDF3OutputPlan(
     date, rdf3GrabRows, rdf3MachineSettingRows, rdf3MachineDailyRows,
   );
+  const planFallback = {
+    rdf2Tons: outputPlan.rdf2Tons,
+    rdf2LGTons: outputPlan.rdf2LGTons,
+    rdf3Tons: rdf3OutputPlan.rdf3Tons,
+    rdf3Available: rdf3OutputPlan.basisDays > 0,
+  };
+  const dailyPlan = resolveProductionPlanForDate(productionPlanRows, date, planFallback);
+  const mtdPlan = datesToReport.reduce((sum, entryDate) => {
+    const dayPlan = resolveProductionPlanForDate(productionPlanRows, entryDate, planFallback);
+    return {
+      rdf2Tons: sum.rdf2Tons + dayPlan.rdf2Tons,
+      rdf2LGTons: sum.rdf2LGTons + dayPlan.rdf2LGTons,
+      rdf3Tons: sum.rdf3Tons + (dayPlan.rdf3Available ? dayPlan.rdf3Tons : 0),
+    };
+  }, { rdf2Tons: 0, rdf2LGTons: 0, rdf3Tons: 0 });
 
   const incomingRow = tippingRows.find((row) => row.EntryDate === date);
   const incomingMTDRows = tippingRows.filter((row) => row.EntryDate >= bounds.start && row.EntryDate <= date);
@@ -3442,13 +3537,21 @@ async function handleExecutiveReport(req, res, query) {
       },
       plan: {
         ...outputPlan,
+        source: dailyPlan.source,
+        effectiveDate: dailyPlan.effectiveDate,
+        rdf2Tons: dailyPlan.rdf2Tons,
+        rdf2LGTons: dailyPlan.rdf2LGTons,
+        rdf3Tons: dailyPlan.rdf3Tons,
+        rdf3Available: dailyPlan.rdf3Available,
         rdf3BasisDays: rdf3OutputPlan.basisDays,
-        rdf3Tons: rdf3OutputPlan.rdf3Tons,
         rdf3StartDate: rdf3OutputPlan.startDate,
         rdf3EndDate: rdf3OutputPlan.endDate,
-        mtdRDF2Tons: outputPlan.rdf2Tons * elapsedDays,
-        mtdRDF2LGTons: outputPlan.rdf2LGTons * elapsedDays,
-        mtdRDF3Tons: rdf3OutputPlan.rdf3Tons * elapsedDays,
+        averageRDF2Tons: outputPlan.rdf2Tons,
+        averageRDF2LGTons: outputPlan.rdf2LGTons,
+        averageRDF3Tons: rdf3OutputPlan.rdf3Tons,
+        mtdRDF2Tons: mtdPlan.rdf2Tons,
+        mtdRDF2LGTons: mtdPlan.rdf2LGTons,
+        mtdRDF3Tons: mtdPlan.rdf3Tons,
       },
     },
     diesel: {
@@ -3966,6 +4069,7 @@ async function dispatchBusinessApi(req, res, pathname, query) {
   if (resource === 'executive-report' && req.method === 'GET') return handleExecutiveReport(req, res, query);
   if (resource === 'yield') return handleYield(req, res, rest);
   if (resource === 'rdf3-machines') return handleRDF3Machines(req, res, rest, query);
+  if (resource === 'production-plan') return handleProductionPlan(req, res, rest, query);
   if (resource === 'sales') return handleSales(req, res, rest, query);
   if (resource === 'delivery-plans') return handleDeliveryPlans(req, res, rest, query);
   if (resource === 'stock') {

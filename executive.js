@@ -58,13 +58,17 @@
   }
 
   function renderDailyComparisons(data) {
+    const plan = data.output.plan;
+    // A typed-in plan governs on its own; the historical average only stands in
+    // for days it actually has samples for, so an empty basis reads as "-".
+    const rdfPlanned = plan.source === 'manual' || plan.basisDays > 0;
     const rows = [
       { key: 'msw', label: 'MSW to Production', actual: data.production.dailyTons, plan: data.targets.dailyTons },
-      { key: 'rdf2', label: 'RDF2', actual: data.output.daily.rdf2Tons, plan: data.output.plan.rdf2Tons },
-      { key: 'rdf2lg', label: 'RDF2 LG', actual: data.output.daily.rdf2LGTons, plan: data.output.plan.rdf2LGTons },
+      { key: 'rdf2', label: 'RDF2', actual: data.output.daily.rdf2Tons, plan: rdfPlanned ? plan.rdf2Tons : null },
+      { key: 'rdf2lg', label: 'RDF2 LG', actual: data.output.daily.rdf2LGTons, plan: rdfPlanned ? plan.rdf2LGTons : null },
       {
         key: 'rdf3', label: 'RDF3', actual: data.output.daily.rdf3Tons,
-        plan: data.output.plan.rdf3BasisDays ? data.output.plan.rdf3Tons : null,
+        plan: plan.rdf3Available ? plan.rdf3Tons : null,
       },
     ];
     document.getElementById('executiveDailyComparisons').innerHTML = rows.map((row) => {
@@ -177,9 +181,13 @@
 
     renderDailyComparisons(data);
     const plan = data.output.plan;
-    setText('executiveOutputPlanMeta', plan.basisDays
-      ? `Plan RDF จากค่าเฉลี่ยย้อนหลัง ${plan.basisDays.toLocaleString('th-TH')} วัน (${thaiDate(plan.startDate)} - ${thaiDate(plan.endDate)})`
-      : 'ยังไม่มีข้อมูลย้อนหลังเพียงพอสำหรับ Plan RDF');
+    if (plan.source === 'manual') {
+      setText('executiveOutputPlanMeta', `Plan RDF จากเป้าผลผลิตรายวันที่ตั้งไว้ (มีผลตั้งแต่ ${thaiDate(plan.effectiveDate)})`);
+    } else {
+      setText('executiveOutputPlanMeta', plan.basisDays
+        ? `Plan RDF จากค่าเฉลี่ยย้อนหลัง ${plan.basisDays.toLocaleString('th-TH')} วัน (${thaiDate(plan.startDate)} - ${thaiDate(plan.endDate)}) — ยังไม่ได้ตั้งเป้าผลผลิตรายวัน`
+        : 'ยังไม่ได้ตั้งเป้าผลผลิตรายวัน และยังไม่มีข้อมูลย้อนหลังเพียงพอสำหรับ Plan RDF');
+    }
 
     setText('executiveMonthMeta', `${monthLabel(data.month)} · วันที่ ${data.elapsedDays} จาก ${data.daysInMonth}`);
     setText('executiveMTDPct', percentLabel(data.production.monthlyAchievementPct));
@@ -187,18 +195,21 @@
     setText('executiveProductionMTD', `${numberLabel(data.production.mtdTons)} ตัน`);
     setText('executiveMonthlyTarget', `${numberLabel(data.targets.monthlyTons)} ตัน`);
 
-    const rdf2MTDPct = achievement(data.output.mtd.rdf2Tons, plan.mtdRDF2Tons);
-    const rdf2LGMTDPct = achievement(data.output.mtd.rdf2LGTons, plan.mtdRDF2LGTons);
+    const rdfMTDPlanned = plan.source === 'manual' || plan.basisDays > 0;
+    const rdf2MTDPlan = rdfMTDPlanned ? plan.mtdRDF2Tons : null;
+    const rdf2LGMTDPlan = rdfMTDPlanned ? plan.mtdRDF2LGTons : null;
+    const rdf2MTDPct = achievement(data.output.mtd.rdf2Tons, rdf2MTDPlan);
+    const rdf2LGMTDPct = achievement(data.output.mtd.rdf2LGTons, rdf2LGMTDPlan);
     setText('executiveRDF2MTD', `${numberLabel(data.output.mtd.rdf2Tons)} ตัน`);
-    setText('executiveRDF2MTDPlan', `${numberLabel(plan.mtdRDF2Tons)} ตัน`);
+    setText('executiveRDF2MTDPlan', rdf2MTDPlan === null ? '-' : `${numberLabel(rdf2MTDPlan)} ตัน`);
     setText('executiveRDF2MTDPct', percentLabel(rdf2MTDPct));
     setProgress('executiveRDF2MTDBar', rdf2MTDPct);
     setText('executiveRDF2LGMTD', `${numberLabel(data.output.mtd.rdf2LGTons)} ตัน`);
-    setText('executiveRDF2LGMTDPlan', `${numberLabel(plan.mtdRDF2LGTons)} ตัน`);
+    setText('executiveRDF2LGMTDPlan', rdf2LGMTDPlan === null ? '-' : `${numberLabel(rdf2LGMTDPlan)} ตัน`);
     setText('executiveRDF2LGMTDPct', percentLabel(rdf2LGMTDPct));
     setProgress('executiveRDF2LGMTDBar', rdf2LGMTDPct);
     setText('executiveRDF3MTD', `${numberLabel(data.output.mtd.rdf3Tons)} ตัน`);
-    const rdf3MTDPlan = plan.rdf3BasisDays ? plan.mtdRDF3Tons : null;
+    const rdf3MTDPlan = plan.rdf3Available ? plan.mtdRDF3Tons : null;
     const rdf3MTDPct = achievement(data.output.mtd.rdf3Tons, rdf3MTDPlan);
     setText('executiveRDF3MTDPlan', rdf3MTDPlan === null ? '-' : `${numberLabel(rdf3MTDPlan)} ตัน`);
     setText('executiveRDF3MTDPct', percentLabel(rdf3MTDPct));

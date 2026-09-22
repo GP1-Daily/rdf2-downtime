@@ -201,6 +201,8 @@ test('diesel entry and executive daily report combine source systems without dou
   assert.ok(Math.abs(report.output.plan.rdf2LGTons - (80 / 3)) < 0.0001);
   assert.ok(Math.abs(report.output.plan.mtdRDF2Tons - (640 / 3)) < 0.0001);
   assert.ok(Math.abs(report.output.plan.mtdRDF2LGTons - (320 / 3)) < 0.0001);
+  assert.equal(report.output.plan.source, 'historical');
+  assert.equal(report.output.plan.rdf3Available, true);
   assert.equal(report.output.plan.rdf3BasisDays, 3);
   assert.ok(Math.abs(report.output.plan.rdf3Tons - 1.647) < 0.0001);
   assert.ok(Math.abs(report.output.plan.mtdRDF3Tons - 6.588) < 0.0001);
@@ -259,6 +261,7 @@ test('diesel entry and executive daily report combine source systems without dou
   assert.equal(refusedDelete.response.status, 409);
 
   assert.equal((await fetch(`${baseUrl}/diesel.js`)).status, 200);
+  assert.equal((await fetch(`${baseUrl}/production-plan.js`)).status, 200);
   const executiveCssResponse = await fetch(`${baseUrl}/executive.css`);
   assert.equal(executiveCssResponse.status, 200);
   assert.match(
@@ -266,7 +269,10 @@ test('diesel entry and executive daily report combine source systems without dou
     /\.executive-skeleton\[hidden\],\.executive-content\[hidden\]\{display:none !important;\}/,
   );
   const page = await fetch(`${baseUrl}/`).then((pageResponse) => pageResponse.text());
-  assert.match(page, /executive\.js\?v=20260914-rdf3-plan/);
+  assert.match(page, /executive\.js\?v=20260922-production-plan/);
+  assert.match(page, /production-plan\.js\?v=20260922-production-plan/);
+  assert.match(page, /id="productionPlanSetup"/);
+  assert.match(page, /id="planRDF3"/);
   assert.match(page, /id="executiveRDF3MTDPct"/);
   assert.match(page, /id="executiveRDF3MTDPlan"/);
   assert.match(page, /executive\.css\?v=20260814-company-logo/);
@@ -279,7 +285,56 @@ test('diesel entry and executive daily report combine source systems without dou
   assert.match(page, /<h2>Control Report<\/h2>/);
   assert.match(page, /<h2>Daily Report<\/h2>/);
   const version = await fetch(`${baseUrl}/api/version`).then((versionResponse) => versionResponse.json());
-  assert.equal(version.version, '1.1.0');
+  assert.equal(version.version, '1.2.0');
   const loginPage = await fetch(`${baseUrl}/login.html`).then((pageResponse) => pageResponse.text());
   assert.match(loginPage, /id="appVersion"/);
+});
+
+test('a saved daily output plan replaces the historical average on the executive report', async (t) => {
+  const baseUrl = await startServer(t);
+
+  const rejected = await jsonRequest(baseUrl, '/api/production-plan', 'PUT', {
+    effectiveDate: '2026-08-04', rdf2TonsPerDay: -1, rdf2LGTonsPerDay: 0, rdf3TonsPerDay: 0,
+  });
+  assert.equal(rejected.response.status, 400);
+
+  const saved = await jsonRequest(baseUrl, '/api/production-plan', 'PUT', {
+    effectiveDate: '2026-08-04',
+    rdf2TonsPerDay: 50,
+    rdf2LGTonsPerDay: 25,
+    rdf3TonsPerDay: 5,
+    note: 'แผนทดสอบ',
+  });
+  assert.equal(saved.response.status, 200);
+  assert.equal(saved.data.updated, false);
+
+  const listed = await fetch(`${baseUrl}/api/production-plan?date=2026-08-04`).then((r) => r.json());
+  assert.equal(listed.applicable.EffectiveDate, '2026-08-04');
+  assert.equal(Number(listed.applicable.RDF2TonsPerDay), 50);
+
+  const report = await fetch(`${baseUrl}/api/executive-report?date=2026-08-04`).then((r) => r.json());
+  const plan = report.output.plan;
+  assert.equal(plan.source, 'manual');
+  assert.equal(plan.effectiveDate, '2026-08-04');
+  assert.equal(plan.rdf2Tons, 50);
+  assert.equal(plan.rdf2LGTons, 25);
+  assert.equal(plan.rdf3Tons, 5);
+  assert.equal(plan.rdf3Available, true);
+
+  // Aug 1-3 fall before the plan's effective date, so they keep the historical
+  // average while Aug 4 uses the typed-in numbers.
+  assert.ok(Math.abs(plan.mtdRDF2Tons - 210) < 0.0001);
+  assert.ok(Math.abs(plan.mtdRDF2LGTons - 105) < 0.0001);
+  assert.ok(Math.abs(plan.mtdRDF3Tons - 9.941) < 0.0001);
+  assert.ok(Math.abs(plan.averageRDF2Tons - (160 / 3)) < 0.0001);
+  assert.equal(plan.basisDays, 3);
+
+  // A day before the plan starts still reads as historical.
+  const earlier = await fetch(`${baseUrl}/api/executive-report?date=2026-08-03`).then((r) => r.json());
+  assert.equal(earlier.output.plan.source, 'historical');
+
+  const removed = await jsonRequest(baseUrl, `/api/production-plan/${listed.applicable.ID}`, 'DELETE');
+  assert.equal(removed.response.status, 200);
+  const afterDelete = await fetch(`${baseUrl}/api/executive-report?date=2026-08-04`).then((r) => r.json());
+  assert.equal(afterDelete.output.plan.source, 'historical');
 });

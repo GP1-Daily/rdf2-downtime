@@ -39,7 +39,7 @@ test('production setup is separated into RDF2, RDF3 and stock sections', () => {
   const script = fs.readFileSync(path.join(root, 'machines.js'), 'utf8');
 
   assert.match(html, /class="tab-panel production-setup-tab"/);
-  assert.match(html, /href="#rdf2YieldSetup"[\s\S]*?href="#rdf3MachineControl"[\s\S]*?href="#productionStockSetup"/);
+  assert.match(html, /href="#rdf2YieldSetup"[\s\S]*?href="#rdf3MachineControl"[\s\S]*?href="#productionStockSetup"[\s\S]*?href="#productionPlanSetup"/);
   assert.match(html, /id="rdf2YieldSetup"[\s\S]*?id="yieldRDF2"/);
   assert.match(html, /id="rdf3MachineControl"[\s\S]*?id="rdf3MC5Cap"/);
   assert.match(html, /id="productionStockSetup"[\s\S]*?id="currentStockGrid"/);
@@ -48,4 +48,6 @@ test('production setup is separated into RDF2, RDF3 and stock sections', () => {
   assert.doesNotMatch(script, /rdf3LineStage|rdf3LineStatusText|data-stage-machine/);
   assert.match(css, /\.rdf2-yield-panel\s*{[^}]*order:\s*1/s);
   assert.match(css, /\.rdf3-machine-panel\s*{[^}]*order:\s*2/s);
+  assert.match(html, /id="productionPlanSetup"[\s\S]*?id="planRDF3"/);
+  assert.match(css, /\.production-plan-panel\s*{[^}]*order:\s*4/s);
 });

@@ -39,6 +39,9 @@ const SHEETS = {
   RevenueTippingDaily: ['ID', 'EntryDate', 'MSWTons', 'Note', 'CreatedAt'],
   WeeklyDeliveryPlans: ['ID', 'WeekStart', 'Customer', 'Product', 'PlanTons', 'CreatedAt'],
   KPIDailyHistory: ['ID', 'EntryDate', 'RDF2Tons', 'RDF3Tons', 'FineFractionTons', 'MSWTons', 'Source', 'CreatedAt', 'RDF2LGTons'],
+  ProductionPlanSettings: [
+    'ID', 'EffectiveDate', 'RDF2TonsPerDay', 'RDF2LGTonsPerDay', 'RDF3TonsPerDay', 'Note', 'CreatedAt',
+  ],
   KPIComplaints: ['ID', 'EntryDate', 'Customer', 'Detail', 'CreatedAt'],
   KPITargetSettings: ['ID', 'EffectiveDate', 'RDF2Target', 'RDF3Target', 'FineFractionTarget', 'MSWTarget', 'ComplaintLimit', 'CreatedAt', 'RDF2LGTarget'],
   DieselMachines: ['ID', 'Name', 'Active', 'CreatedAt', 'DailyLimitLiters'],
