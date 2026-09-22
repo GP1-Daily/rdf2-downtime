@@ -39,30 +39,20 @@
     });
   }
 
+  // Silent when the plan already covers the date Daily Report opens on; it only
+  // speaks up for the case that silently falls back to the historical average.
   function renderCoverage(rows) {
     const coverage = element('productionPlanCoverage');
     if (!coverage) return;
+    coverage.textContent = '';
+    coverage.classList.remove('warn');
     const reportDate = reportDefaultDate();
     const usable = rows.filter(
       (row) => number(row.MSWTonsPerDay) > 0 || number(row.RDF3TonsPerDay) > 0,
     );
-    if (!usable.length) {
-      coverage.textContent = '';
-      coverage.classList.remove('warn');
-      return;
-    }
-    const covering = usable
-      .filter((row) => String(row.EffectiveDate) <= reportDate)
-      .sort((a, b) => String(a.EffectiveDate).localeCompare(String(b.EffectiveDate)))
-      .pop();
-    if (covering) {
-      coverage.classList.remove('warn');
-      coverage.textContent = `หน้า Daily Report ที่เปิดมา (${thaiDate(reportDate)}) ใช้แผนชุดที่มีผลตั้งแต่ ${thaiDate(covering.EffectiveDate)} แล้ว`;
-      return;
-    }
-    const earliest = usable
-      .map((row) => String(row.EffectiveDate))
-      .sort()[0];
+    if (!usable.length) return;
+    if (usable.some((row) => String(row.EffectiveDate) <= reportDate)) return;
+    const earliest = usable.map((row) => String(row.EffectiveDate)).sort()[0];
     coverage.classList.add('warn');
     coverage.textContent = `แผนที่บันทึกไว้เริ่มมีผล ${thaiDate(earliest)} ซึ่งยังไม่ครอบคลุมวันที่ ${thaiDate(reportDate)} ที่หน้า Daily Report เปิดมาเป็นค่าเริ่มต้น — เลือกวันที่รายงานตั้งแต่ ${thaiDate(earliest)} เป็นต้นไป หรือแก้วันที่เริ่มมีผลให้ย้อนกว่านี้`;
   }
@@ -102,10 +92,6 @@
   function render(data) {
     const applicable = data.applicable;
     currentYields = data.yields || currentYields;
-    element('productionPlanApplied').textContent = applicable
-      ? `มีผลตั้งแต่ ${applicable.EffectiveDate}`
-      : 'ยังไม่ได้ตั้งแผน — หน้า Daily Report ใช้ค่าเฉลี่ยย้อนหลังไปก่อน';
-
     const form = applicable
       || { EffectiveDate: data.date, MSWTonsPerDay: 0, RDF3TonsPerDay: 0, Note: '' };
     element('planEffectiveDate').value = form.EffectiveDate || data.date;

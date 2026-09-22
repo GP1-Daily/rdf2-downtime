@@ -658,17 +658,6 @@
   }
 }
 
-.plan-applied-line {
-  margin-bottom: 14px;
-  padding: 11px 14px;
-  border: 1px solid #ded6f4;
-  border-radius: 4px;
-  background: #f6f4fc;
-  color: #3f3170;
-  font-size: 14px;
-  font-weight: 600;
-}
-
 .plan-target-form input {
   width: 100%;
 }
@@ -692,7 +681,7 @@
 }
 
 .plan-coverage-line {
-  margin: -6px 0 14px;
+  margin: 0 0 14px;
   padding: 11px 14px;
   border: 1px solid #cfe4d9;
   border-radius: 4px;
