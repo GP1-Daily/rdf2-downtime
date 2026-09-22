@@ -24,6 +24,47 @@
     }).format(new Date());
   }
 
+  // Daily Report opens on yesterday, while this panel opens on today, so a plan
+  // saved without touching the date field covers nothing the report is showing.
+  function reportDefaultDate() {
+    const now = new Date();
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+  }
+
+  function thaiDate(date) {
+    return new Date(`${date}T12:00:00+07:00`).toLocaleDateString('th-TH', {
+      day: 'numeric', month: 'long', year: 'numeric',
+    });
+  }
+
+  function renderCoverage(rows) {
+    const coverage = element('productionPlanCoverage');
+    if (!coverage) return;
+    const reportDate = reportDefaultDate();
+    const usable = rows.filter((row) => number(row.MSWTonsPerDay) > 0);
+    if (!usable.length) {
+      coverage.textContent = '';
+      coverage.classList.remove('warn');
+      return;
+    }
+    const covering = usable
+      .filter((row) => String(row.EffectiveDate) <= reportDate)
+      .sort((a, b) => String(a.EffectiveDate).localeCompare(String(b.EffectiveDate)))
+      .pop();
+    if (covering) {
+      coverage.classList.remove('warn');
+      coverage.textContent = `หน้า Daily Report ที่เปิดมา (${thaiDate(reportDate)}) ใช้แผนชุดที่มีผลตั้งแต่ ${thaiDate(covering.EffectiveDate)} แล้ว`;
+      return;
+    }
+    const earliest = usable
+      .map((row) => String(row.EffectiveDate))
+      .sort()[0];
+    coverage.classList.add('warn');
+    coverage.textContent = `แผนที่บันทึกไว้เริ่มมีผล ${thaiDate(earliest)} ซึ่งยังไม่ครอบคลุมวันที่ ${thaiDate(reportDate)} ที่หน้า Daily Report เปิดมาเป็นค่าเริ่มต้น — เลือกวันที่รายงานตั้งแต่ ${thaiDate(earliest)} เป็นต้นไป หรือแก้วันที่เริ่มมีผลให้ย้อนกว่านี้`;
+  }
+
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, (character) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -66,6 +107,7 @@
     renderTotals();
 
     const rows = Array.isArray(data.rows) ? data.rows : [];
+    renderCoverage(rows);
     element('productionPlanHistory').innerHTML = rows.length
       ? rows.map((row) => `<tr>
           <td>${escapeHtml(row.EffectiveDate)}</td>

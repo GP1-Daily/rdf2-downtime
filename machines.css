@@ -690,3 +690,24 @@
     border-top: 1px solid #d5e2dc;
   }
 }
+
+.plan-coverage-line {
+  margin: -6px 0 14px;
+  padding: 11px 14px;
+  border: 1px solid #cfe4d9;
+  border-radius: 4px;
+  background: #f1f9f5;
+  color: #1c5f45;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.plan-coverage-line:empty {
+  display: none;
+}
+
+.plan-coverage-line.warn {
+  border-color: #e8cf9e;
+  background: #fdf7ec;
+  color: #7a5310;
+}

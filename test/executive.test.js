@@ -275,6 +275,7 @@ test('diesel entry and executive daily report combine source systems without dou
   assert.match(page, /id="productionPlanSetup"/);
   assert.match(page, /id="planRDF3"/);
   assert.match(page, /id="planMSW"/);
+  assert.match(page, /id="productionPlanCoverage"/);
   assert.match(page, /id="executiveRDF3MTDPct"/);
   assert.match(page, /id="executiveRDF3MTDPlan"/);
   assert.match(page, /executive\.css\?v=20260814-company-logo/);
@@ -287,7 +288,7 @@ test('diesel entry and executive daily report combine source systems without dou
   assert.match(page, /<h2>Control Report<\/h2>/);
   assert.match(page, /<h2>Daily Report<\/h2>/);
   const version = await fetch(`${baseUrl}/api/version`).then((versionResponse) => versionResponse.json());
-  assert.equal(version.version, '1.4.0');
+  assert.equal(version.version, '1.4.1');
   const loginPage = await fetch(`${baseUrl}/login.html`).then((pageResponse) => pageResponse.text());
   assert.match(loginPage, /id="appVersion"/);
 });

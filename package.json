@@ -1,6 +1,6 @@
 {
   "name": "gp1-connect",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "GP1 integrated operations and performance management system",
   "main": "server.js",
   "scripts": {
