@@ -1,6 +1,7 @@
 (() => {
   let initialized = false;
   let loadingPromise = null;
+  let currentYields = { rdf2Pct: 0, rdf2LGPct: 0, rdf3YieldPct: 0, yieldConfigured: false };
 
   function element(id) {
     return document.getElementById(id);
@@ -36,35 +37,31 @@
     status.classList.toggle('error', Boolean(error));
   }
 
+  // Mirrors productionPlanOutputs on the server so typing an MSW figure shows
+  // the product lines it implies before anything is saved.
   function renderTotals() {
     const msw = number(element('planMSW')?.value);
-    const rdf2 = number(element('planRDF2')?.value);
-    const rdf2LG = number(element('planRDF2LG')?.value);
+    const rdf2LG = msw * currentYields.rdf2LGPct / 100;
     element('planMSWDaily').textContent = `${format(msw)} ตัน/วัน`;
-    element('planDailyTotal').textContent = `${format(rdf2 + rdf2LG)} ตัน/วัน`;
-    element('planMonthlyTotal').textContent = `${format(msw * 30)} ตัน/30 วัน`;
-    // Spelling the ratio out makes it obvious when the plan and the yield
-    // settings disagree, because the actual bar is computed from the yield.
-    element('planImpliedYield').textContent = msw > 0
-      ? `RDF2 ${format(rdf2 / msw * 100)}% · LG ${format(rdf2LG / msw * 100)}%`
-      : '-';
+    element('planMonthlyTotal').textContent = `${format(msw * 30)} ตัน`;
+    element('planRDF2Label').textContent = `RDF2 (${format(currentYields.rdf2Pct)}%)`;
+    element('planRDF2LGLabel').textContent = `RDF2 LG (${format(currentYields.rdf2LGPct)}%)`;
+    element('planRDF3Label').textContent = `RDF3 (${format(currentYields.rdf3YieldPct)}% ของ LG)`;
+    element('planRDF2').textContent = `${format(msw * currentYields.rdf2Pct / 100)} ตัน/วัน`;
+    element('planRDF2LG').textContent = `${format(rdf2LG)} ตัน/วัน`;
+    element('planRDF3').textContent = `${format(rdf2LG * currentYields.rdf3YieldPct / 100)} ตัน/วัน`;
   }
 
   function render(data) {
     const applicable = data.applicable;
+    currentYields = data.yields || currentYields;
     element('productionPlanApplied').textContent = applicable
       ? `มีผลตั้งแต่ ${applicable.EffectiveDate}`
       : 'ยังไม่ได้ตั้งแผน — หน้า Daily Report ใช้ค่าเฉลี่ยย้อนหลังไปก่อน';
 
-    const form = applicable || {
-      EffectiveDate: data.date,
-      MSWTonsPerDay: 0, RDF2TonsPerDay: 0, RDF2LGTonsPerDay: 0, RDF3TonsPerDay: 0, Note: '',
-    };
+    const form = applicable || { EffectiveDate: data.date, MSWTonsPerDay: 0, Note: '' };
     element('planEffectiveDate').value = form.EffectiveDate || data.date;
     element('planMSW').value = number(form.MSWTonsPerDay).toFixed(2);
-    element('planRDF2').value = number(form.RDF2TonsPerDay).toFixed(2);
-    element('planRDF2LG').value = number(form.RDF2LGTonsPerDay).toFixed(2);
-    element('planRDF3').value = number(form.RDF3TonsPerDay).toFixed(2);
     element('planNote').value = form.Note || '';
     renderTotals();
 
@@ -73,14 +70,18 @@
       ? rows.map((row) => `<tr>
           <td>${escapeHtml(row.EffectiveDate)}</td>
           <td>${format(row.MSWTonsPerDay)}</td>
-          <td>${format(row.RDF2TonsPerDay)}</td>
-          <td>${format(row.RDF2LGTonsPerDay)}</td>
-          <td>${format(row.RDF3TonsPerDay)}</td>
+          <td>${format(row.derived?.rdf2Tons)}</td>
+          <td>${format(row.derived?.rdf2LGTons)}</td>
+          <td>${format(row.derived?.rdf3Tons)}</td>
           <td class="left">${escapeHtml(row.Note || '')}</td>
           <td><button class="danger" data-plan-id="${escapeHtml(row.ID)}">ลบ</button></td>
         </tr>`).join('')
       : '<tr><td colspan="7" class="empty-note">ยังไม่มีแผนที่บันทึกไว้</td></tr>';
 
+    if (!currentYields.yieldConfigured) {
+      setStatus(`ยังไม่ได้ตั้ง Yield ที่มีผลกับวันที่ ${data.date} — RDF2 · RDF2 LG · RDF3 คำนวณไม่ได้`, true);
+      return;
+    }
     setStatus(applicable
       ? `แผนที่ใช้กับวันที่ ${data.date} คือชุดที่มีผลตั้งแต่ ${applicable.EffectiveDate}`
       : `ยังไม่มีแผนที่มีผลกับวันที่ ${data.date}`);
@@ -108,9 +109,6 @@
       body: JSON.stringify({
         effectiveDate,
         mswTonsPerDay: number(element('planMSW').value),
-        rdf2TonsPerDay: number(element('planRDF2').value),
-        rdf2LGTonsPerDay: number(element('planRDF2LG').value),
-        rdf3TonsPerDay: number(element('planRDF3').value),
         note: element('planNote').value,
       }),
     });
@@ -125,9 +123,7 @@
     element('planEffectiveDate')?.addEventListener('change', () => {
       loadPlans().catch((error) => window.toast(error.message, true));
     });
-    for (const id of ['planMSW', 'planRDF2', 'planRDF2LG', 'planRDF3']) {
-      element(id)?.addEventListener('input', renderTotals);
-    }
+    element('planMSW')?.addEventListener('input', renderTotals);
     element('productionPlanHistory')?.addEventListener('click', async (event) => {
       const button = event.target.closest('button[data-plan-id]');
       if (!button || button.disabled) return;

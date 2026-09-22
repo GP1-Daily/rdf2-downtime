@@ -287,7 +287,7 @@ test('diesel entry and executive daily report combine source systems without dou
   assert.match(page, /<h2>Control Report<\/h2>/);
   assert.match(page, /<h2>Daily Report<\/h2>/);
   const version = await fetch(`${baseUrl}/api/version`).then((versionResponse) => versionResponse.json());
-  assert.equal(version.version, '1.3.0');
+  assert.equal(version.version, '1.4.0');
   const loginPage = await fetch(`${baseUrl}/login.html`).then((pageResponse) => pageResponse.text());
   assert.match(loginPage, /id="appVersion"/);
 });
@@ -296,32 +296,37 @@ test('a saved daily output plan replaces the historical average on the executive
   const baseUrl = await startServer(t);
 
   const rejected = await jsonRequest(baseUrl, '/api/production-plan', 'PUT', {
-    effectiveDate: '2026-08-04', rdf2TonsPerDay: -1, rdf2LGTonsPerDay: 0, rdf3TonsPerDay: 0,
+    effectiveDate: '2026-08-04', mswTonsPerDay: -1,
   });
   assert.equal(rejected.response.status, 400);
 
   const saved = await jsonRequest(baseUrl, '/api/production-plan', 'PUT', {
     effectiveDate: '2026-08-04',
     mswTonsPerDay: 300,
-    rdf2TonsPerDay: 50,
-    rdf2LGTonsPerDay: 25,
-    rdf3TonsPerDay: 5,
     note: 'แผนทดสอบ',
   });
   assert.equal(saved.response.status, 200);
   assert.equal(saved.data.updated, false);
 
+  // The yield in effect is RDF2 20% and RDF2 LG 10%, and RDF3 converts the LG
+  // stream at its configured 82.35%.
   const listed = await fetch(`${baseUrl}/api/production-plan?date=2026-08-04`).then((r) => r.json());
   assert.equal(listed.applicable.EffectiveDate, '2026-08-04');
-  assert.equal(Number(listed.applicable.RDF2TonsPerDay), 50);
+  assert.equal(Number(listed.applicable.MSWTonsPerDay), 300);
+  assert.equal(listed.yields.rdf2Pct, 20);
+  assert.equal(listed.yields.rdf2LGPct, 10);
+  assert.equal(listed.rows[0].derived.rdf2Tons, 60);
+  assert.ok(Math.abs(listed.rows[0].derived.rdf3Tons - 24.705) < 0.0001);
 
   const report = await fetch(`${baseUrl}/api/executive-report?date=2026-08-04`).then((r) => r.json());
   const plan = report.output.plan;
   assert.equal(plan.source, 'manual');
   assert.equal(plan.effectiveDate, '2026-08-04');
-  assert.equal(plan.rdf2Tons, 50);
-  assert.equal(plan.rdf2LGTons, 25);
-  assert.equal(plan.rdf3Tons, 5);
+  assert.equal(plan.mswTons, 300);
+  assert.equal(plan.rdf2Tons, 60);
+  assert.equal(plan.rdf2LGTons, 30);
+  assert.ok(Math.abs(plan.rdf3Tons - 24.705) < 0.0001);
+  assert.equal(plan.rdfAvailable, true);
   assert.equal(plan.rdf3Available, true);
 
   // A typed-in MSW plan is a per-day number, so the month is that number times
@@ -332,10 +337,10 @@ test('a saved daily output plan replaces the historical average on the executive
   assert.equal(report.targets.monthlyTons, 300 * 31);
 
   // Aug 1-3 fall before the plan's effective date, so they keep the historical
-  // average while Aug 4 uses the typed-in numbers.
-  assert.ok(Math.abs(plan.mtdRDF2Tons - 210) < 0.0001);
-  assert.ok(Math.abs(plan.mtdRDF2LGTons - 105) < 0.0001);
-  assert.ok(Math.abs(plan.mtdRDF3Tons - 9.941) < 0.0001);
+  // average while Aug 4 uses the numbers derived from the typed-in MSW target.
+  assert.ok(Math.abs(plan.mtdRDF2Tons - (160 + 60)) < 0.0001);
+  assert.ok(Math.abs(plan.mtdRDF2LGTons - (80 + 30)) < 0.0001);
+  assert.ok(Math.abs(plan.mtdRDF3Tons - (3 * 1.647 + 24.705)) < 0.0001);
   assert.ok(Math.abs(plan.averageRDF2Tons - (160 / 3)) < 0.0001);
   assert.equal(plan.basisDays, 3);
 

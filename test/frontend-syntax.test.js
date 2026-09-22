@@ -49,5 +49,5 @@ test('production setup is separated into RDF2, RDF3 and stock sections', () => {
   assert.match(css, /\.rdf2-yield-panel\s*{[^}]*order:\s*1/s);
   assert.match(css, /\.rdf3-machine-panel\s*{[^}]*order:\s*2/s);
   assert.match(html, /id="productionPlanSetup"[\s\S]*?id="planRDF3"/);
-  assert.match(css, /\.production-plan-panel\s*{[^}]*order:\s*4/s);
+  assert.match(css, /\.production-plan-panel\s*{[^}]*order:\s*6/s);
 });

@@ -61,7 +61,7 @@
     const plan = data.output.plan;
     // A typed-in plan governs on its own; the historical average only stands in
     // for days it actually has samples for, so an empty basis reads as "-".
-    const rdfPlanned = plan.source === 'manual' || plan.basisDays > 0;
+    const rdfPlanned = plan.rdfAvailable;
     const rows = [
       { key: 'msw', label: 'MSW to Production', actual: data.production.dailyTons, plan: data.targets.dailyTons },
       { key: 'rdf2', label: 'RDF2', actual: data.output.daily.rdf2Tons, plan: rdfPlanned ? plan.rdf2Tons : null },
@@ -181,8 +181,10 @@
 
     renderDailyComparisons(data);
     const plan = data.output.plan;
-    if (plan.source === 'manual') {
-      setText('executiveOutputPlanMeta', `Plan RDF จากเป้าผลผลิตรายวันที่ตั้งไว้ (มีผลตั้งแต่ ${thaiDate(plan.effectiveDate)})`);
+    if (plan.source === 'manual' && plan.rdfAvailable) {
+      setText('executiveOutputPlanMeta', `Plan RDF คำนวณจากเป้า MSW ${numberLabel(plan.mswTons)} ตัน/วัน × Yield RDF2 ${percentLabel(plan.rdf2Pct)} · LG ${percentLabel(plan.rdf2LGPct)} · RDF3 ${percentLabel(plan.rdf3YieldPct)} ของ LG (มีผลตั้งแต่ ${thaiDate(plan.effectiveDate)})`);
+    } else if (plan.source === 'manual') {
+      setText('executiveOutputPlanMeta', `ตั้งเป้า MSW ${numberLabel(plan.mswTons)} ตัน/วันแล้ว แต่ยังไม่มี Yield ที่มีผลกับวันนี้ จึงยังคำนวณ Plan RDF ไม่ได้`);
     } else {
       setText('executiveOutputPlanMeta', plan.basisDays
         ? `Plan RDF จากค่าเฉลี่ยย้อนหลัง ${plan.basisDays.toLocaleString('th-TH')} วัน (${thaiDate(plan.startDate)} - ${thaiDate(plan.endDate)}) — ยังไม่ได้ตั้งเป้าผลผลิตรายวัน`
@@ -195,7 +197,7 @@
     setText('executiveProductionMTD', `${numberLabel(data.production.mtdTons)} ตัน`);
     setText('executiveMonthlyTarget', `${numberLabel(data.targets.monthlyTons)} ตัน`);
 
-    const rdfMTDPlanned = plan.source === 'manual' || plan.basisDays > 0;
+    const rdfMTDPlanned = plan.rdfAvailable;
     const rdf2MTDPlan = rdfMTDPlanned ? plan.mtdRDF2Tons : null;
     const rdf2LGMTDPlan = rdfMTDPlanned ? plan.mtdRDF2LGTons : null;
     const rdf2MTDPct = achievement(data.output.mtd.rdf2Tons, rdf2MTDPlan);
