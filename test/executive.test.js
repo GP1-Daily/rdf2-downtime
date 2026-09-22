@@ -190,6 +190,7 @@ test('diesel entry and executive daily report combine source systems without dou
   assert.equal(report.production.dailyTons, 250);
   assert.equal(report.production.mtdTons, 1050);
   assert.equal(report.production.weeklyTons, 550);
+  assert.equal(report.targets.source, 'kpi-target');
   assert.ok(Math.abs(report.targets.dailyTons - (8000 / 4 / 7)) < 0.0001);
   assert.equal(report.output.daily.rdf2Tons, 50);
   assert.equal(report.output.daily.rdf2LGTons, 25);
@@ -273,6 +274,7 @@ test('diesel entry and executive daily report combine source systems without dou
   assert.match(page, /production-plan\.js\?v=20260922-production-plan/);
   assert.match(page, /id="productionPlanSetup"/);
   assert.match(page, /id="planRDF3"/);
+  assert.match(page, /id="planMSW"/);
   assert.match(page, /id="executiveRDF3MTDPct"/);
   assert.match(page, /id="executiveRDF3MTDPlan"/);
   assert.match(page, /executive\.css\?v=20260814-company-logo/);
@@ -285,7 +287,7 @@ test('diesel entry and executive daily report combine source systems without dou
   assert.match(page, /<h2>Control Report<\/h2>/);
   assert.match(page, /<h2>Daily Report<\/h2>/);
   const version = await fetch(`${baseUrl}/api/version`).then((versionResponse) => versionResponse.json());
-  assert.equal(version.version, '1.2.0');
+  assert.equal(version.version, '1.3.0');
   const loginPage = await fetch(`${baseUrl}/login.html`).then((pageResponse) => pageResponse.text());
   assert.match(loginPage, /id="appVersion"/);
 });
@@ -300,6 +302,7 @@ test('a saved daily output plan replaces the historical average on the executive
 
   const saved = await jsonRequest(baseUrl, '/api/production-plan', 'PUT', {
     effectiveDate: '2026-08-04',
+    mswTonsPerDay: 300,
     rdf2TonsPerDay: 50,
     rdf2LGTonsPerDay: 25,
     rdf3TonsPerDay: 5,
@@ -321,6 +324,13 @@ test('a saved daily output plan replaces the historical average on the executive
   assert.equal(plan.rdf3Tons, 5);
   assert.equal(plan.rdf3Available, true);
 
+  // A typed-in MSW plan is a per-day number, so the month is that number times
+  // the days August actually has rather than the KPI target spread over 28.
+  assert.equal(report.targets.source, 'manual');
+  assert.equal(report.targets.dailyTons, 300);
+  assert.equal(report.targets.weeklyTons, 2100);
+  assert.equal(report.targets.monthlyTons, 300 * 31);
+
   // Aug 1-3 fall before the plan's effective date, so they keep the historical
   // average while Aug 4 uses the typed-in numbers.
   assert.ok(Math.abs(plan.mtdRDF2Tons - 210) < 0.0001);
@@ -337,4 +347,6 @@ test('a saved daily output plan replaces the historical average on the executive
   assert.equal(removed.response.status, 200);
   const afterDelete = await fetch(`${baseUrl}/api/executive-report?date=2026-08-04`).then((r) => r.json());
   assert.equal(afterDelete.output.plan.source, 'historical');
+  assert.equal(afterDelete.targets.source, 'kpi-target');
+  assert.ok(Math.abs(afterDelete.targets.dailyTons - (8000 / 4 / 7)) < 0.0001);
 });

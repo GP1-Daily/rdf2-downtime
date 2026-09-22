@@ -1248,7 +1248,9 @@ async function handleYield(req, res, parts) {
 
 function validateProductionPlan(body) {
   const effectiveDate = cleanText(body.effectiveDate);
-  const values = [body.rdf2TonsPerDay, body.rdf2LGTonsPerDay, body.rdf3TonsPerDay].map(Number);
+  const values = [
+    body.mswTonsPerDay, body.rdf2TonsPerDay, body.rdf2LGTonsPerDay, body.rdf3TonsPerDay,
+  ].map(Number);
   if (!validIsoDate(effectiveDate)) {
     return { error: 'กรุณาระบุวันที่เริ่มใช้แผนให้ถูกต้อง' };
   }
@@ -1258,9 +1260,10 @@ function validateProductionPlan(body) {
   return {
     data: {
       EffectiveDate: effectiveDate,
-      RDF2TonsPerDay: values[0],
-      RDF2LGTonsPerDay: values[1],
-      RDF3TonsPerDay: values[2],
+      MSWTonsPerDay: values[0],
+      RDF2TonsPerDay: values[1],
+      RDF2LGTonsPerDay: values[2],
+      RDF3TonsPerDay: values[3],
       Note: cleanText(body.note),
     },
   };
@@ -3374,9 +3377,19 @@ async function handleExecutiveReport(req, res, query) {
 
   const historyByDate = new Map(historyRows.map((row) => [row.EntryDate, row]));
   const targetSetting = applicableRow(targetRows, date, 'EffectiveDate') || DEFAULT_KPI_TARGET;
-  const monthlyTargetTons = Math.max(0, Number(targetSetting.MSWTarget) || 0);
-  const weeklyTargetTons = monthlyTargetTons / 4;
-  const dailyTargetTons = weeklyTargetTons / 7;
+  // A typed-in MSW plan is already a per-day figure, so the month is simply that
+  // number times the days the month actually has. Without one we keep the older
+  // reading of the KPI target: a monthly tonnage spread over four seven-day weeks.
+  const plannedMSWTonsPerDay = Math.max(
+    0,
+    Number(applicableRow(productionPlanRows, date, 'EffectiveDate')?.MSWTonsPerDay) || 0,
+  );
+  const mswPlanned = plannedMSWTonsPerDay > 0;
+  const monthlyTargetTons = mswPlanned
+    ? plannedMSWTonsPerDay * bounds.days
+    : Math.max(0, Number(targetSetting.MSWTarget) || 0);
+  const dailyTargetTons = mswPlanned ? plannedMSWTonsPerDay : monthlyTargetTons / 28;
+  const weeklyTargetTons = dailyTargetTons * 7;
   const weekStart = mondayForDate(date);
   const stock = buildMaterialStockData({
     asOfDate: date,
@@ -3492,6 +3505,7 @@ async function handleExecutiveReport(req, res, query) {
     elapsedDays,
     daysInMonth: bounds.days,
     targets: {
+      source: mswPlanned ? 'manual' : 'kpi-target',
       dailyTons: dailyTargetTons,
       weeklyTons: weeklyTargetTons,
       monthlyTons: monthlyTargetTons,

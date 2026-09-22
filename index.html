@@ -1288,6 +1288,7 @@
       <div class="plan-applied-line" id="productionPlanApplied">-</div>
       <div class="entry-form plan-target-form">
         <div><label>มีผลตั้งแต่วันที่</label><input type="date" id="planEffectiveDate"></div>
+        <div><label>MSW to Production (ตัน/วัน)</label><input type="number" id="planMSW" min="0" step="0.01"></div>
         <div><label>RDF2 (ตัน/วัน)</label><input type="number" id="planRDF2" min="0" step="0.01"></div>
         <div><label>RDF2 LG (ตัน/วัน)</label><input type="number" id="planRDF2LG" min="0" step="0.01"></div>
         <div><label>RDF3 (ตัน/วัน)</label><input type="number" id="planRDF3" min="0" step="0.01"></div>
@@ -1295,14 +1296,16 @@
         <div><button class="primary" id="btnSaveProductionPlan">บันทึกแผน</button></div>
       </div>
       <div class="machine-calculation plan-calculation">
+        <div><span>MSW ต่อวัน</span><strong id="planMSWDaily">0.00 ตัน/วัน</strong></div>
         <div><span>RDF2 + RDF2 LG</span><strong id="planDailyTotal">0.00 ตัน/วัน</strong></div>
-        <div><span>RDF3</span><strong id="planRDF3Total">0.00 ตัน/วัน</strong></div>
-        <div class="result"><span>RDF2 รวม 30 วัน</span><strong id="planMonthlyTotal">0.00 ตัน/30 วัน</strong></div>
+        <div><span>Yield ที่แผนนี้แปลว่า</span><strong id="planImpliedYield">-</strong></div>
+        <div class="result"><span>MSW รวม 30 วัน</span><strong id="planMonthlyTotal">0.00 ตัน/30 วัน</strong></div>
       </div>
+      <div class="hint">เป้าเดือนคำนวณจาก MSW ต่อวัน × จำนวนวันจริงของเดือนนั้น ถ้าปล่อย MSW เป็น 0 หน้า Daily Report จะกลับไปใช้ค่า MSW Target รายเดือนจากแท็บ KPI</div>
       <div class="machine-status-line" id="productionPlanStatus" role="status"></div>
       <div class="scroll-table machine-history-wrap">
         <table>
-          <thead><tr><th>มีผลตั้งแต่</th><th>RDF2</th><th>RDF2 LG</th><th>RDF3</th><th>หมายเหตุ</th><th>จัดการ</th></tr></thead>
+          <thead><tr><th>มีผลตั้งแต่</th><th>MSW</th><th>RDF2</th><th>RDF2 LG</th><th>RDF3</th><th>หมายเหตุ</th><th>จัดการ</th></tr></thead>
           <tbody id="productionPlanHistory"></tbody>
         </table>
       </div>

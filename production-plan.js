@@ -37,12 +37,17 @@
   }
 
   function renderTotals() {
+    const msw = number(element('planMSW')?.value);
     const rdf2 = number(element('planRDF2')?.value);
     const rdf2LG = number(element('planRDF2LG')?.value);
-    const rdf3 = number(element('planRDF3')?.value);
+    element('planMSWDaily').textContent = `${format(msw)} ตัน/วัน`;
     element('planDailyTotal').textContent = `${format(rdf2 + rdf2LG)} ตัน/วัน`;
-    element('planMonthlyTotal').textContent = `${format((rdf2 + rdf2LG) * 30)} ตัน/30 วัน`;
-    element('planRDF3Total').textContent = `${format(rdf3)} ตัน/วัน`;
+    element('planMonthlyTotal').textContent = `${format(msw * 30)} ตัน/30 วัน`;
+    // Spelling the ratio out makes it obvious when the plan and the yield
+    // settings disagree, because the actual bar is computed from the yield.
+    element('planImpliedYield').textContent = msw > 0
+      ? `RDF2 ${format(rdf2 / msw * 100)}% · LG ${format(rdf2LG / msw * 100)}%`
+      : '-';
   }
 
   function render(data) {
@@ -52,9 +57,11 @@
       : 'ยังไม่ได้ตั้งแผน — หน้า Daily Report ใช้ค่าเฉลี่ยย้อนหลังไปก่อน';
 
     const form = applicable || {
-      EffectiveDate: data.date, RDF2TonsPerDay: 0, RDF2LGTonsPerDay: 0, RDF3TonsPerDay: 0, Note: '',
+      EffectiveDate: data.date,
+      MSWTonsPerDay: 0, RDF2TonsPerDay: 0, RDF2LGTonsPerDay: 0, RDF3TonsPerDay: 0, Note: '',
     };
     element('planEffectiveDate').value = form.EffectiveDate || data.date;
+    element('planMSW').value = number(form.MSWTonsPerDay).toFixed(2);
     element('planRDF2').value = number(form.RDF2TonsPerDay).toFixed(2);
     element('planRDF2LG').value = number(form.RDF2LGTonsPerDay).toFixed(2);
     element('planRDF3').value = number(form.RDF3TonsPerDay).toFixed(2);
@@ -65,13 +72,14 @@
     element('productionPlanHistory').innerHTML = rows.length
       ? rows.map((row) => `<tr>
           <td>${escapeHtml(row.EffectiveDate)}</td>
+          <td>${format(row.MSWTonsPerDay)}</td>
           <td>${format(row.RDF2TonsPerDay)}</td>
           <td>${format(row.RDF2LGTonsPerDay)}</td>
           <td>${format(row.RDF3TonsPerDay)}</td>
           <td class="left">${escapeHtml(row.Note || '')}</td>
           <td><button class="danger" data-plan-id="${escapeHtml(row.ID)}">ลบ</button></td>
         </tr>`).join('')
-      : '<tr><td colspan="6" class="empty-note">ยังไม่มีแผนที่บันทึกไว้</td></tr>';
+      : '<tr><td colspan="7" class="empty-note">ยังไม่มีแผนที่บันทึกไว้</td></tr>';
 
     setStatus(applicable
       ? `แผนที่ใช้กับวันที่ ${data.date} คือชุดที่มีผลตั้งแต่ ${applicable.EffectiveDate}`
@@ -99,6 +107,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         effectiveDate,
+        mswTonsPerDay: number(element('planMSW').value),
         rdf2TonsPerDay: number(element('planRDF2').value),
         rdf2LGTonsPerDay: number(element('planRDF2LG').value),
         rdf3TonsPerDay: number(element('planRDF3').value),
@@ -116,7 +125,7 @@
     element('planEffectiveDate')?.addEventListener('change', () => {
       loadPlans().catch((error) => window.toast(error.message, true));
     });
-    for (const id of ['planRDF2', 'planRDF2LG', 'planRDF3']) {
+    for (const id of ['planMSW', 'planRDF2', 'planRDF2LG', 'planRDF3']) {
       element(id)?.addEventListener('input', renderTotals);
     }
     element('productionPlanHistory')?.addEventListener('click', async (event) => {

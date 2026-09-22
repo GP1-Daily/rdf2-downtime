@@ -164,7 +164,8 @@ const TABLES = {
   ProductionPlanSettings: {
     table: 'production_plan_settings',
     columns: {
-      ID: 'id', EffectiveDate: 'effective_date', RDF2TonsPerDay: 'rdf2_tons_per_day',
+      ID: 'id', EffectiveDate: 'effective_date', MSWTonsPerDay: 'msw_tons_per_day',
+      RDF2TonsPerDay: 'rdf2_tons_per_day',
       RDF2LGTonsPerDay: 'rdf2_lg_tons_per_day', RDF3TonsPerDay: 'rdf3_tons_per_day',
       Note: 'note', CreatedAt: 'created_at',
     },
@@ -479,6 +480,7 @@ function ensureSchema() {
       CREATE TABLE IF NOT EXISTS production_plan_settings (
         id SERIAL PRIMARY KEY,
         effective_date TEXT NOT NULL,
+        msw_tons_per_day NUMERIC NOT NULL DEFAULT 0,
         rdf2_tons_per_day NUMERIC NOT NULL DEFAULT 0,
         rdf2_lg_tons_per_day NUMERIC NOT NULL DEFAULT 0,
         rdf3_tons_per_day NUMERIC NOT NULL DEFAULT 0,
@@ -487,6 +489,8 @@ function ensureSchema() {
       );
       CREATE UNIQUE INDEX IF NOT EXISTS production_plan_settings_date_idx
         ON production_plan_settings (effective_date);
+      ALTER TABLE production_plan_settings
+        ADD COLUMN IF NOT EXISTS msw_tons_per_day NUMERIC NOT NULL DEFAULT 0;
       CREATE TABLE IF NOT EXISTS kpi_target_settings (
         id SERIAL PRIMARY KEY,
         effective_date TEXT NOT NULL,
